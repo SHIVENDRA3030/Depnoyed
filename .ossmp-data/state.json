@@ -595,6 +595,49 @@
         }
       ],
       "startedAt": "2026-08-08T14:59:41.375Z"
+    },
+    "ossmp-demo-counter-pjmpm0-gbdm": {
+      "id": "cnt_119893df3d89",
+      "name": "ossmp-demo-counter-pjmpm0-gbdm",
+      "status": "running",
+      "image": "ossmp/demo-counter:1.0",
+      "port": 80,
+      "volumeName": "ossmp-vol-demo-counter-pjmpm0-dkd1",
+      "simulator": "counter",
+      "cpuLimit": 0.5,
+      "memoryLimitMb": 512,
+      "env": {
+        "DEPLOYMENT_ID": "cmskjmkf1000oq6s9q0ls1kk6",
+        "APP_SLUG": "demo-counter"
+      },
+      "logs": [
+        {
+          "t": "2026-08-08T15:43:24.649Z",
+          "stream": "stdout",
+          "message": "Creating container from image ossmp/demo-counter:1.0"
+        },
+        {
+          "t": "2026-08-08T15:43:24.649Z",
+          "stream": "stdout",
+          "message": "Mounting volume ossmp-vol-demo-counter-pjmpm0-dkd1 at /data"
+        },
+        {
+          "t": "2026-08-08T15:43:24.649Z",
+          "stream": "stdout",
+          "message": "Resource limits: cpu=0.5 memory=512MB"
+        },
+        {
+          "t": "2026-08-08T15:43:24.865Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=counter) on port 80"
+        },
+        {
+          "t": "2026-08-08T15:43:24.865Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:80"
+        }
+      ],
+      "startedAt": "2026-08-08T15:43:24.865Z"
     }
   },
   "volumes": {
@@ -645,6 +688,10 @@
     "ossmp-vol-gitea-lite-58ekmk-czs1": {
       "name": "ossmp-vol-gitea-lite-58ekmk-czs1",
       "createdAt": "2026-08-08T14:59:41.220Z"
+    },
+    "ossmp-vol-demo-counter-pjmpm0-dkd1": {
+      "name": "ossmp-vol-demo-counter-pjmpm0-dkd1",
+      "createdAt": "2026-08-08T15:43:24.645Z"
     }
   }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Rocket, Mail, Lock, User, Loader2, ArrowRight } from "lucide-react";
+import { Rocket, Mail, Lock, User, Loader2, ArrowRight, Package, Zap, Globe } from "lucide-react";
 import { api, useAuth, navigate, ApiError } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,7 +46,13 @@ export function LoginView() {
             <span className="size-1.5 rounded-full bg-brand" /> Multi-tenant · MVP
           </span>
           <h1 className="mt-5 text-4xl font-bold tracking-tight">
-            Deploy open-source apps in <span className="text-brand">one click</span>.
+            Deploy open-source apps in{" "}
+            <span className="relative inline-block">
+              <span className="animate-shimmer-text bg-gradient-to-r from-emerald-500 via-teal-300 to-emerald-500 bg-[length:200%_100%] bg-clip-text text-transparent">
+                one click
+              </span>
+            </span>
+            .
           </h1>
           <p className="mt-4 max-w-md text-muted-foreground">
             Every deployment gets its own isolated container, a dedicated persistent volume, and a
@@ -58,8 +64,30 @@ export function LoginView() {
             <Feature title="Unique public URL" desc="Each deployment is reachable on its own subdomain." />
           </ul>
 
+          {/* What's included mini feature grid */}
+          <div className="mt-8 grid grid-cols-3 gap-3">
+            <MiniFeatureCard
+              icon={<Package className="size-4" />}
+              value="10+"
+              label="Apps"
+              desc="Ready-to-deploy catalog"
+            />
+            <MiniFeatureCard
+              icon={<Zap className="size-4" />}
+              value="Free"
+              label="Tier"
+              desc="No cost to get started"
+            />
+            <MiniFeatureCard
+              icon={<Globe className="size-4" />}
+              value="Instant"
+              label="Deploy"
+              desc="Live in seconds"
+            />
+          </div>
+
           {/* Decorative geometric shapes — enhanced with more variety */}
-          <div className="relative mt-8 h-40 overflow-hidden" aria-hidden="true">
+          <div className="relative mt-6 h-32 overflow-hidden" aria-hidden="true">
             {/* Large circle */}
             <div className="animate-float-slow absolute -left-8 top-0 size-32 rounded-full border border-brand/20 bg-brand/5" />
             {/* Small filled circle */}
@@ -71,9 +99,6 @@ export function LoginView() {
             <div className="animate-float-slow absolute left-40 top-20 size-2 rounded-full bg-emerald-400/30" />
             {/* Gradient bar */}
             <div className="animate-float-slower absolute bottom-4 left-12 h-1.5 w-28 rounded-full bg-gradient-to-r from-emerald-500/30 via-teal-500/20 to-transparent" />
-            {/* Triangle-ish shape */}
-            <div className="animate-float-slow absolute right-40 bottom-2 size-0 border-x-[12px] border-b-[20px] border-x-transparent border-b-brand/20" />
-            {/* Additional decorative shapes */}
             {/* Ring */}
             <div className="animate-float-slower absolute left-16 top-2 size-12 rounded-full border-2 border-teal-400/15" />
             {/* Small diamond */}
@@ -88,12 +113,30 @@ export function LoginView() {
               <div className="size-1.5 rounded-full bg-emerald-400/25" />
             </div>
           </div>
+
+          {/* Trust badge row */}
+          <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground/70">
+            <svg viewBox="0 0 24 24" fill="none" className="size-3.5 text-emerald-500">
+              <path d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+              <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>No credit card required</span>
+            <span className="text-muted-foreground/30">·</span>
+            <span>Free tier</span>
+            <span className="text-muted-foreground/30">·</span>
+            <span>Open source</span>
+          </div>
         </div>
 
         {/* Auth form */}
         <div className="mx-auto w-full max-w-md">
-          {/* Dots pattern background behind the auth card */}
+          {/* Decorative gradient orb behind the auth card */}
           <div className="relative">
+            <div
+              className="animate-orb-pulse absolute -top-20 left-1/2 -z-20 size-72 -translate-x-1/2 rounded-full bg-gradient-to-br from-emerald-400/20 via-teal-400/10 to-cyan-400/5 blur-3xl"
+              aria-hidden="true"
+            />
+            {/* Dots pattern background behind the auth card */}
             <div className="absolute -inset-6 -z-10 rounded-3xl bg-grid opacity-30 [mask-image:radial-gradient(ellipse_at_center,black,transparent_70%)]" />
             <div className="rounded-2xl border border-border/60 bg-card/70 p-7 shadow-lg backdrop-blur-xl supports-[backdrop-filter]:bg-card/50">
               <div className="mb-6 flex items-center gap-2.5 lg:hidden">
@@ -219,5 +262,29 @@ function Feature({ title, desc }: { title: string; desc: string }) {
         <span className="block text-xs text-muted-foreground">{desc}</span>
       </span>
     </li>
+  );
+}
+
+function MiniFeatureCard({
+  icon,
+  value,
+  label,
+  desc,
+}: {
+  icon: React.ReactNode;
+  value: string;
+  label: string;
+  desc: string;
+}) {
+  return (
+    <div className="group rounded-xl border border-border/50 bg-muted/20 px-3 py-3 transition-all duration-200 hover:border-brand/30 hover:bg-brand-soft/30">
+      <div className="flex items-center gap-1.5 text-brand">
+        {icon}
+      </div>
+      <p className="mt-1.5 text-lg font-bold tracking-tight text-foreground">
+        {value} <span className="text-sm font-medium text-muted-foreground">{label}</span>
+      </p>
+      <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">{desc}</p>
+    </div>
   );
 }

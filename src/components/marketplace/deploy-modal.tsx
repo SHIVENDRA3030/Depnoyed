@@ -14,6 +14,9 @@ import {
   Plus,
   X,
   Variable,
+  Calculator,
+  Network,
+  HardDrive,
 } from "lucide-react";
 import { api, navigate, type AppItem, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -211,6 +214,49 @@ export function DeployModal({ app, open, onOpenChange, onDeployed }: DeployModal
               <MemoryStick className="size-3" /> 512 MB
             </span>
           </div>
+        </div>
+
+        {/* Estimated cost */}
+        <div className="rounded-xl border border-border/60 bg-gradient-to-br from-brand-soft/60 via-muted/30 to-muted/20 p-4">
+          <p className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <Calculator className="size-3.5" /> Estimated cost
+          </p>
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-foreground">
+                <Cpu className="size-3.5 text-muted-foreground" />
+                <span>Compute</span>
+                <span className="text-xs text-muted-foreground">0.5 CPU + 512 MB</span>
+              </span>
+              <span className="font-mono text-xs font-medium tabular-nums">$0.008/hr</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-foreground">
+                <HardDrive className="size-3.5 text-muted-foreground" />
+                <span>Storage</span>
+                <span className="text-xs text-muted-foreground">10 GB persistent volume</span>
+              </span>
+              <span className="font-mono text-xs font-medium tabular-nums">$0.001/hr</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-foreground">
+                <Network className="size-3.5 text-muted-foreground" />
+                <span>Network</span>
+                <span className="text-xs text-muted-foreground">Public URL + subdomain</span>
+              </span>
+              <span className="font-mono text-xs font-medium tabular-nums">$0.0005/hr</span>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between border-t border-border/40 pt-3">
+            <span className="text-sm font-semibold text-foreground">Total</span>
+            <div className="text-right">
+              <span className="font-mono text-sm font-bold tabular-nums text-brand">~$0.0095/hr</span>
+              <span className="ml-2 font-mono text-xs text-muted-foreground">(~$6.84/mo)</span>
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] italic text-muted-foreground">
+            Estimate only — actual usage may vary
+          </p>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">

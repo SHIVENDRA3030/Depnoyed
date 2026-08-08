@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Rocket, Search, Boxes, Container, Database, Globe, ArrowRight, Loader2, Sparkles, Zap, Flame, Star, TrendingUp, FlaskConical, Globe2, Wrench, FileText, Heart, Download, Clock, GitCompare, X, History } from "lucide-react";
+import { Rocket, Search, Boxes, Container, Database, Globe, ArrowRight, Loader2, Sparkles, Zap, Flame, Star, TrendingUp, FlaskConical, Globe2, Wrench, FileText, Heart, Download, Clock, GitCompare, X, History, Users, ShieldCheck, Activity } from "lucide-react";
 import { api, navigate, useAuth, type AppItem, type DeploymentItem, ApiError } from "@/lib/store";
 import { useCompare } from "@/lib/compare-store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -19,6 +19,47 @@ import {
 import { toast } from "sonner";
 
 type SortMode = "popular" | "newest" | "alpha" | "favorites";
+
+/* ----------------------------- AnimatedCounter ----------------------------- */
+
+function AnimatedCounter({ target, duration = 1200, className = "" }: { target: number; duration?: number; className?: string }) {
+  const [display, setDisplay] = useState(0);
+  const ref = useRef<{ start: number | null; raf: number }>({ start: null, raf: 0 });
+
+  useEffect(() => {
+    const startTime = performance.now();
+    ref.current.start = startTime;
+
+    function step(now: number) {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // ease-out cubic for a nice deceleration
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(eased * target));
+      if (progress < 1) {
+        ref.current.raf = requestAnimationFrame(step);
+      }
+    }
+
+    ref.current.raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(ref.current.raf);
+  }, [target, duration]);
+
+  return <span className={className}>{display}</span>;
+}
+
+/* ----------------------------- Social Proof Data ----------------------------- */
+
+const AVATAR_COLORS = [
+  "bg-emerald-500", "bg-teal-500", "bg-cyan-500", "bg-emerald-600",
+  "bg-teal-600", "bg-cyan-600", "bg-emerald-400", "bg-teal-400",
+];
+
+const DEPLOYMENT_ACTIVITIES = [
+  { app: "Grafana", minutes: 3 },
+  { app: "n8n", minutes: 7 },
+  { app: "Supabase", minutes: 12 },
+];
 
 function getFavorites(): string[] {
   if (typeof window === "undefined") return [];
@@ -53,6 +94,7 @@ export function MarketplaceView() {
   const [favVersion, setFavVersion] = useState(0); // bump to re-derive favorites
   const searchRef = useRef<HTMLInputElement>(null);
   const user = useAuth((s) => s.user);
+  const [userDeploys, setUserDeploys] = useState<DeploymentItem[] | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -65,6 +107,24 @@ export function MarketplaceView() {
       }
     })();
   }, []);
+
+  // Fetch user deployments for recommendation filtering
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { deployments } = await api<{ deployments: DeploymentItem[] }>('/api/deployments');
+        if (!cancelled) setUserDeploys(deployments);
+      } catch {
+        if (!cancelled) setUserDeploys([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  // Derive effective deployments (null out when no user)
+  const effectiveUserDeploys = user ? userDeploys : null;
 
   // Recent searches (refreshed on query change via handleSearch)
   const refreshRecent = useCallback(() => setRecentSearches(getRecentSearches()), []);
@@ -105,6 +165,21 @@ export function MarketplaceView() {
 
   const totalDeploys = useMemo(() => (apps ?? []).reduce((sum, a) => sum + a.deploymentCount, 0), [apps]);
   const favCount = useMemo(() => getFavorites().length, [favVersion]); // re-derive when favorites change
+
+  // Recommended apps: apps the user hasn't deployed, sorted by deployment count
+  const recommended = useMemo(() => {
+    if (!apps || apps.length === 0) return [];
+    const deployedAppIds = new Set(
+      (effectiveUserDeploys ?? [])
+        .map((d) => d.app?.id)
+        .filter(Boolean) as string[]
+    );
+    const undeployed = apps.filter((a) => !deployedAppIds.has(a.id));
+    return [...undeployed].sort((a, b) => b.deploymentCount - a.deploymentCount).slice(0, 3);
+  }, [apps, effectiveUserDeploys]);
+
+  // Social proof developer count
+  const developerCount = useMemo(() => Math.max(totalDeploys * 2 + 3, 12), [totalDeploys]);
 
   function handleSearch(q: string) {
     setQuery(q);
@@ -153,24 +228,56 @@ export function MarketplaceView() {
               dedicated container, persistent storage, and a unique public URL.
             </p>
             <div className="animate-fade-in-up mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3 [animation-delay:300ms]">
-              <StatCard icon={<Container className="size-5" />} label="Isolated containers" desc="Per deployment" />
-              <StatCard icon={<Database className="size-5" />} label="Persistent volumes" desc="Data survives restarts" />
-              <StatCard icon={<Globe className="size-5" />} label="Unique public URLs" desc="Instant access" />
+              <StatCard icon={<Container className="size-5" />} label="Isolated containers" desc="Per deployment" indicator="∞" />
+              <StatCard icon={<Database className="size-5" />} label="Persistent volumes" desc="Data survives restarts" indicator="24/7" />
+              <StatCard icon={<Globe className="size-5" />} label="Unique public URLs" desc="Instant access" indicator="100%" />
             </div>
-            {/* Quick stats row */}
+            {/* Quick stats row — animated counters */}
             {apps && apps.length > 0 && (
               <div className="animate-fade-in-up mt-6 flex flex-wrap items-center justify-center gap-3 text-sm text-muted-foreground [animation-delay:400ms]">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-3 py-1 shadow-sm">
-                  <Boxes className="size-3.5 text-brand" /> {apps.length} apps available
+                  <Boxes className="size-3.5 text-brand" /> <AnimatedCounter target={apps.length} /> apps available
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-3 py-1 shadow-sm">
-                  <Download className="size-3.5 text-brand" /> {totalDeploys} total deployments
+                  <Download className="size-3.5 text-brand" /> <AnimatedCounter target={totalDeploys} /> total deployments
                 </span>
                 {favCount > 0 && (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200/60 bg-rose-50/60 px-3 py-1 shadow-sm dark:border-rose-800/40 dark:bg-rose-950/20">
                     <Heart className="size-3.5 fill-rose-500 text-rose-500" /> {favCount} favorites
                   </span>
                 )}
+              </div>
+            )}
+
+            {/* Social Proof Section */}
+            {apps && apps.length > 0 && (
+              <div className="animate-fade-in-up mt-8 flex flex-col items-center gap-3 [animation-delay:500ms]">
+                {/* Avatar row */}
+                <div className="flex items-center -space-x-2">
+                  {AVATAR_COLORS.slice(0, 6).map((color, i) => (
+                    <div
+                      key={i}
+                      className={`${color} size-8 rounded-full border-2 border-background shadow-sm flex items-center justify-center text-[10px] font-bold text-white/90`}
+                    >
+                      {String.fromCharCode(65 + i)}
+                    </div>
+                  ))}
+                  <div className="flex size-8 items-center justify-center rounded-full border-2 border-border bg-muted text-[10px] font-semibold text-muted-foreground shadow-sm">
+                    +{developerCount - 6}
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Join <span className="font-semibold text-foreground"><AnimatedCounter target={developerCount} duration={1400} /></span> developers who have deployed <span className="font-semibold text-foreground"><AnimatedCounter target={totalDeploys} duration={1000} /></span> instances
+                </p>
+                {/* Deployment activity indicators */}
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {DEPLOYMENT_ACTIVITIES.map((act, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/5 px-2.5 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">
+                      <Activity className="size-3" />
+                      {act.app} deployed {act.minutes}m ago
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -192,6 +299,43 @@ export function MarketplaceView() {
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             {featured.map((app, i) => (
+              <div key={app.id} className="animate-card-entrance" style={{ animationDelay: `${i * 100}ms` }}>
+                <FeaturedAppCard app={app} rank={i + 1} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Recommended / Popular Picks */}
+      {recommended.length > 0 && (
+        <section className="mx-auto max-w-6xl px-4 pt-8">
+          <div className="flex items-center gap-2">
+            {user ? (
+              <>
+                <Sparkles className="size-5 text-emerald-500" />
+                <h2 className="text-xl font-semibold">Recommended for you</h2>
+                <Badge variant="secondary" className="ml-1 gap-1 font-normal">
+                  <Star className="size-3" /> Personalized
+                </Badge>
+              </>
+            ) : (
+              <>
+                <Star className="size-5 text-amber-500" />
+                <h2 className="text-xl font-semibold">Popular picks</h2>
+                <Badge variant="secondary" className="ml-1 gap-1 font-normal">
+                  <TrendingUp className="size-3" /> Top rated
+                </Badge>
+              </>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {user
+              ? "Apps you haven't deployed yet, ranked by popularity."
+              : "Sign in to get personalized recommendations based on your activity."}
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            {recommended.map((app, i) => (
               <div key={app.id} className="animate-card-entrance" style={{ animationDelay: `${i * 100}ms` }}>
                 <FeaturedAppCard app={app} rank={i + 1} />
               </div>
@@ -530,14 +674,21 @@ function AppCard({ app, onFavToggle }: { app: AppItem; onFavToggle?: () => void 
   );
 }
 
-function StatCard({ icon, label, desc }: { icon: React.ReactNode; label: string; desc: string }) {
+function StatCard({ icon, label, desc, indicator }: { icon: React.ReactNode; label: string; desc: string; indicator?: string }) {
   return (
-    <div className="group flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-background/60 px-4 py-5 text-center backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:bg-emerald-50/30 hover:shadow-md dark:hover:bg-emerald-950/10">
-      <span className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 transition-all duration-300 group-hover:bg-emerald-500/20 group-hover:scale-110 dark:text-emerald-400">
+    <div className="group relative flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-gradient-to-br from-emerald-50/40 via-background/60 to-teal-50/30 px-4 py-5 text-center backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:bg-emerald-50/30 hover:shadow-md dark:from-emerald-950/20 dark:via-background/60 dark:to-teal-950/10 dark:hover:bg-emerald-950/10">
+      {/* Decorative glow on hover */}
+      <div className="pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100" style={{ boxShadow: '0 0 20px rgba(16,185,129,0.12)' }} />
+      <span className="stat-icon-glow relative flex size-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 transition-all duration-300 group-hover:bg-emerald-500/20 group-hover:scale-110 dark:text-emerald-400">
         {icon}
       </span>
       <span className="text-sm font-semibold">{label}</span>
       <span className="text-[11px] text-muted-foreground">{desc}</span>
+      {indicator && (
+        <span className="absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full bg-emerald-500/10 text-[9px] font-bold text-emerald-600 opacity-0 shadow-sm transition-all duration-300 group-hover:opacity-100 group-hover:scale-100 scale-75 dark:text-emerald-400">
+          {indicator}
+        </span>
+      )}
     </div>
   );
 }

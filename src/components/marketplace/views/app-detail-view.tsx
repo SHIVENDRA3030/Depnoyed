@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Rocket,
@@ -26,6 +26,10 @@ import {
   Code,
   FileText,
   BookOpen,
+  Circle,
+  ArrowRight,
+  LayoutGrid,
+  Wrench,
 } from "lucide-react";
 import { api, navigate, useAuth, type AppItem, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -35,6 +39,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { MarkdownRenderer } from "@/components/marketplace/markdown-renderer";
 
@@ -43,6 +48,9 @@ export function AppDetailView({ slug }: { slug: string }) {
   const [notFound, setNotFound] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [showStickyDeploy, setShowStickyDeploy] = useState(false);
+  const [relatedApps, setRelatedApps] = useState<AppItem[]>([]);
+  const [userDeployments, setUserDeployments] = useState<DeploymentItem[]>([]);
+  const [reviewCount, setReviewCount] = useState(0);
   const user = useAuth((s) => s.user);
   const deployBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -57,6 +65,52 @@ export function AppDetailView({ slug }: { slug: string }) {
     })();
   }, [slug]);
 
+  // Fetch related apps and user deployments
+  useEffect(() => {
+    (async () => {
+      try {
+        const { apps } = await api<{ apps: AppItem[] }>("/api/apps");
+        if (app) {
+          setRelatedApps(
+            apps
+              .filter((a) => a.category === app.category && a.slug !== app.slug)
+              .slice(0, 3)
+          );
+        }
+      } catch {
+        setRelatedApps([]);
+      }
+    })();
+  }, [app]);
+
+  useEffect(() => {
+    if (!user) {
+      setUserDeployments([]);
+      return;
+    }
+    (async () => {
+      try {
+        const { deployments } = await api<{ deployments: DeploymentItem[] }>("/api/deployments");
+        setUserDeployments(deployments);
+      } catch {
+        setUserDeployments([]);
+      }
+    })();
+  }, [user]);
+
+  // Compute how many deployments the user has for this app
+  const userAppDeploymentCount = useMemo(() => {
+    if (!app) return 0;
+    return userDeployments.filter(
+      (d) => d.app?.slug === app.slug
+    ).length;
+  }, [app, userDeployments]);
+
+  // Read review count from localStorage
+  useEffect(() => {
+    setReviewCount(getReviewCount(slug));
+  }, [slug]);
+
   useEffect(() => {
     function onScroll() {
       if (!deployBtnRef.current) return;
@@ -66,6 +120,7 @@ export function AppDetailView({ slug }: { slug: string }) {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, [app]);
+
   function deploy() {
     if (!app) return;
     if (!user) {
@@ -97,6 +152,9 @@ export function AppDetailView({ slug }: { slug: string }) {
       </div>
     );
   }
+
+  // Determine which tabs are available
+  const showReadmeTab = !!app.readme;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -135,6 +193,15 @@ export function AppDetailView({ slug }: { slug: string }) {
                 )}
               </div>
               <p className="mt-1 max-w-xl text-sm text-muted-foreground">{app.description}</p>
+
+              {/* Deployment Status Indicator */}
+              {userAppDeploymentCount > 0 && (
+                <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  <Circle className="size-2 fill-emerald-500 text-emerald-500 dark:fill-emerald-400 dark:text-emerald-400" />
+                  You have {userAppDeploymentCount} instance{userAppDeploymentCount !== 1 ? "s" : ""} running
+                </div>
+              )}
+
               <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
                 <span className="inline-flex items-center gap-1">
                   <Calendar className="size-3" /> Added {new Date(app.createdAt).toLocaleDateString()}
@@ -177,70 +244,144 @@ export function AppDetailView({ slug }: { slug: string }) {
         </div>
       </div>
 
-      {/* What you get — with gradient borders */}
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <div className="gradient-border-card rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="text-sm font-semibold">What you get</h2>
-          <ul className="mt-3 space-y-2.5 text-sm">
-            <Row icon={<Container className="size-4 text-brand" />} title="Isolated container" desc={`${app.dockerImage} · port ${app.containerPort}`} />
-            <Row icon={<Database className="size-4 text-brand" />} title="Persistent volume" desc="Data survives stop / restart" />
-            <Row icon={<Globe className="size-4 text-brand" />} title="Unique public URL" desc="<subdomain>.apps.local" />
-            <Row icon={<ShieldCheck className="size-4 text-brand" />} title="Tenant isolation" desc="Only you can access it" />
-          </ul>
-        </div>
-        <div className="gradient-border-card rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="text-sm font-semibold">Resource limits</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Configured server-side so one tenant can't exhaust the host.
-          </p>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <Metric icon={<Cpu className="size-4" />} label="CPU" value="0.5 core" />
-            <Metric icon={<MemoryStick className="size-4" />} label="Memory" value="512 MB" />
-          </div>
-          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
-            <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-800 dark:text-emerald-300">
-              <CheckCircle2 className="size-3.5" /> Ready to deploy
-            </p>
-            <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-400">
-              {user ? "Click Deploy to launch your instance." : "Sign in first, then deploy in one click."}
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* Tabbed Content */}
+      <Tabs defaultValue="overview" className="mt-6">
+        <TabsList className="h-10 w-full justify-start gap-0 rounded-none border-b border-border bg-transparent p-0">
+          <TabsTrigger
+            value="overview"
+            className="relative rounded-none border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors data-[state=active]:border-brand data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+          >
+            <LayoutGrid className="mr-1.5 size-4" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger
+            value="specifications"
+            className="relative rounded-none border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors data-[state=active]:border-brand data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+          >
+            <Wrench className="mr-1.5 size-4" />
+            Specifications
+          </TabsTrigger>
+          {showReadmeTab && (
+            <TabsTrigger
+              value="readme"
+              className="relative rounded-none border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors data-[state=active]:border-brand data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+            >
+              <BookOpen className="mr-1.5 size-4" />
+              README
+            </TabsTrigger>
+          )}
+          <TabsTrigger
+            value="reviews"
+            className="relative rounded-none border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors data-[state=active]:border-brand data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+          >
+            <Star className="mr-1.5 size-4" />
+            Reviews
+            {reviewCount > 0 && (
+              <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-[10px]">
+                {reviewCount}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Tech specs */}
-      <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <h2 className="flex items-center gap-1.5 text-sm font-semibold">
-          <Server className="size-4" /> Technical specifications
-        </h2>
-        <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Spec icon={<Layers className="size-3.5" />} label="Docker image" value={app.dockerImage} mono />
-          <Spec icon={<Hash className="size-3.5" />} label="Container port" value={String(app.containerPort)} mono />
-          <Spec icon={<Container className="size-3.5" />} label="Runtime" value={app.simulator === "static" ? "Static server" : `${app.simulator} simulator`} />
-          <Spec icon={<Cpu className="size-3.5" />} label="CPU limit" value="0.5 core" />
-          <Spec icon={<MemoryStick className="size-3.5" />} label="Memory limit" value="512 MB" />
-          <Spec icon={<ShieldCheck className="size-3.5" />} label="Isolation" value="Per-tenant volume + container" />
-        </dl>
-      </div>
-
-      {/* README */}
-      {app.readme && (
-        <div className="mt-6 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-          <div className="flex items-center gap-2 border-b border-border/40 bg-muted/20 px-5 py-3">
-            <BookOpen className="size-4 text-brand" />
-            <h2 className="text-sm font-semibold">README</h2>
-            <span className="text-[11px] text-muted-foreground">· Markdown</span>
-          </div>
-          <div className="px-5 py-4">
-            <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:scroll-mt-20 prose-headings:font-semibold prose-a:text-brand prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-zinc-950 prose-pre:text-zinc-100">
-              <MarkdownRenderer content={app.readme} />
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="mt-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="gradient-border-card rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <h2 className="text-sm font-semibold">What you get</h2>
+              <ul className="mt-3 space-y-2.5 text-sm">
+                <Row icon={<Container className="size-4 text-brand" />} title="Isolated container" desc={`${app.dockerImage} · port ${app.containerPort}`} />
+                <Row icon={<Database className="size-4 text-brand" />} title="Persistent volume" desc="Data survives stop / restart" />
+                <Row icon={<Globe className="size-4 text-brand" />} title="Unique public URL" desc="<subdomain>.apps.local" />
+                <Row icon={<ShieldCheck className="size-4 text-brand" />} title="Tenant isolation" desc="Only you can access it" />
+              </ul>
             </div>
+            <div className="gradient-border-card rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <h2 className="text-sm font-semibold">Resource limits</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Configured server-side so one tenant can't exhaust the host.
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <Metric icon={<Cpu className="size-4" />} label="CPU" value="0.5 core" />
+                <Metric icon={<MemoryStick className="size-4" />} label="Memory" value="512 MB" />
+              </div>
+              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-800 dark:text-emerald-300">
+                  <CheckCircle2 className="size-3.5" /> Ready to deploy
+                </p>
+                <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-400">
+                  {user ? "Click Deploy to launch your instance." : "Sign in first, then deploy in one click."}
+                </p>
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* Specifications Tab */}
+        <TabsContent value="specifications" className="mt-5">
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+              <Server className="size-4" /> Technical specifications
+            </h2>
+            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Spec icon={<Layers className="size-3.5" />} label="Docker image" value={app.dockerImage} mono />
+              <Spec icon={<Hash className="size-3.5" />} label="Container port" value={String(app.containerPort)} mono />
+              <Spec icon={<Container className="size-3.5" />} label="Runtime" value={app.simulator === "static" ? "Static server" : `${app.simulator} simulator`} />
+              <Spec icon={<Cpu className="size-3.5" />} label="CPU limit" value="0.5 core" />
+              <Spec icon={<MemoryStick className="size-3.5" />} label="Memory limit" value="512 MB" />
+              <Spec icon={<ShieldCheck className="size-3.5" />} label="Isolation" value="Per-tenant volume + container" />
+            </dl>
+          </div>
+        </TabsContent>
+
+        {/* README Tab */}
+        {showReadmeTab && (
+          <TabsContent value="readme" className="mt-5">
+            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+              <div className="flex items-center gap-2 border-b border-border/40 bg-muted/20 px-5 py-3">
+                <BookOpen className="size-4 text-brand" />
+                <h2 className="text-sm font-semibold">README</h2>
+                <span className="text-[11px] text-muted-foreground">· Markdown</span>
+              </div>
+              <div className="px-5 py-4">
+                <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:scroll-mt-20 prose-headings:font-semibold prose-a:text-brand prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-zinc-950 prose-pre:text-zinc-100">
+                  <MarkdownRenderer content={app.readme!} />
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+        )}
+
+        {/* Reviews Tab */}
+        <TabsContent value="reviews" className="mt-5">
+          <AppRatingsSection appSlug={app.slug} appName={app.name} onReviewCountChange={setReviewCount} />
+        </TabsContent>
+      </Tabs>
+
+      {/* Related Apps */}
+      {relatedApps.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between">
+            <h2 className="flex items-center gap-1.5 text-base font-semibold">
+              <LayoutGrid className="size-4 text-brand" /> Related apps
+            </h2>
+            <button
+              onClick={() => {
+                // Navigate to marketplace with category filter via hash
+                window.location.hash = `#/marketplace?category=${encodeURIComponent(app.category)}`;
+              }}
+              className="inline-flex items-center gap-1 text-xs font-medium text-brand transition-colors hover:text-brand/80"
+            >
+              View all {app.category} <ArrowRight className="size-3" />
+            </button>
+          </div>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {relatedApps.map((related) => (
+              <RelatedAppCard key={related.slug} app={related} user={user} />
+            ))}
           </div>
         </div>
       )}
-
-      {/* Ratings & Reviews */}
-      <AppRatingsSection appSlug={app.slug} appName={app.name} />
 
       {!user && (
         <div className="mt-6 flex flex-col items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand-soft p-5 sm:flex-row">
@@ -272,6 +413,59 @@ export function AppDetailView({ slug }: { slug: string }) {
     </div>
   );
 }
+
+/* -------------------------- Related App Card -------------------------- */
+
+function RelatedAppCard({ app, user }: { app: AppItem; user: ReturnType<typeof useAuth.getState>["user"] }) {
+  const [modalOpen, setModalOpen] = useState(false);
+
+  function handleDeploy() {
+    if (!user) {
+      toast.info("Sign in to deploy");
+      navigate({ name: "login" });
+      return;
+    }
+    setModalOpen(true);
+  }
+
+  return (
+    <>
+      <div
+        className="group flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:border-brand/30 hover:shadow-md cursor-pointer"
+        onClick={() => navigate({ name: "app", slug: app.slug })}
+      >
+        <div className="flex items-start gap-3">
+          <AppLogo logo={app.logo} simulator={app.simulator} name={app.name} size="sm" />
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-sm font-semibold group-hover:text-brand transition-colors">{app.name}</h3>
+            <Badge variant="secondary" className="mt-0.5 text-[10px]">{app.category}</Badge>
+          </div>
+        </div>
+        <p className="line-clamp-2 text-xs text-muted-foreground">{app.description}</p>
+        <div className="mt-auto flex items-center justify-between">
+          <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Zap className="size-3" /> {app.deploymentCount} {app.deploymentCount === 1 ? "deploy" : "deploys"}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1 text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeploy();
+            }}
+          >
+            <Rocket className="size-3" />
+            {user ? "Deploy" : "Sign in"}
+          </Button>
+        </div>
+      </div>
+      <DeployModal app={app} open={modalOpen} onOpenChange={setModalOpen} />
+    </>
+  );
+}
+
+/* -------------------------- Helper Components -------------------------- */
 
 function Row({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
   return (
@@ -326,6 +520,10 @@ function getReviews(slug: string): Review[] {
   } catch { return []; }
 }
 
+function getReviewCount(slug: string): number {
+  return getReviews(slug).length;
+}
+
 function saveReview(slug: string, review: Review) {
   const all = JSON.parse(localStorage.getItem("oss-reviews") || "{}");
   if (!all[slug]) all[slug] = [];
@@ -344,8 +542,8 @@ function toggleHelpful(slug: string, reviewId: string): boolean {
   return true;
 }
 
-function AppRatingsSection({ appSlug, appName }: { appSlug: string; appName: string }) {
-  const [reviews, setReviews] = useState<Review[]>([]);
+function AppRatingsSection({ appSlug, appName, onReviewCountChange }: { appSlug: string; appName: string; onReviewCountChange?: (count: number) => void }) {
+  const [reviews, setReviews] = useState<Review[]>(() => getReviews(appSlug));
   const [userRating, setUserRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
   const [hoverRating, setHoverRating] = useState(0);
@@ -353,8 +551,8 @@ function AppRatingsSection({ appSlug, appName }: { appSlug: string; appName: str
   const user = useAuth((s) => s.user);
 
   useEffect(() => {
-    setReviews(getReviews(appSlug));
-  }, [appSlug]);
+    onReviewCountChange?.(reviews.length);
+  }, [reviews.length]);
 
   const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
 
@@ -373,7 +571,9 @@ function AppRatingsSection({ appSlug, appName }: { appSlug: string; appName: str
       helpful: 0,
     };
     saveReview(appSlug, review);
-    setReviews(getReviews(appSlug));
+    const updated = getReviews(appSlug);
+    setReviews(updated);
+    onReviewCountChange?.(updated.length);
     setUserRating(0);
     setReviewText("");
     setSubmitting(false);
@@ -381,7 +581,7 @@ function AppRatingsSection({ appSlug, appName }: { appSlug: string; appName: str
   }
 
   return (
-    <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <h2 className="flex items-center gap-1.5 text-sm font-semibold">
           <Star className="size-4" /> Ratings & Reviews
@@ -486,7 +686,7 @@ function AppRatingsSection({ appSlug, appName }: { appSlug: string; appName: str
               </div>
               {review.text && <p className="text-sm text-muted-foreground">{review.text}</p>}
               <button
-                onClick={() => { if (toggleHelpful(appSlug, review.id)) { setReviews(getReviews(appSlug)); } }}
+                onClick={() => { if (toggleHelpful(appSlug, review.id)) { const r = getReviews(appSlug); setReviews(r); onReviewCountChange?.(r.length); } }}
                 className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-brand"
               >
                 <ThumbsUp className="size-3" /> Helpful {review.helpful > 0 && `(${review.helpful})`}

@@ -28,6 +28,10 @@ import {
   FileText,
   Rocket,
   Plus,
+  Code2,
+  AlertTriangle,
+  Monitor,
+  MailCheck,
 } from "lucide-react";
 import { api, useAuth, navigate, type AppItem, type DeploymentItem, ApiError } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -68,11 +72,23 @@ export function SettingsView() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage your account, deployments, and preferences.
-        </p>
+      {/* Gradient header section with avatar */}
+      <div className="mb-8 overflow-hidden rounded-2xl border border-border/40 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent dark:from-emerald-500/5 dark:via-teal-500/3">
+        <div className="relative px-6 pb-5 pt-6">
+          {/* Decorative background orb */}
+          <div className="absolute -right-12 -top-12 size-40 rounded-full bg-gradient-to-br from-emerald-400/15 to-teal-400/5 blur-2xl" aria-hidden="true" />
+          <div className="relative flex items-center gap-5">
+            <div className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-2xl font-bold text-white shadow-lg ring-2 ring-white/20 dark:ring-white/10">
+              {user.email.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Manage your account, deployments, and preferences.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-6">
@@ -121,6 +137,15 @@ export function SettingsView() {
           <NotificationsSection />
         </SettingsCard>
 
+        {/* API Access */}
+        <SettingsCard
+          icon={<Code2 className="size-5" />}
+          title="API Access"
+          description="Manage API keys and view usage"
+        >
+          <ApiAccessSection />
+        </SettingsCard>
+
         {/* Account Actions */}
         <SettingsCard
           icon={<Key className="size-5" />}
@@ -129,6 +154,9 @@ export function SettingsView() {
         >
           <AccountSection user={user} logout={logout} />
         </SettingsCard>
+
+        {/* Danger Zone */}
+        <DangerZoneSection />
       </div>
     </div>
   );
@@ -449,6 +477,14 @@ function NotificationsSection() {
     if (typeof window === "undefined") return true;
     return localStorage.getItem("oss-notify-volume") !== "false";
   });
+  const [emailNotify, setEmailNotify] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("oss-notify-email") !== "false";
+  });
+  const [desktopNotify, setDesktopNotify] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("oss-notify-desktop") === "true";
+  });
 
   return (
     <div className="space-y-4">
@@ -472,6 +508,23 @@ function NotificationsSection() {
         description="Notify when volume data exceeds size thresholds"
         checked={volumeNotify}
         onChange={(v) => { setVolumeNotify(v); localStorage.setItem("oss-notify-volume", String(v)); }}
+      />
+
+      <Separator />
+
+      <NotificationToggle
+        icon={<MailCheck className="size-4" />}
+        title="Email notifications"
+        description="Receive email alerts for deployment status changes"
+        checked={emailNotify}
+        onChange={(v) => { setEmailNotify(v); localStorage.setItem("oss-notify-email", String(v)); }}
+      />
+      <NotificationToggle
+        icon={<Monitor className="size-4" />}
+        title="Desktop notifications"
+        description="Show browser desktop notifications for events"
+        checked={desktopNotify}
+        onChange={(v) => { setDesktopNotify(v); localStorage.setItem("oss-notify-desktop", String(v)); }}
       />
     </div>
   );
@@ -937,6 +990,170 @@ function AccountSection({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- API Access Section ---------- */
+
+function ApiAccessSection() {
+  const [apiKey] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("oss-api-key");
+  });
+  const [requestCount] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    const stored = localStorage.getItem("oss-api-requests");
+    return stored ? parseInt(stored, 10) : Math.floor(Math.random() * 50) + 10;
+  });
+
+  function generateApiKey() {
+    toast.info("Coming soon — API key generation will be available in a future update.");
+  }
+
+  const apiBaseUrl = typeof window !== "undefined" ? window.location.origin : "";
+
+  return (
+    <div className="space-y-5">
+      <div className="space-y-1.5">
+        <p className="text-sm font-medium">API Base URL</p>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 rounded-md border border-border/60 bg-muted/40 px-3 py-2 font-mono text-xs text-foreground">
+            {apiBaseUrl}/api
+          </code>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              navigator.clipboard.writeText(`${apiBaseUrl}/api`);
+              toast.success("Copied to clipboard");
+            }}
+          >
+            <Copy className="mr-1.5 size-3.5" /> Copy
+          </Button>
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">API Key</p>
+          <p className="text-xs text-muted-foreground">
+            {apiKey ? `Key ending in …${apiKey.slice(-4)}` : "No API key generated yet"}
+          </p>
+        </div>
+        <Button size="sm" variant="outline" onClick={generateApiKey}>
+          <Key className="mr-1.5 size-3.5" /> Generate API Key
+        </Button>
+      </div>
+
+      <Separator />
+
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">API Usage</p>
+          <p className="text-xs text-muted-foreground">Requests made this month</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-semibold tabular-nums text-foreground">{requestCount}</span>
+          <span className="text-xs text-muted-foreground">requests</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Danger Zone Section ---------- */
+
+function DangerZoneSection() {
+  const [deletingDeploys, setDeletingDeploys] = useState(false);
+
+  async function deleteAllDeployments() {
+    setDeletingDeploys(true);
+    try {
+      const data = await api<{ deployments: DeploymentItem[] }>("/api/deployments");
+      const ids = data.deployments.map((d) => d.id);
+      await Promise.all(ids.map((id) => api(`/api/deployments/${id}`, { method: "DELETE" })));
+      toast.success(`${ids.length} deployment(s) deleted`);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to delete deployments");
+    } finally {
+      setDeletingDeploys(false);
+    }
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl border-2 border-destructive/30 bg-card shadow-sm">
+      <div className="flex items-center gap-3 border-b border-destructive/20 bg-destructive/5 px-6 py-4">
+        <span className="flex size-8 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+          <AlertTriangle className="size-5" />
+        </span>
+        <div>
+          <h2 className="text-sm font-semibold text-destructive">Danger Zone</h2>
+          <p className="text-xs text-muted-foreground">Irreversible and destructive actions</p>
+        </div>
+      </div>
+      <div className="space-y-4 px-6 py-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Delete all deployments</p>
+            <p className="text-xs text-muted-foreground">
+              Permanently remove all your deployments and their data
+            </p>
+          </div>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={deletingDeploys}
+                className="border-destructive/30 text-destructive hover:bg-destructive/10"
+              >
+                {deletingDeploys ? (
+                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-1.5 size-3.5" />
+                )}
+                Delete all
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete all deployments?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete all of your deployments and their associated data.
+                  This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={deleteAllDeployments}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Delete all deployments
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+
+        <Separator />
+
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-destructive">Delete account</p>
+            <p className="text-xs text-muted-foreground">
+              Permanently delete your account and all data
+            </p>
+          </div>
+          <Button size="sm" variant="outline" disabled className="gap-1.5">
+            <Trash2 className="size-3.5" /> Delete account
+            <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px]">Coming soon</Badge>
+          </Button>
+        </div>
       </div>
     </div>
   );

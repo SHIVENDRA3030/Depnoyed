@@ -1015,3 +1015,56 @@ Stage Summary:
 - Comprehensive styling polish applied across all 6 views
 - No bugs or errors found during QA
 - Project is stable and feature-rich for MVP stage
+
+---
+Task ID: 2
+Agent: lead-engineer (Z.ai Code)
+Task: QA testing, styling improvements, and new feature additions to the OSS Marketplace MVP.
+
+Work Log:
+- Performed comprehensive QA testing with agent-browser: marketplace, login/register, deploy flow, deployment detail, settings, dark mode — all functional
+- Enhanced marketplace hero section:
+  - Added AnimatedCounter component (requestAnimationFrame + ease-out cubic curve)
+  - Added social proof section with avatar row, "Join X developers" text, and deployment activity indicators
+  - Added "Recommended for you" section (personalized when logged in, "Popular picks" otherwise)
+  - Enhanced stat cards with gradient backgrounds, icon bounce/glow on hover, and number indicators (∞, 24/7, 100%)
+  - Added CSS: stat-icon-glow, stat-icon-bounce keyframe
+- Enhanced dashboard view:
+  - Added 4 summary stat cards: Total Deployments, Running, Total Uptime, Resource Usage
+  - Added activity timeline panel (side-by-side on desktop, below on mobile)
+  - Enhanced empty state with animated floating elements, step-by-step guide, and quick action buttons
+  - Added CSS: empty-float-1-4, empty-pulse-ring, stat-trend-up/down
+- Enhanced deploy modal:
+  - Added cost estimator section with Compute, Storage, Network line items
+  - Shows total hourly and monthly cost (~$0.0095/hr, ~$6.84/mo)
+  - Uses Calculator icon with gradient background
+- Enhanced deployment view:
+  - Added status badge/shield generator with shields.io URL
+  - Copyable snippets in Markdown, HTML, and URL formats
+  - Status-to-color mapping (running→brightgreen, pending→yellow, etc.)
+- Enhanced app detail view:
+  - Converted sections to tabbed interface (Overview, Specifications, README, Reviews)
+  - Added "Related apps" section showing same-category apps
+  - Added deployment status indicator in header ("You have N instance(s) running")
+- Enhanced login view:
+  - Added "What's included" mini feature grid (10+ Apps, Free Tier, Instant Deploy)
+  - Added animated shimmer gradient on "one click" text
+  - Added trust badge row (No credit card required · Free tier · Open source)
+  - Added decorative gradient orb behind auth card
+  - Added CSS: shimmer-text, orb-pulse keyframes
+- Enhanced settings view:
+  - Added gradient header with prominent avatar
+  - Added "API Access" section (API base URL, API key, usage stats)
+  - Added notification toggles (email + desktop)
+  - Added "Danger Zone" section (delete all deployments, delete account)
+- All changes pass ESLint cleanly with no errors
+- Dev server compiles and runs without issues
+
+Stage Summary:
+- Marketplace now has animated counters, social proof, recommended apps, and enhanced stat cards
+- Dashboard has summary stats, activity timeline, and improved empty state
+- Deploy modal has cost estimator; deployment view has status badge generator
+- App detail has tabbed interface, related apps, and instance count indicator
+- Login has shimmer text, feature grid, trust badges; settings has API access, danger zone
+- Project is stable, feature-rich, and visually polished for MVP stage
+- No bugs or errors found during QA

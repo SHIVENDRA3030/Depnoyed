@@ -33,6 +33,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Variable,
+  Shield,
+  CheckCheck,
 } from "lucide-react";
 import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -490,6 +492,13 @@ export function DeploymentView({ id }: { id: string }) {
           </AlertDialog>
         </div>
       </div>
+
+      {/* Status Badge section */}
+      <StatusBadgeSection
+        appName={dep.app?.name ?? "app"}
+        status={dep.status}
+        subdomain={dep.subdomain}
+      />
 
       {/* Deploy progress — connected line/dots visual */}
       <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -953,6 +962,131 @@ function DeploymentPerformanceSparklines({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/* ---------- Status Badge Section ---------- */
+
+function badgeColorForStatus(status: string): string {
+  switch (status) {
+    case "running":
+      return "brightgreen";
+    case "pending":
+    case "creating":
+      return "yellow";
+    case "failed":
+    case "dead":
+      return "red";
+    case "stopped":
+    case "exited":
+      return "gray";
+    default:
+      return "lightgray";
+  }
+}
+
+function badgeLabelForStatus(status: string): string {
+  switch (status) {
+    case "running":
+      return "running";
+    case "pending":
+      return "pending";
+    case "creating":
+      return "creating";
+    case "failed":
+      return "failed";
+    case "dead":
+      return "dead";
+    case "stopped":
+      return "stopped";
+    case "exited":
+      return "exited";
+    default:
+      return status;
+  }
+}
+
+function StatusBadgeSection({
+  appName,
+  status,
+  subdomain,
+}: {
+  appName: string;
+  status: string;
+  subdomain: string;
+}) {
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+
+  const color = badgeColorForStatus(status);
+  const label = badgeLabelForStatus(status);
+  const slug = appName.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
+  const badgeUrl = `https://img.shields.io/badge/${slug}-${label}-${color}`;
+
+  const snippets = [
+    { format: "Markdown", code: `![${appName} status](${badgeUrl})` },
+    { format: "HTML", code: `<img src="${badgeUrl}" alt="${appName} status" />` },
+    { format: "URL", code: badgeUrl },
+  ];
+
+  function copySnippet(idx: number) {
+    navigator.clipboard?.writeText(snippets[idx].code);
+    setCopiedIdx(idx);
+    toast.success("Copied to clipboard");
+    setTimeout(() => setCopiedIdx(null), 1500);
+  }
+
+  return (
+    <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <h2 className="flex items-center gap-2 text-sm font-semibold">
+        <Shield className="size-4 text-brand" /> Status Badge
+      </h2>
+      <p className="mt-0.5 text-[11px] text-muted-foreground">
+        Embed a live status badge in your README, docs, or dashboard.
+      </p>
+
+      {/* Badge preview */}
+      <div className="mt-4 flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-4">
+        <img
+          src={badgeUrl}
+          alt={`${appName} ${status}`}
+          className="h-5"
+          loading="lazy"
+        />
+        <span className="text-xs text-muted-foreground">
+          Preview — auto-updates with deployment status
+        </span>
+      </div>
+
+      {/* Copyable snippets */}
+      <div className="mt-3 space-y-2">
+        {snippets.map((s, i) => (
+          <div key={s.format} className="flex items-center gap-2">
+            <span className="w-16 shrink-0 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {s.format}
+            </span>
+            <code className="flex-1 truncate rounded-md border border-border/60 bg-muted/40 px-2.5 py-1.5 font-mono text-xs text-foreground/80">
+              {s.code}
+            </code>
+            <button
+              type="button"
+              onClick={() => copySnippet(i)}
+              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label={`Copy ${s.format}`}
+            >
+              {copiedIdx === i ? (
+                <CheckCheck className="size-3.5 text-brand" />
+              ) : (
+                <Copy className="size-3.5" />
+              )}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-3 text-[11px] text-muted-foreground">
+        Badge URL: <span className="font-mono text-foreground/70">{badgeUrl}</span>
+      </p>
     </div>
   );
 }

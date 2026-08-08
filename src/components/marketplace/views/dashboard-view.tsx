@@ -315,41 +315,54 @@ export function DashboardView() {
         </div>
       </div>
 
-      {/* Stats cards with glass morphism */}
-      {deployments && deployments.length > 0 && (
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard
-            icon={<Boxes className="size-4" />}
-            label="Total"
-            value={String(deployments.length)}
-            tone="default"
-            glass
-          />
-          <StatCard
-            icon={<Activity className="size-4" />}
-            label="Running"
-            value={String(deployments.filter((d) => d.status === "running").length)}
-            tone="emerald"
-            glass
-          />
-          <StatCard
-            icon={<Square className="size-4" />}
-            label="Stopped"
-            value={String(deployments.filter((d) => d.status === "stopped" || d.status === "exited").length)}
-            tone="zinc"
-            glass
-          />
-          <StatCard
-            icon={<HardDrive className="size-4" />}
-            label="Data stored"
-            value={formatDataSize(
-              deployments.reduce((acc, d) => acc + (d.volumeDataSize ?? 0), 0)
-            )}
-            tone="brand"
-            glass
-          />
-        </div>
-      )}
+      {/* Summary stat cards with glass morphism & trend indicators */}
+      {deployments && deployments.length > 0 && (() => {
+        const runningCount = deployments.filter((d) => d.status === "running").length;
+        const totalUptimeMin = deployments
+          .filter((d) => d.status === "running")
+          .reduce((acc, d) => acc + Math.max(0, Math.floor((Date.now() - new Date(d.createdAt).getTime()) / 60000)), 0);
+        const uptimeH = Math.floor(totalUptimeMin / 60);
+        const uptimeM = totalUptimeMin % 60;
+        const uptimeStr = uptimeH > 0 ? `${uptimeH}h ${uptimeM}m` : `${uptimeM}m`;
+        const containerQuota = 10;
+        const runningPct = Math.round((runningCount / Math.max(1, deployments.length)) * 100);
+        return (
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard
+              icon={<Boxes className="size-4" />}
+              label="Total Deployments"
+              value={String(deployments.length)}
+              tone="default"
+              glass
+              trend={{ direction: "up", value: `${runningPct}%` }}
+            />
+            <StatCard
+              icon={<Activity className="size-4" />}
+              label="Running"
+              value={String(runningCount)}
+              tone="emerald"
+              glass
+              trend={{ direction: runningCount > 0 ? "up" : "down", value: runningCount > 0 ? "active" : "idle" }}
+            />
+            <StatCard
+              icon={<Clock className="size-4" />}
+              label="Total Uptime"
+              value={uptimeStr}
+              tone="teal"
+              glass
+              trend={{ direction: "up", value: "live" }}
+            />
+            <StatCard
+              icon={<Cpu className="size-4" />}
+              label="Resource Usage"
+              value={`${deployments.length}/${containerQuota}`}
+              tone="brand"
+              glass
+              trend={{ direction: deployments.length > containerQuota * 0.7 ? "up" : "down", value: `${Math.round((deployments.length / containerQuota) * 100)}%` }}
+            />
+          </div>
+        );
+      })()}
 
       {/* Health Overview — Feature 1 */}
       {healthData && healthData.runningCount > 0 && (
@@ -483,54 +496,73 @@ export function DashboardView() {
         </div>
       )}
 
-      <div className="mt-6">
-        {deployments === null ? (
-          <div className="space-y-3">
-            {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="h-28 rounded-2xl shimmer" />
-            ))}
-          </div>
-        ) : deployments.length === 0 ? (
-          <EmptyState />
-        ) : filteredDeployments.length === 0 ? (
-          <div className="flex flex-col items-center rounded-2xl border border-dashed border-border py-12 text-center">
-            <Search className="size-8 text-muted-foreground/40" />
-            <p className="mt-2 text-sm text-muted-foreground">No deployments match your search.</p>
-            <Button variant="outline" size="sm" className="mt-3" onClick={() => { setSearchQuery(""); setStatusFilter("all"); }}>
-              Clear filters
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filteredDeployments.map((d) => (
-              <DeploymentRow
-                key={d.id}
-                d={d}
-                busy={busyId === d.id}
-                selected={selectedIds.has(d.id)}
-                onSelect={() => toggleSelect(d.id)}
-                onStart={() => act(d.id, "start")}
-                onStop={() => act(d.id, "stop")}
-                onRestart={() => act(d.id, "restart")}
-                onDelete={() => remove(d.id)}
+      {/* Main content: Deployment list + Activity timeline side-by-side on desktop */}
+      <div className="mt-6 lg:grid lg:grid-cols-[1fr_320px] lg:gap-6">
+        {/* Left column: Deployments */}
+        <div>
+          {deployments === null ? (
+            <div className="space-y-3">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="h-28 rounded-2xl shimmer" />
+              ))}
+            </div>
+          ) : deployments.length === 0 ? (
+            <EmptyState />
+          ) : filteredDeployments.length === 0 ? (
+            <div className="flex flex-col items-center rounded-2xl border border-dashed border-border py-12 text-center">
+              <Search className="size-8 text-muted-foreground/40" />
+              <p className="mt-2 text-sm text-muted-foreground">No deployments match your search.</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => { setSearchQuery(""); setStatusFilter("all"); }}>
+                Clear filters
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredDeployments.map((d) => (
+                <DeploymentRow
+                  key={d.id}
+                  d={d}
+                  busy={busyId === d.id}
+                  selected={selectedIds.has(d.id)}
+                  onSelect={() => toggleSelect(d.id)}
+                  onStart={() => act(d.id, "start")}
+                  onStop={() => act(d.id, "stop")}
+                  onRestart={() => act(d.id, "restart")}
+                  onDelete={() => remove(d.id)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Resource Usage sparkline section */}
+          {deployments && deployments.length > 0 && (
+            <ResourceUsageSparklines deployments={deployments} />
+          )}
+        </div>
+
+        {/* Right column: Activity Timeline (visible on lg+) */}
+        {deployments && deployments.length > 0 && (
+          <div className="hidden lg:block">
+            <div className="lg:sticky lg:top-8">
+              <DashboardActivityPanel
+                deployments={deployments}
+                expanded={timelineExpanded}
+                onToggleExpand={() => setTimelineExpanded((v) => !v)}
               />
-            ))}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Resource Usage sparkline section */}
+      {/* Activity timeline below deployments on mobile/tablet */}
       {deployments && deployments.length > 0 && (
-        <ResourceUsageSparklines deployments={deployments} />
-      )}
-
-      {/* Activity timeline - Enhanced (Feature 3) */}
-      {deployments && deployments.length > 0 && (
-        <EnhancedActivityTimeline
-          deployments={deployments}
-          expanded={timelineExpanded}
-          onToggleExpand={() => setTimelineExpanded((v) => !v)}
-        />
+        <div className="lg:hidden">
+          <EnhancedActivityTimeline
+            deployments={deployments}
+            expanded={timelineExpanded}
+            onToggleExpand={() => setTimelineExpanded((v) => !v)}
+          />
+        </div>
       )}
 
       {/* Batch action bar - fixed at bottom */}
@@ -629,29 +661,40 @@ function StatCard({
   value,
   tone,
   glass: glassProp,
+  trend,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
-  tone: "default" | "emerald" | "zinc" | "brand";
+  tone: "default" | "emerald" | "zinc" | "brand" | "teal";
   glass?: boolean;
+  trend?: { direction: "up" | "down"; value: string };
 }) {
   const toneClasses = {
     default: "bg-muted/60 text-foreground",
     emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
     zinc: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
     brand: "bg-brand-soft text-brand",
+    teal: "bg-teal-500/10 text-teal-600 dark:text-teal-400",
   }[tone];
   return (
     <div className={`group flex items-center gap-3 rounded-xl border border-border p-3 shadow-sm transition-all duration-200 hover:border-brand/30 hover:shadow-md ${glassProp ? "glass-stat-card border-white/20 dark:border-white/5" : "bg-card"}`}>
       <span className={`flex size-9 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-110 ${toneClasses}`}>
         {icon}
       </span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
           {label}
         </p>
-        <p className="truncate text-lg font-bold tabular-nums">{value}</p>
+        <div className="flex items-baseline gap-1.5">
+          <p className="truncate text-lg font-bold tabular-nums">{value}</p>
+          {trend && (
+            <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium tabular-nums ${trend.direction === "up" ? "stat-trend-up" : "stat-trend-down"}`}>
+              {trend.direction === "up" ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+              {trend.value}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -832,37 +875,71 @@ function EmptyState() {
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-12 top-1/4 size-32 rounded-full bg-emerald-500/5 blur-2xl" />
         <div className="absolute -right-8 bottom-1/4 size-24 rounded-full bg-teal-500/5 blur-2xl" />
+        {/* Animated floating orbs */}
+        <div className="empty-float-1 absolute left-[15%] top-[20%] size-4 rounded-full bg-emerald-400/10 blur-sm" />
+        <div className="empty-float-2 absolute right-[18%] top-[30%] size-3 rounded-full bg-teal-400/10 blur-sm" />
+        <div className="empty-float-3 absolute left-[60%] bottom-[25%] size-5 rounded-full bg-emerald-300/8 blur-md" />
+        <div className="empty-float-4 absolute right-[30%] bottom-[35%] size-3.5 rounded-full bg-teal-300/8 blur-sm" />
       </div>
+
+      {/* Main icon with pulse ring */}
       <div className="relative">
+        <div className="empty-pulse-ring absolute inset-0 rounded-2xl border-2 border-emerald-500/30" />
         <div className="flex size-20 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 text-brand shadow-sm dark:from-emerald-950/30 dark:to-teal-950/30">
           <Container className="size-9" />
         </div>
         <div className="absolute -right-2 -top-2 flex size-6 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
           <Plus className="size-3" />
         </div>
-        {/* Decorative dots */}
-        <div className="absolute -left-4 bottom-0 size-2 rounded-full bg-emerald-500/20" />
-        <div className="absolute -right-6 bottom-2 size-1.5 rounded-full bg-teal-500/20" />
+        {/* Animated decorative dots */}
+        <div className="empty-float-1 absolute -left-6 bottom-2 size-2 rounded-full bg-emerald-500/30" />
+        <div className="empty-float-3 absolute -right-8 top-0 size-1.5 rounded-full bg-teal-500/30" />
+        <div className="empty-float-2 absolute left-0 -bottom-4 size-1 rounded-full bg-emerald-400/20" />
       </div>
+
       <h3 className="mt-6 text-lg font-semibold">No deployments yet</h3>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">
         Browse the marketplace and deploy your first open-source application in one click.
       </p>
-      <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row">
+
+      {/* Step-by-step guide */}
+      <div className="mt-6 flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-1.5">
+          <span className="flex size-6 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand">1</span>
+          <span className="text-muted-foreground">Browse</span>
+        </div>
+        <ArrowRight className="size-3.5 text-muted-foreground/40" />
+        <div className="flex items-center gap-1.5">
+          <span className="flex size-6 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand">2</span>
+          <span className="text-muted-foreground">Deploy</span>
+        </div>
+        <ArrowRight className="size-3.5 text-muted-foreground/40" />
+        <div className="flex items-center gap-1.5">
+          <span className="flex size-6 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand">3</span>
+          <span className="text-muted-foreground">Access</span>
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-col items-center gap-3 sm:flex-row">
         <Button className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-sm hover:shadow-md hover:brightness-110" onClick={() => navigate({ name: "marketplace" })}>
           <Rocket className="mr-2 size-4" /> Browse marketplace
         </Button>
       </div>
-      {/* Quick suggestions */}
+
+      {/* Quick action buttons for popular apps */}
       <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
         <span className="text-xs text-muted-foreground/60">Try:</span>
-        {["Demo Counter", "Static Welcome", "Markdown Wiki"].map((name) => (
+        {[
+          { name: "Demo Counter", icon: <Zap className="size-2.5" /> },
+          { name: "Static Welcome", icon: <Container className="size-2.5" /> },
+          { name: "Markdown Wiki", icon: <Boxes className="size-2.5" /> },
+        ].map((app) => (
           <button
-            key={name}
+            key={app.name}
             onClick={() => navigate({ name: "marketplace" })}
-            className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-all hover:border-emerald-500/30 hover:text-emerald-600 dark:hover:text-emerald-400"
+            className="quick-action-card inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition-all hover:border-emerald-500/30 hover:bg-emerald-500/5 hover:text-emerald-600 dark:hover:text-emerald-400"
           >
-            <Rocket className="size-2.5" /> {name}
+            {app.icon} {app.name}
           </button>
         ))}
       </div>
@@ -1154,6 +1231,134 @@ function QuickActions({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ---------- Dashboard Activity Panel (sidebar for desktop) ---------- */
+
+function DashboardActivityPanel({
+  deployments,
+  expanded,
+  onToggleExpand,
+}: {
+  deployments: DeploymentItem[];
+  expanded: boolean;
+  onToggleExpand: () => void;
+}) {
+  // Generate events from deployments, limit to 5 most recent
+  const events = useMemo(() => {
+    const allEvents: {
+      id: string;
+      appName: string;
+      action: "deployed" | "started" | "stopped" | "restarted";
+      dotColor: string;
+      icon: React.ReactNode;
+      description: string;
+      time: string;
+      iso: string;
+    }[] = [];
+
+    for (const d of deployments) {
+      const appName = d.app?.name ?? "Unknown";
+      const createdTime = new Date(d.createdAt).getTime();
+      const updatedTime = new Date(d.updatedAt).getTime();
+
+      // Deploy event (from createdAt)
+      allEvents.push({
+        id: `${d.id}-deploy`,
+        appName,
+        action: "deployed",
+        dotColor: "bg-emerald-500",
+        icon: <Rocket className="size-3" />,
+        description: `Deployed ${appName}`,
+        time: timeAgo(d.createdAt),
+        iso: d.createdAt,
+      });
+
+      // If updatedAt differs from createdAt, add a status event
+      if (Math.abs(updatedTime - createdTime) > 60000) {
+        if (d.status === "running") {
+          allEvents.push({
+            id: `${d.id}-start`,
+            appName,
+            action: "started",
+            dotColor: "bg-emerald-500",
+            icon: <Play className="size-3" />,
+            description: `Started ${appName}`,
+            time: timeAgo(d.updatedAt),
+            iso: d.updatedAt,
+          });
+        } else if (d.status === "stopped" || d.status === "exited") {
+          allEvents.push({
+            id: `${d.id}-stop`,
+            appName,
+            action: "stopped",
+            dotColor: "bg-amber-500",
+            icon: <Square className="size-3" />,
+            description: `Stopped ${appName}`,
+            time: timeAgo(d.updatedAt),
+            iso: d.updatedAt,
+          });
+        }
+      }
+    }
+
+    // Sort by time descending, take 5
+    return allEvents
+      .sort((a, b) => new Date(b.iso).getTime() - new Date(a.iso).getTime())
+      .slice(0, expanded ? 10 : 5);
+  }, [deployments, expanded]);
+
+  const hasMore = events.length >= (expanded ? 10 : 5);
+
+  return (
+    <div className="rounded-2xl border border-border bg-card shadow-sm">
+      <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
+        <h3 className="flex items-center gap-2 text-sm font-semibold">
+          <Activity className="size-4 text-brand" /> Activity
+        </h3>
+        <span className="text-[10px] font-medium text-muted-foreground/50">Live</span>
+      </div>
+      <ol className="relative px-4 py-2">
+        {events.map((event, i) => {
+          const isLast = i === events.length - 1;
+          return (
+            <li
+              key={event.id}
+              className="animate-timeline-entrance relative"
+              style={{ animationDelay: `${i * 40}ms` }}
+            >
+              {/* Connector line */}
+              {!isLast && (
+                <div className="absolute left-[7px] top-5 bottom-0 w-px bg-border/40" />
+              )}
+              <div className="flex items-start gap-3 py-2">
+                {/* Timeline dot */}
+                <span className="relative mt-1 flex shrink-0">
+                  <span className={`size-3.5 rounded-full border-2 border-background ${event.dotColor}`} />
+                </span>
+                {/* Event content */}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium">{event.description}</p>
+                  <p className="text-[10px] text-muted-foreground/70">{event.time}</p>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      {hasMore && (
+        <div className="border-t border-border/40 px-4 py-2 text-center">
+          <button
+            onClick={onToggleExpand}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {expanded ? "Show less" : "View all"}
+            <ChevronDown className={`size-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
