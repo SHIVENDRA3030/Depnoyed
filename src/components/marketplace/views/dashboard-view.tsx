@@ -30,6 +30,7 @@ import {
   HardDriveUpload,
   DollarSign,
   Search,
+  Rocket,
 } from "lucide-react";
 import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -433,49 +434,98 @@ export function DashboardView() {
         <ResourceUsageSparklines deployments={deployments} />
       )}
 
-      {/* Activity timeline */}
+      {/* Activity timeline - Enhanced */}
       {deployments && deployments.length > 0 && (
         <div className="mt-8">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            <TrendingUp className="size-4" /> Recent activity
-          </h2>
-          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-            <ol className="relative space-y-3">
-              <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-border" />
+          <div className="flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              <TrendingUp className="size-4" /> Recent activity
+            </h2>
+            <span className="text-[11px] text-muted-foreground/60">Live · auto-refresh</span>
+          </div>
+          <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <ol className="relative divide-y divide-border/40">
+              {/* Animated timeline spine */}
               {[...deployments]
                 .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-                .slice(0, 5)
-                .map((d) => {
+                .slice(0, 6)
+                .map((d, i) => {
                   const isActive = d.status === "running";
+                  const isFailed = d.status === "failed" || d.status === "dead";
+                  const statusIcon = isActive ? "🟢" : isFailed ? "🔴" : "⚪";
+                  const statusLabel = isActive ? "Running" : d.status === "stopped" || d.status === "exited" ? "Stopped" : isFailed ? "Failed" : d.status;
                   return (
-                    <li key={d.id} className="relative flex items-start gap-3 pl-6">
-                      <span
-                        className={`absolute left-0 top-1.5 size-4 rounded-full border-2 border-background ${
-                          isActive
-                            ? "bg-emerald-500"
-                            : d.status === "failed" || d.status === "dead"
-                            ? "bg-red-500"
-                            : "bg-zinc-400"
-                        }`}
-                      />
+                    <li key={d.id} className="animate-slide-in-right" style={{ animationDelay: `${i * 60}ms` }}>
                       <button
-                        className="flex flex-1 items-center justify-between gap-2 text-left text-sm hover:opacity-80"
+                        className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/30"
                         onClick={() => navigate({ name: "deployment", id: d.id })}
                       >
-                        <span className="min-w-0">
-                          <span className="font-medium">{d.app?.name ?? "Unknown app"}</span>{" "}
-                          <span className="text-muted-foreground">
-                            {isActive ? "is running" : `was ${d.status}`}
+                        {/* Status indicator with health ring */}
+                        <span className="relative flex size-8 shrink-0 items-center justify-center">
+                          {isActive && (
+                            <span className="absolute inset-0 rounded-full bg-emerald-500/20 animate-health-ring" />
+                          )}
+                          <span className={`relative flex size-3 rounded-full ${
+                            isActive ? "bg-emerald-500" : isFailed ? "bg-red-500" : "bg-zinc-400 dark:bg-zinc-500"
+                          }`}>
+                            {isActive && (
+                              <span className="absolute inset-0 rounded-full bg-emerald-500 animate-status-pulse" />
+                            )}
                           </span>
                         </span>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {timeAgo(d.updatedAt)}
-                        </span>
+                        {/* App info */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-medium group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                              {d.app?.name ?? "Unknown app"}
+                            </span>
+                            <Badge
+                              variant="secondary"
+                              className={`shrink-0 gap-1 text-[10px] font-normal ${
+                                isActive
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                  : isFailed
+                                  ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                                  : ""
+                              }`}
+                            >
+                              {statusLabel}
+                            </Badge>
+                            {d.label && (
+                              <Badge variant="outline" className="shrink-0 text-[10px] font-normal">
+                                <Tag className="mr-0.5 size-2.5" /> {d.label}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground/70">
+                            <span className="font-mono">{d.subdomain}</span>
+                            {d.volumeDataSize != null && d.volumeDataSize > 0 && (
+                              <span>· {formatDataSize(d.volumeDataSize)} stored</span>
+                            )}
+                          </div>
+                        </div>
+                        {/* Timestamp */}
+                        <div className="shrink-0 text-right">
+                          <span className="block text-xs text-muted-foreground">{timeAgo(d.updatedAt)}</span>
+                          <span className="block text-[10px] text-muted-foreground/50">
+                            {new Date(d.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
                       </button>
                     </li>
                   );
                 })}
             </ol>
+            {deployments.length > 6 && (
+              <div className="border-t border-border/40 px-4 py-2.5 text-center">
+                <button
+                  onClick={() => navigate({ name: "dashboard" })}
+                  className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  View all {deployments.length} deployments
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -588,8 +638,8 @@ function StatCard({
     brand: "bg-brand-soft text-brand",
   }[tone];
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:border-brand/30">
-      <span className={`flex size-9 items-center justify-center rounded-lg ${toneClasses}`}>
+    <div className="group flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm transition-all duration-200 hover:border-brand/30 hover:shadow-md">
+      <span className={`flex size-9 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-110 ${toneClasses}`}>
         {icon}
       </span>
       <div className="min-w-0">
@@ -754,22 +804,45 @@ function DeploymentRow({
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-20 text-center">
+    <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border py-20 text-center">
+      {/* Background decorative elements */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -left-12 top-1/4 size-32 rounded-full bg-emerald-500/5 blur-2xl" />
+        <div className="absolute -right-8 bottom-1/4 size-24 rounded-full bg-teal-500/5 blur-2xl" />
+      </div>
       <div className="relative">
-        <div className="flex size-16 items-center justify-center rounded-2xl bg-brand-soft text-brand">
-          <Container className="size-8" />
+        <div className="flex size-20 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 text-brand shadow-sm dark:from-emerald-950/30 dark:to-teal-950/30">
+          <Container className="size-9" />
         </div>
-        <div className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-brand text-brand-foreground">
+        <div className="absolute -right-2 -top-2 flex size-6 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
           <Plus className="size-3" />
         </div>
+        {/* Decorative dots */}
+        <div className="absolute -left-4 bottom-0 size-2 rounded-full bg-emerald-500/20" />
+        <div className="absolute -right-6 bottom-2 size-1.5 rounded-full bg-teal-500/20" />
       </div>
-      <h3 className="mt-5 text-lg font-semibold">No deployments yet</h3>
-      <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+      <h3 className="mt-6 text-lg font-semibold">No deployments yet</h3>
+      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
         Browse the marketplace and deploy your first open-source application in one click.
       </p>
-      <Button className="mt-5 bg-brand text-brand-foreground hover:bg-brand/90" onClick={() => navigate({ name: "marketplace" })}>
-        Browse marketplace <ArrowRight className="ml-2 size-4" />
-      </Button>
+      <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row">
+        <Button className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-sm hover:shadow-md hover:brightness-110" onClick={() => navigate({ name: "marketplace" })}>
+          <Rocket className="mr-2 size-4" /> Browse marketplace
+        </Button>
+      </div>
+      {/* Quick suggestions */}
+      <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+        <span className="text-xs text-muted-foreground/60">Try:</span>
+        {["Demo Counter", "Static Welcome", "Markdown Wiki"].map((name) => (
+          <button
+            key={name}
+            onClick={() => navigate({ name: "marketplace" })}
+            className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-all hover:border-emerald-500/30 hover:text-emerald-600 dark:hover:text-emerald-400"
+          >
+            <Rocket className="size-2.5" /> {name}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

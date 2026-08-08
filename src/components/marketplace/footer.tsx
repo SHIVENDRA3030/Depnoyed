@@ -1,6 +1,7 @@
 "use client";
 
-import { Rocket, ShieldCheck, Container, Database, Globe, Lock, Zap, Cpu } from "lucide-react";
+import { Rocket, ShieldCheck, Container, Database, Globe, Lock, Zap, Cpu, Heart, Code2, Github } from "lucide-react";
+import { navigate } from "@/lib/store";
 
 export function Footer() {
   return (
@@ -28,24 +29,43 @@ export function Footer() {
                 v1.0 · mock runtime
               </span>
             </div>
+            {/* Social / links row */}
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                onClick={() => navigate({ name: "marketplace" })}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Code2 className="size-3.5" /> Marketplace
+              </button>
+              <span className="text-border">·</span>
+              <button
+                onClick={() => navigate({ name: "settings" })}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ShieldCheck className="size-3.5" /> Settings
+              </button>
+            </div>
           </div>
 
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Platform
             </h4>
-            <ul className="mt-3 space-y-2 text-sm">
-              <li className="flex items-center gap-2 text-muted-foreground">
-                <Container className="size-3.5 text-brand" /> Isolated containers
+            <ul className="mt-3 space-y-2.5 text-sm">
+              <li className="group flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
+                <Container className="size-3.5 text-brand transition-transform group-hover:scale-110" /> Isolated containers
               </li>
-              <li className="flex items-center gap-2 text-muted-foreground">
-                <Database className="size-3.5 text-brand" /> Persistent volumes
+              <li className="group flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
+                <Database className="size-3.5 text-brand transition-transform group-hover:scale-110" /> Persistent volumes
               </li>
-              <li className="flex items-center gap-2 text-muted-foreground">
-                <ShieldCheck className="size-3.5 text-brand" /> Tenant isolation
+              <li className="group flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
+                <ShieldCheck className="size-3.5 text-brand transition-transform group-hover:scale-110" /> Tenant isolation
               </li>
-              <li className="flex items-center gap-2 text-muted-foreground">
-                <Globe className="size-3.5 text-brand" /> Unique public URLs
+              <li className="group flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
+                <Globe className="size-3.5 text-brand transition-transform group-hover:scale-110" /> Unique public URLs
+              </li>
+              <li className="group flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground">
+                <Zap className="size-3.5 text-brand transition-transform group-hover:scale-110" /> One-click deploy
               </li>
             </ul>
           </div>
@@ -54,25 +74,48 @@ export function Footer() {
             <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Resources
             </h4>
-            <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-brand/60" /> API · REST</li>
-              <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-brand/60" /> Runtime · pluggable Docker adapter</li>
-              <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-brand/60" /> DB · Prisma + SQLite</li>
-              <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-brand/60" /> Auth · scrypt + signed cookie</li>
+            <ul className="mt-3 space-y-2.5 text-sm text-muted-foreground">
+              <li className="group flex items-center gap-2 transition-colors hover:text-foreground">
+                <span className="size-1.5 rounded-full bg-brand/60 transition-transform group-hover:scale-125" /> API · REST
+              </li>
+              <li className="group flex items-center gap-2 transition-colors hover:text-foreground">
+                <span className="size-1.5 rounded-full bg-brand/60 transition-transform group-hover:scale-125" /> Runtime · pluggable Docker adapter
+              </li>
+              <li className="group flex items-center gap-2 transition-colors hover:text-foreground">
+                <span className="size-1.5 rounded-full bg-brand/60 transition-transform group-hover:scale-125" /> DB · Prisma + SQLite
+              </li>
+              <li className="group flex items-center gap-2 transition-colors hover:text-foreground">
+                <span className="size-1.5 rounded-full bg-brand/60 transition-transform group-hover:scale-125" /> Auth · scrypt + signed cookie
+              </li>
+              <li className="group flex items-center gap-2 transition-colors hover:text-foreground">
+                <span className="size-1.5 rounded-full bg-brand/60 transition-transform group-hover:scale-125" /> UI · shadcn/ui + Tailwind
+              </li>
             </ul>
           </div>
         </div>
 
-        <div className="mt-8 flex flex-col items-center justify-between gap-2 border-t border-border/80 pt-6 text-xs text-muted-foreground sm:flex-row">
-          <p>© {new Date().getFullYear()} OSS Deploy · MVP prototype</p>
-          <div className="flex items-center gap-3">
+        <div className="mt-8 flex flex-col items-center justify-between gap-3 border-t border-border/80 pt-6 text-xs text-muted-foreground sm:flex-row">
+          <div className="flex items-center gap-2">
+            <p>© {new Date().getFullYear()} OSS Deploy</p>
+            <span className="text-border">·</span>
+            <span className="inline-flex items-center gap-1">
+              Made with <Heart className="size-3 fill-rose-500 text-rose-500" /> open-source
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3">
             <span className="inline-flex items-center gap-1">
               <Lock className="size-3" /> scrypt auth
             </span>
+            <span className="text-border">·</span>
             <span className="inline-flex items-center gap-1">
               <Cpu className="size-3" /> 0.5 core / 512 MB
             </span>
-            <span>Built with Next.js, Tailwind &amp; shadcn/ui</span>
+            <span className="text-border">·</span>
+            <span className="inline-flex items-center gap-1">
+              <Container className="size-3" /> multi-tenant
+            </span>
+            <span className="text-border hidden sm:inline">·</span>
+            <span className="hidden sm:inline">Next.js + Tailwind + shadcn/ui</span>
           </div>
         </div>
       </div>

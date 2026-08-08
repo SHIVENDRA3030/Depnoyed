@@ -349,6 +349,122 @@
   .animated-underline:hover {
     background-size: 100% 1px;
   }
+
+  /* Hero floating orbs */
+  .hero-orb-1 {
+    animation: orb-float-1 12s ease-in-out infinite;
+  }
+  .hero-orb-2 {
+    animation: orb-float-2 15s ease-in-out infinite;
+  }
+  .hero-orb-3 {
+    animation: orb-float-3 10s ease-in-out infinite;
+  }
+
+  /* Particle drift */
+  .animate-particle-drift {
+    animation: particle-drift 4s ease-out infinite;
+  }
+
+  /* Staggered card entrance */
+  .animate-card-entrance {
+    animation: card-entrance 0.5s ease-out both;
+  }
+
+  /* Health ring pulse */
+  .animate-health-ring {
+    animation: health-ring 2s ease-out infinite;
+  }
+
+  /* Counter tick */
+  .animate-counter-tick {
+    animation: counter-tick 0.3s ease-out;
+  }
+
+  /* Timeline grow */
+  .animate-timeline-grow {
+    animation: timeline-grow 0.6s ease-out both;
+    transform-origin: top;
+  }
+
+  /* Enhanced glass card with border glow */
+  .glass-card-enhanced {
+    background: oklch(1 0 0 / 0.65);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid oklch(1 0 0 / 0.2);
+  }
+  .dark .glass-card-enhanced {
+    background: oklch(0.205 0 0 / 0.65);
+    border: 1px solid oklch(1 0 0 / 0.08);
+  }
+
+  /* Card hover glow effect */
+  .card-glow-hover {
+    position: relative;
+    overflow: hidden;
+  }
+  .card-glow-hover::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), oklch(0.696 0.17 162.48 / 0.08) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .card-glow-hover:hover::before {
+    opacity: 1;
+  }
+
+  /* Deployment status gradient bar */
+  .status-bar-running {
+    background: linear-gradient(90deg, oklch(0.696 0.17 162.48) 0%, oklch(0.628 0.19 200) 100%);
+  }
+  .status-bar-stopped {
+    background: linear-gradient(90deg, oklch(0.556 0 0) 0%, oklch(0.4 0 0) 100%);
+  }
+  .status-bar-pending {
+    background: linear-gradient(90deg, oklch(0.769 0.15 85) 0%, oklch(0.7 0.15 60) 100%);
+  }
+  .status-bar-failed {
+    background: linear-gradient(90deg, oklch(0.577 0.245 27.325) 0%, oklch(0.5 0.2 20) 100%);
+  }
+
+  /* Activity timeline styles */
+  .timeline-dot {
+    position: relative;
+  }
+  .timeline-dot::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--brand);
+  }
+
+  /* Typing cursor blink */
+  .animate-cursor-blink {
+    animation: cursor-blink 1s step-end infinite;
+  }
+
+  /* Smooth number change */
+  .number-change {
+    display: inline-block;
+    transition: transform 0.2s ease;
+  }
+  .number-change-up {
+    transform: translateY(-2px);
+  }
+  .number-change-down {
+    transform: translateY(2px);
+  }
 }
 
 /* Keyframes */
@@ -426,4 +542,63 @@
 @keyframes success-ring {
   0% { transform: scale(0.8); opacity: 1; box-shadow: 0 0 0 0 oklch(0.696 0.17 162.48 / 0.4); }
   100% { transform: scale(1.5); opacity: 0; box-shadow: 0 0 0 20px oklch(0.696 0.17 162.48 / 0); }
+}
+
+/* Hero floating orbs */
+@keyframes orb-float-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(30px, -40px) scale(1.05); }
+  50% { transform: translate(-20px, -60px) scale(0.95); }
+  75% { transform: translate(-40px, -20px) scale(1.02); }
+}
+@keyframes orb-float-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(-40px, 20px) scale(0.98); }
+  50% { transform: translate(20px, 40px) scale(1.04); }
+  75% { transform: translate(40px, -10px) scale(0.96); }
+}
+@keyframes orb-float-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(25px, 35px) scale(1.06); }
+  66% { transform: translate(-35px, 15px) scale(0.94); }
+}
+
+/* Hero particle drift */
+@keyframes particle-drift {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(-120px) translateX(30px); opacity: 0; }
+}
+
+/* Staggered card entrance */
+@keyframes card-entrance {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Pulse ring for health indicators */
+@keyframes health-ring {
+  0% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.5); opacity: 0; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+/* Smooth counter tick */
+@keyframes counter-tick {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* Timeline line grow */
+@keyframes timeline-grow {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+
+/* Cursor blink */
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }

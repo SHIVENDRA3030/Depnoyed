@@ -875,3 +875,82 @@ Stage Summary:
 - **Verification results**: All pages render correctly, lint clean, no runtime errors, admin page functional, compare feature working, README rendering with Markdown, dashboard search/filter working, keyboard shortcuts active
 - **Unresolved issues/risks**: Database was force-reset (existing deployments lost), ratings still localStorage-based, admin user must be the first registered user
 - **Priority recommendations for next phase**: (1) Move ratings to server-side DB, (2) Add deployment sharing/collaboration, (3) Add real-time WebSocket status updates, (4) Add deployment health check monitoring with alerts, (5) Add app screenshots gallery, (6) Add deployment templates/quick-deploy presets
+
+---
+Task ID: 6
+Agent: lead-engineer (Z.ai Code)
+Task: Phase 6 — Styling improvements, new features, and comprehensive QA testing
+
+Work Log:
+- Assessed project status: all core flows (auth, marketplace, deploy, dashboard, app detail, settings, admin) working correctly
+- QA tested with agent-browser: marketplace, login, register, deploy, dashboard, app detail, dark mode, mobile — all passed with zero errors
+- Enhanced globals.css with 10+ new CSS animations and utility classes:
+  - Hero floating orbs (orb-float-1/2/3) for ambient movement
+  - Particle drift animation for hero section
+  - Staggered card entrance animation (card-entrance)
+  - Health ring pulse for deployment status indicators
+  - Counter tick and timeline grow animations
+  - Cursor blink animation
+  - Glass card enhanced with border glow
+  - Card glow hover effect (follows mouse position)
+  - Deployment status gradient bars (running/stopped/pending/failed)
+  - Activity timeline dot styles
+  - Number change transitions
+- Improved marketplace hero section:
+  - Added 3 floating blurred orbs (hero-orb-1/2/3) for ambient depth
+  - Added 4 small decorative particles with staggered delays
+  - Enhanced stat cards with hover scale effect
+  - Added favorites count badge in stats row
+- Added Favorites filter on marketplace:
+  - New "Favorites" category button with heart icon and count
+  - Filters apps to show only favorited ones
+  - Dedicated empty state for favorites with guidance text
+  - Reactive favorites state (favVersion counter) so category appears immediately
+  - onFavToggle callback propagates from AppCard to parent
+- Enhanced app cards:
+  - Added version and repository indicators below description
+  - Favorite heart indicator on app logo when favorited
+  - Improved hover transitions with card-glow-hover effect
+  - Staggered card entrance animations
+  - Toast notifications on favorite toggle
+- Added recent search suggestions:
+  - Stores last 5 searches in localStorage
+  - Dropdown appears on search focus with recent searches
+  - Clear button to remove history
+  - Search icon and history icon
+  - Enter key submits search and saves to history
+  - Clear button (X) in search input
+- Enhanced dashboard activity timeline:
+  - Full-width list items with dividers instead of timeline dots
+  - Status badge with color-coded backgrounds
+  - Health ring pulse animation on running deployments
+  - Label badge shown when deployment has custom label
+  - Subdomain and volume data size shown
+  - Timestamp with both relative time and clock time
+  - "Live · auto-refresh" indicator
+  - "View all N deployments" link when > 6
+  - Slide-in-right animation for each timeline entry
+- Enhanced dashboard empty state:
+  - Background decorative gradient blobs
+  - Larger icon with gradient background
+  - Gradient CTA button (emerald to teal)
+  - Quick suggestion pills (Demo Counter, Static Welcome, Markdown Wiki)
+  - Decorative dots
+- Enhanced dashboard stat cards with hover scale effect
+- Enhanced footer:
+  - "One-click deploy" platform feature
+  - "UI · shadcn/ui + Tailwind" resource item
+  - Hover scale effects on icons
+  - Hover color transitions on list items
+  - "Made with ❤ open-source" in copyright
+  - "multi-tenant" indicator
+  - Responsive layout with hidden elements on mobile
+- Fixed lint errors: added Rocket import to dashboard, fixed setState-in-effect pattern, removed unused eslint-disable directives
+- All QA tests pass: zero errors, zero lint errors, all flows functional
+
+Stage Summary:
+- **Styling**: Hero has floating orbs & particles, cards have glow hover effects, staggered entrance animations, enhanced stat cards with scale-on-hover, improved empty states with gradient blobs
+- **New Features**: Favorites filter (reactive with category button), recent search suggestions dropdown, enhanced activity timeline with health indicators, version/repository info on app cards
+- **QA**: Full agent-browser testing — marketplace, login, register, deploy, favorites, dark mode, mobile — all passing
+- **Lint**: Clean, zero errors
+- **Key files modified**: globals.css, marketplace-view.tsx, dashboard-view.tsx, footer.tsx

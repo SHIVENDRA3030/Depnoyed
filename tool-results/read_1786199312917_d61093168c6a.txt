@@ -1,0 +1,974 @@
+     1→"use client";
+     2→
+     3→import { useCallback, useEffect, useMemo, useState } from "react";
+     4→import {
+     5→  Plus,
+     6→  ExternalLink,
+     7→  Play,
+     8→  Square,
+     9→  RotateCw,
+    10→  Trash2,
+    11→  Loader2,
+    12→  Container,
+    13→  Clock,
+    14→  ArrowRight,
+    15→  RefreshCw,
+    16→  Timer,
+    17→  Database,
+    18→  Activity,
+    19→  Boxes,
+    20→  HardDrive,
+    21→  TrendingUp,
+    22→  Tag,
+    23→  X,
+    24→  CheckSquare,
+    25→  Cpu,
+    26→  MemoryStick,
+    27→  ArrowUpRight,
+    28→  ArrowDownRight,
+    29→  Wifi,
+    30→  HardDriveUpload,
+    31→  DollarSign,
+    32→  Search,
+    33→} from "lucide-react";
+    34→import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
+    35→import { AppLogo } from "@/components/marketplace/app-logo";
+    36→import { statusColor } from "@/components/marketplace/status";
+    37→import {
+    38→  calculateUptime,
+    39→  getContainerMetrics,
+    40→  healthDotColor,
+    41→} from "@/lib/metrics";
+    42→import { Button } from "@/components/ui/button";
+    43→import { Badge } from "@/components/ui/badge";
+    44→import { Checkbox } from "@/components/ui/checkbox";
+    45→import { Progress } from "@/components/ui/progress";
+    46→import { Input } from "@/components/ui/input";
+    47→import {
+    48→  AlertDialog,
+    49→  AlertDialogAction,
+    50→  AlertDialogCancel,
+    51→  AlertDialogContent,
+    52→  AlertDialogDescription,
+    53→  AlertDialogFooter,
+    54→  AlertDialogHeader,
+    55→  AlertDialogTitle,
+    56→  AlertDialogTrigger,
+    57→} from "@/components/ui/alert-dialog";
+    58→import { toast } from "sonner";
+    59→import {
+    60→  Sparkline,
+    61→  sparklineColor,
+    62→  generateTimeSeries,
+    63→  tickTimeSeries,
+    64→} from "@/components/marketplace/sparkline";
+    65→
+    66→function statusAccentBorder(status: string): string {
+    67→  switch (status) {
+    68→    case "running":
+    69→      return "border-l-emerald-500";
+    70→    case "pending":
+    71→    case "creating":
+    72→      return "border-l-amber-500";
+    73→    case "failed":
+    74→    case "dead":
+    75→      return "border-l-red-500";
+    76→    case "stopped":
+    77→    case "exited":
+    78→      return "border-l-zinc-400 dark:border-l-zinc-500";
+    79→    default:
+    80→      return "border-l-muted-foreground";
+    81→  }
+    82→}
+    83→
+    84→function statusDotClass(status: string): string {
+    85→  switch (status) {
+    86→    case "running":
+    87→      return "bg-emerald-500";
+    88→    case "stopped":
+    89→    case "exited":
+    90→      return "bg-zinc-400";
+    91→    case "pending":
+    92→    case "creating":
+    93→      return "bg-amber-500";
+    94→    case "failed":
+    95→    case "dead":
+    96→      return "bg-red-500";
+    97→    default:
+    98→      return "bg-muted-foreground";
+    99→  }
+   100→}
+   101→
+   102→export function DashboardView() {
+   103→  const [deployments, setDeployments] = useState<DeploymentItem[] | null>(null);
+   104→  const [busyId, setBusyId] = useState<string | null>(null);
+   105→  const [refreshing, setRefreshing] = useState(false);
+   106→  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+   107→  const [batchBusy, setBatchBusy] = useState(false);
+   108→  const [searchQuery, setSearchQuery] = useState("");
+   109→  const [statusFilter, setStatusFilter] = useState<string>("all");
+   110→
+   111→  const load = useCallback(async () => {
+   112→    try {
+   113→      const { deployments } = await api<{ deployments: DeploymentItem[] }>("/api/deployments");
+   114→      setDeployments(deployments);
+   115→    } catch {
+   116→      toast.error("Failed to load deployments");
+   117→      setDeployments([]);
+   118→    }
+   119→  }, []);
+   120→
+   121→  useEffect(() => {
+   122→    load();
+   123→    const t = setInterval(load, 5000);
+   124→    return () => clearInterval(t);
+   125→  }, [load]);
+   126→
+   127→  const filteredDeployments = useMemo(() => {
+   128→    if (!deployments) return [];
+   129→    const q = searchQuery.trim().toLowerCase();
+   130→    return deployments.filter((d) => {
+   131→      const matchesStatus =
+   132→        statusFilter === "all" ||
+   133→        (statusFilter === "running" && d.status === "running") ||
+   134→        (statusFilter === "stopped" && (d.status === "stopped" || d.status === "exited"));
+   135→      if (!matchesStatus) return false;
+   136→      if (!q) return true;
+   137→      return (
+   138→        (d.app?.name?.toLowerCase().includes(q) ?? false) ||
+   139→        (d.label?.toLowerCase().includes(q) ?? false) ||
+   140→        d.subdomain.toLowerCase().includes(q) ||
+   141→        d.containerName.toLowerCase().includes(q)
+   142→      );
+   143→    });
+   144→  }, [deployments, searchQuery, statusFilter]);
+   145→
+   146→  async function refresh() {
+   147→    setRefreshing(true);
+   148→    await load();
+   149→    setRefreshing(false);
+   150→  }
+   151→
+   152→  async function act(id: string, action: "start" | "stop" | "restart") {
+   153→    setBusyId(id);
+   154→    try {
+   155→      const { deployment } = await api<{ deployment: DeploymentItem }>(`/api/deployments/${id}/${action}`, {
+   156→        method: "POST",
+   157→      });
+   158→      setDeployments((d) => (d ?? []).map((x) => (x.id === id ? deployment : x)));
+   159→      toast.success(`Deployment ${action === 'stop' ? 'stopped' : action + 'ed'}`);
+   160→    } catch (e) {
+   161→      toast.error(e instanceof ApiError ? e.message : `Failed to ${action}`);
+   162→    } finally {
+   163→      setBusyId(null);
+   164→    }
+   165→  }
+   166→
+   167→  async function remove(id: string) {
+   168→    setBusyId(id);
+   169→    try {
+   170→      await api(`/api/deployments/${id}`, { method: "DELETE" });
+   171→      setDeployments((d) => (d ?? []).filter((x) => x.id !== id));
+   172→      toast.success("Deployment deleted");
+   173→    } catch (e) {
+   174→      toast.error(e instanceof ApiError ? e.message : "Failed to delete");
+   175→    } finally {
+   176→      setBusyId(null);
+   177→    }
+   178→  }
+   179→
+   180→  // Batch operations
+   181→  function toggleSelect(id: string) {
+   182→    setSelectedIds((prev) => {
+   183→      const next = new Set(prev);
+   184→      if (next.has(id)) next.delete(id);
+   185→      else next.add(id);
+   186→      return next;
+   187→    });
+   188→  }
+   189→
+   190→  function toggleSelectAll() {
+   191→    if (!deployments) return;
+   192→    if (selectedIds.size === deployments.length) {
+   193→      setSelectedIds(new Set());
+   194→    } else {
+   195→      setSelectedIds(new Set(deployments.map((d) => d.id)));
+   196→    }
+   197→  }
+   198→
+   199→  function deselectAll() {
+   200→    setSelectedIds(new Set());
+   201→  }
+   202→
+   203→  const batchInfo = useMemo(() => {
+   204→    if (!deployments) return { hasStopped: false, hasRunning: false, count: 0 };
+   205→    const selected = deployments.filter((d) => selectedIds.has(d.id));
+   206→    return {
+   207→      hasStopped: selected.some((d) => d.status === "stopped" || d.status === "exited"),
+   208→      hasRunning: selected.some((d) => d.status === "running"),
+   209→      count: selected.length,
+   210→    };
+   211→  }, [deployments, selectedIds]);
+   212→
+   213→  async function batchAction(action: "start" | "stop" | "restart") {
+   214→    setBatchBusy(true);
+   215→    let successCount = 0;
+   216→    let failCount = 0;
+   217→    for (const id of selectedIds) {
+   218→      try {
+   219→        await api<{ deployment: DeploymentItem }>(`/api/deployments/${id}/${action}`, { method: "POST" });
+   220→        successCount++;
+   221→      } catch {
+   222→        failCount++;
+   223→      }
+   224→    }
+   225→    await load();
+   226→    setBatchBusy(false);
+   227→    deselectAll();
+   228→    if (failCount === 0) toast.success(`${successCount} deployment(s) ${action === 'stop' ? 'stopped' : action + 'ed'}`);
+   229→    else toast.error(`${failCount} failed, ${successCount} succeeded`);
+   230→  }
+   231→
+   232→  async function batchDelete() {
+   233→    setBatchBusy(true);
+   234→    let successCount = 0;
+   235→    let failCount = 0;
+   236→    for (const id of selectedIds) {
+   237→      try {
+   238→        await api(`/api/deployments/${id}`, { method: "DELETE" });
+   239→        successCount++;
+   240→      } catch {
+   241→        failCount++;
+   242→      }
+   243→    }
+   244→    await load();
+   245→    setBatchBusy(false);
+   246→    deselectAll();
+   247→    if (failCount === 0) toast.success(`${successCount} deployment(s) deleted`);
+   248→    else toast.error(`${failCount} failed, ${successCount} succeeded`);
+   249→  }
+   250→
+   251→  return (
+   252→    <div className="mx-auto max-w-6xl px-4 py-8">
+   253→      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   254→        <div>
+   255→          <h1 className="text-2xl font-bold tracking-tight">My deployments</h1>
+   256→          <p className="text-sm text-muted-foreground">Manage your isolated application instances.</p>
+   257→        </div>
+   258→        <div className="flex items-center gap-2">
+   259→          <Button variant="outline" size="sm" onClick={refresh} disabled={refreshing}>
+   260→            {refreshing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
+   261→            Refresh
+   262→          </Button>
+   263→          <Button size="sm" className="bg-brand text-brand-foreground hover:bg-brand/90" onClick={() => navigate({ name: "marketplace" })}>
+   264→            <Plus className="mr-2 size-4" /> Deploy new
+   265→          </Button>
+   266→        </div>
+   267→      </div>
+   268→
+   269→      {/* Stats cards */}
+   270→      {deployments && deployments.length > 0 && (
+   271→        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+   272→          <StatCard
+   273→            icon={<Boxes className="size-4" />}
+   274→            label="Total"
+   275→            value={String(deployments.length)}
+   276→            tone="default"
+   277→          />
+   278→          <StatCard
+   279→            icon={<Activity className="size-4" />}
+   280→            label="Running"
+   281→            value={String(deployments.filter((d) => d.status === "running").length)}
+   282→            tone="emerald"
+   283→          />
+   284→          <StatCard
+   285→            icon={<Square className="size-4" />}
+   286→            label="Stopped"
+   287→            value={String(deployments.filter((d) => d.status === "stopped" || d.status === "exited").length)}
+   288→            tone="zinc"
+   289→          />
+   290→          <StatCard
+   291→            icon={<HardDrive className="size-4" />}
+   292→            label="Data stored"
+   293→            value={formatDataSize(
+   294→              deployments.reduce((acc, d) => acc + (d.volumeDataSize ?? 0), 0)
+   295→            )}
+   296→            tone="brand"
+   297→          />
+   298→        </div>
+   299→      )}
+   300→
+   301→      {/* Cost estimation */}
+   302→      {deployments && deployments.length > 0 && (
+   303→        <div className="mt-4 rounded-2xl border border-border bg-gradient-to-br from-card via-card to-emerald-50/30 p-5 shadow-sm dark:to-emerald-950/10">
+   304→          <div className="flex items-center justify-between">
+   305→            <div className="flex items-center gap-2">
+   306→              <span className="flex size-8 items-center justify-center rounded-lg bg-brand-soft text-brand">
+   307→                <DollarSign className="size-4" />
+   308→              </span>
+   309→              <div>
+   310→                <h3 className="text-sm font-semibold">Estimated usage cost</h3>
+   311→                <p className="text-[11px] text-muted-foreground">Based on running deployments × resource usage</p>
+   312→              </div>
+   313→            </div>
+   314→            <div className="text-right">
+   315→              <p className="text-lg font-bold">
+   316→                ${estimateCost(deployments).monthly.toFixed(2)}
+   317→                <span className="ml-1 text-xs font-normal text-muted-foreground">/mo</span>
+   318→              </p>
+   319→              <p className="text-[11px] text-muted-foreground">
+   320→                ${estimateCost(deployments).daily.toFixed(3)}/day
+   321→              </p>
+   322→            </div>
+   323→          </div>
+   324→          <div className="mt-3 flex flex-wrap gap-3">
+   325→            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-xs">
+   326→              <Cpu className="size-3 text-brand" />
+   327→              <span className="text-muted-foreground">CPU:</span>
+   328→              <span className="font-medium">${(0.5 * deployments.filter((d) => d.status === "running").length * 5).toFixed(2)}/mo</span>
+   329→            </div>
+   330→            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-xs">
+   331→              <MemoryStick className="size-3 text-brand" />
+   332→              <span className="text-muted-foreground">Memory:</span>
+   333→              <span className="font-medium">${(0.5 * deployments.filter((d) => d.status === "running").length * 3).toFixed(2)}/mo</span>
+   334→            </div>
+   335→            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-xs">
+   336→              <HardDrive className="size-3 text-brand" />
+   337→              <span className="text-muted-foreground">Storage:</span>
+   338→              <span className="font-medium">${(Math.max(1, deployments.reduce((a, d) => a + (d.volumeDataSize ?? 0), 0) / 1024 / 1024) * 0.10).toFixed(2)}/mo</span>
+   339→            </div>
+   340→          </div>
+   341→          <p className="mt-3 text-[10px] text-muted-foreground/70">
+   342→            Estimation only — actual costs may vary based on provider pricing and usage patterns.
+   343→          </p>
+   344→        </div>
+   345→      )}
+   346→
+   347→      {/* Search & filter bar */}
+   348→      {deployments && deployments.length > 0 && (
+   349→        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+   350→          <div className="relative flex-1">
+   351→            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+   352→            <Input
+   353→              value={searchQuery}
+   354→              onChange={(e) => setSearchQuery(e.target.value)}
+   355→              placeholder="Search by app name, label, or subdomain…"
+   356→              className="pl-9"
+   357→            />
+   358→            {searchQuery && (
+   359→              <button
+   360→                onClick={() => setSearchQuery("")}
+   361→                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+   362→              >
+   363→                <X className="size-3.5" />
+   364→              </button>
+   365→            )}
+   366→          </div>
+   367→          <div className="flex items-center gap-1.5">
+   368→            {["all", "running", "stopped"].map((f) => (
+   369→              <button
+   370→                key={f}
+   371→                onClick={() => setStatusFilter(f)}
+   372→                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
+   373→                  statusFilter === f
+   374→                    ? "border-brand/40 bg-brand/10 text-brand"
+   375→                    : "border-border bg-background text-muted-foreground hover:bg-muted"
+   376→                }`}
+   377→              >
+   378→                {f === "all" && <Boxes className="size-3" />}
+   379→                {f === "running" && <Activity className="size-3" />}
+   380→                {f === "stopped" && <Square className="size-3" />}
+   381→                {f.charAt(0).toUpperCase() + f.slice(1)}
+   382→                <span className="ml-0.5 text-[10px] text-muted-foreground/70">
+   383→                  {f === "all"
+   384→                    ? deployments.length
+   385→                    : f === "running"
+   386→                    ? deployments.filter((d) => d.status === "running").length
+   387→                    : deployments.filter((d) => d.status === "stopped" || d.status === "exited").length}
+   388→                </span>
+   389→              </button>
+   390→            ))}
+   391→          </div>
+   392→        </div>
+   393→      )}
+   394→
+   395→      <div className="mt-6">
+   396→        {deployments === null ? (
+   397→          <div className="space-y-3">
+   398→            {Array.from({ length: 2 }).map((_, i) => (
+   399→              <div key={i} className="h-28 rounded-2xl shimmer" />
+   400→            ))}
+   401→          </div>
+   402→        ) : deployments.length === 0 ? (
+   403→          <EmptyState />
+   404→        ) : filteredDeployments.length === 0 ? (
+   405→          <div className="flex flex-col items-center rounded-2xl border border-dashed border-border py-12 text-center">
+   406→            <Search className="size-8 text-muted-foreground/40" />
+   407→            <p className="mt-2 text-sm text-muted-foreground">No deployments match your search.</p>
+   408→            <Button variant="outline" size="sm" className="mt-3" onClick={() => { setSearchQuery(""); setStatusFilter("all"); }}>
+   409→              Clear filters
+   410→            </Button>
+   411→          </div>
+   412→        ) : (
+   413→          <div className="space-y-3">
+   414→            {filteredDeployments.map((d) => (
+   415→              <DeploymentRow
+   416→                key={d.id}
+   417→                d={d}
+   418→                busy={busyId === d.id}
+   419→                selected={selectedIds.has(d.id)}
+   420→                onSelect={() => toggleSelect(d.id)}
+   421→                onStart={() => act(d.id, "start")}
+   422→                onStop={() => act(d.id, "stop")}
+   423→                onRestart={() => act(d.id, "restart")}
+   424→                onDelete={() => remove(d.id)}
+   425→              />
+   426→            ))}
+   427→          </div>
+   428→        )}
+   429→      </div>
+   430→
+   431→      {/* Resource Usage sparkline section */}
+   432→      {deployments && deployments.length > 0 && (
+   433→        <ResourceUsageSparklines deployments={deployments} />
+   434→      )}
+   435→
+   436→      {/* Activity timeline */}
+   437→      {deployments && deployments.length > 0 && (
+   438→        <div className="mt-8">
+   439→          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+   440→            <TrendingUp className="size-4" /> Recent activity
+   441→          </h2>
+   442→          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+   443→            <ol className="relative space-y-3">
+   444→              <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-border" />
+   445→              {[...deployments]
+   446→                .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+   447→                .slice(0, 5)
+   448→                .map((d) => {
+   449→                  const isActive = d.status === "running";
+   450→                  return (
+   451→                    <li key={d.id} className="relative flex items-start gap-3 pl-6">
+   452→                      <span
+   453→                        className={`absolute left-0 top-1.5 size-4 rounded-full border-2 border-background ${
+   454→                          isActive
+   455→                            ? "bg-emerald-500"
+   456→                            : d.status === "failed" || d.status === "dead"
+   457→                            ? "bg-red-500"
+   458→                            : "bg-zinc-400"
+   459→                        }`}
+   460→                      />
+   461→                      <button
+   462→                        className="flex flex-1 items-center justify-between gap-2 text-left text-sm hover:opacity-80"
+   463→                        onClick={() => navigate({ name: "deployment", id: d.id })}
+   464→                      >
+   465→                        <span className="min-w-0">
+   466→                          <span className="font-medium">{d.app?.name ?? "Unknown app"}</span>{" "}
+   467→                          <span className="text-muted-foreground">
+   468→                            {isActive ? "is running" : `was ${d.status}`}
+   469→                          </span>
+   470→                        </span>
+   471→                        <span className="shrink-0 text-xs text-muted-foreground">
+   472→                          {timeAgo(d.updatedAt)}
+   473→                        </span>
+   474→                      </button>
+   475→                    </li>
+   476→                  );
+   477→                })}
+   478→            </ol>
+   479→          </div>
+   480→        </div>
+   481→      )}
+   482→
+   483→      {/* Batch action bar - fixed at bottom */}
+   484→      {batchInfo.count > 0 && (
+   485→        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 shadow-lg backdrop-blur-sm animate-in slide-in-from-bottom-4 duration-200">
+   486→          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+   487→            <div className="flex items-center gap-3">
+   488→              <Checkbox
+   489→                checked={deployments ? selectedIds.size === deployments.length : false}
+   490→                onCheckedChange={toggleSelectAll}
+   491→                aria-label="Select all"
+   492→              />
+   493→              <span className="text-sm font-medium">
+   494→                {batchInfo.count} selected
+   495→              </span>
+   496→            </div>
+   497→            <div className="flex items-center gap-2">
+   498→              <Button
+   499→                size="sm"
+   500→                variant="outline"
+   501→                className="gap-1.5"
+   502→                onClick={() => batchAction("start")}
+   503→                disabled={batchBusy || !batchInfo.hasStopped}
+   504→              >
+   505→                {batchBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+   506→                Start all
+   507→              </Button>
+   508→              <Button
+   509→                size="sm"
+   510→                variant="outline"
+   511→                className="gap-1.5"
+   512→                onClick={() => batchAction("stop")}
+   513→                disabled={batchBusy || !batchInfo.hasRunning}
+   514→              >
+   515→                {batchBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5" />}
+   516→                Stop all
+   517→              </Button>
+   518→              <Button
+   519→                size="sm"
+   520→                variant="outline"
+   521→                className="gap-1.5"
+   522→                onClick={() => batchAction("restart")}
+   523→                disabled={batchBusy}
+   524→              >
+   525→                {batchBusy ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCw className="size-3.5" />}
+   526→                Restart all
+   527→              </Button>
+   528→              <AlertDialog>
+   529→                <AlertDialogTrigger asChild>
+   530→                  <Button
+   531→                    size="sm"
+   532→                    variant="outline"
+   533→                    className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+   534→                    disabled={batchBusy}
+   535→                  >
+   536→                    <Trash2 className="size-3.5" /> Delete all
+   537→                  </Button>
+   538→                </AlertDialogTrigger>
+   539→                <AlertDialogContent>
+   540→                  <AlertDialogHeader>
+   541→                    <AlertDialogTitle>Delete {batchInfo.count} deployment(s)?</AlertDialogTitle>
+   542→                    <AlertDialogDescription>
+   543→                      This permanently removes {batchInfo.count} container(s) and their volumes. All persisted data will be lost.
+   544→                    </AlertDialogDescription>
+   545→                  </AlertDialogHeader>
+   546→                  <AlertDialogFooter>
+   547→                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+   548→                    <AlertDialogAction
+   549→                      onClick={batchDelete}
+   550→                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+   551→                    >
+   552→                      Delete all
+   553→                    </AlertDialogAction>
+   554→                  </AlertDialogFooter>
+   555→                </AlertDialogContent>
+   556→              </AlertDialog>
+   557→              <Button
+   558→                size="sm"
+   559→                variant="ghost"
+   560→                className="gap-1.5"
+   561→                onClick={deselectAll}
+   562→              >
+   563→                <X className="size-3.5" /> Cancel
+   564→              </Button>
+   565→            </div>
+   566→          </div>
+   567→        </div>
+   568→      )}
+   569→    </div>
+   570→  );
+   571→}
+   572→
+   573→function StatCard({
+   574→  icon,
+   575→  label,
+   576→  value,
+   577→  tone,
+   578→}: {
+   579→  icon: React.ReactNode;
+   580→  label: string;
+   581→  value: string;
+   582→  tone: "default" | "emerald" | "zinc" | "brand";
+   583→}) {
+   584→  const toneClasses = {
+   585→    default: "bg-muted/60 text-foreground",
+   586→    emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+   587→    zinc: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
+   588→    brand: "bg-brand-soft text-brand",
+   589→  }[tone];
+   590→  return (
+   591→    <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:border-brand/30">
+   592→      <span className={`flex size-9 items-center justify-center rounded-lg ${toneClasses}`}>
+   593→        {icon}
+   594→      </span>
+   595→      <div className="min-w-0">
+   596→        <p className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+   597→          {label}
+   598→        </p>
+   599→        <p className="truncate text-lg font-bold tabular-nums">{value}</p>
+   600→      </div>
+   601→    </div>
+   602→  );
+   603→}
+   604→
+   605→function DeploymentRow({
+   606→  d,
+   607→  busy,
+   608→  selected,
+   609→  onSelect,
+   610→  onStart,
+   611→  onStop,
+   612→  onRestart,
+   613→  onDelete,
+   614→}: {
+   615→  d: DeploymentItem;
+   616→  busy: boolean;
+   617→  selected: boolean;
+   618→  onSelect: () => void;
+   619→  onStart: () => void;
+   620→  onStop: () => void;
+   621→  onRestart: () => void;
+   622→  onDelete: () => void;
+   623→}) {
+   624→  const running = d.status === "running";
+   625→  const containerId = d.containerId ?? d.id;
+   626→  const metrics = getContainerMetrics(containerId);
+   627→  const uptime = calculateUptime(d.createdAt, d.status);
+   628→
+   629→  return (
+   630→    <div className={`group flex flex-col gap-4 rounded-2xl border border-border border-l-4 ${statusAccentBorder(d.status)} bg-card p-4 shadow-sm transition-colors hover:border-brand/40 sm:flex-row sm:items-center sm:justify-between`}>
+   631→      <div className="flex min-w-0 flex-1 items-center gap-3">
+   632→        {/* Checkbox */}
+   633→        <Checkbox
+   634→          checked={selected}
+   635→          onCheckedChange={onSelect}
+   636→          aria-label={`Select ${d.app?.name ?? "deployment"}`}
+   637→          onClick={(e) => e.stopPropagation()}
+   638→        />
+   639→
+   640→        <button
+   641→          className="flex min-w-0 flex-1 items-center gap-4 text-left"
+   642→          onClick={() => navigate({ name: "deployment", id: d.id })}
+   643→        >
+   644→          <AppLogo logo={d.app?.logo ?? null} simulator={d.app?.simulator ?? "static"} name={d.app?.name ?? "App"} />
+   645→          <div className="min-w-0 flex-1">
+   646→            <div className="flex items-center gap-2">
+   647→              <h3 className="truncate font-semibold">{d.app?.name ?? "Unknown app"}</h3>
+   648→              {d.label && (
+   649→                <Badge variant="outline" className="shrink-0 gap-1 border-brand/30 bg-brand-soft/50 px-1.5 py-0 text-[10px] font-medium text-brand">
+   650→                  <Tag className="size-2.5" /> {d.label}
+   651→                </Badge>
+   652→              )}
+   653→              <span className={`inline-flex shrink-0 items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusColor(d.status)}`}>
+   654→                <span className="relative flex size-1.5">
+   655→                  <span className={`absolute inline-flex size-full rounded-full ${statusDotClass(d.status)} opacity-75`} />
+   656→                  {d.status === "running" && (
+   657→                    <span className={`inline-flex size-full rounded-full ${statusDotClass(d.status)} animate-status-pulse`} />
+   658→                  )}
+   659→                </span>
+   660→                {d.status}
+   661→              </span>
+   662→              {/* Health dot */}
+   663→              <span className="relative flex size-2" title={`Health: ${d.status}`}>
+   664→                <span className={`size-full rounded-full ${healthDotColor(d.status)}`} />
+   665→              </span>
+   666→            </div>
+   667→            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+   668→              <a
+   669→                href={d.previewPath}
+   670→                target="_blank"
+   671→                rel="noreferrer"
+   672→                className="inline-flex max-w-[180px] items-center gap-1 font-mono text-brand hover:underline sm:max-w-[220px]"
+   673→                onClick={(e) => e.stopPropagation()}
+   674→              >
+   675→                <ExternalLink className="size-3 shrink-0" /> <span className="truncate">{d.subdomain}.apps.local</span>
+   676→              </a>
+   677→              <span className="inline-flex items-center gap-1 font-mono">
+   678→                <Container className="size-3" /> <span className="truncate max-w-[150px]">{d.containerName}</span>
+   679→              </span>
+   680→              <span className="inline-flex items-center gap-1">
+   681→                <Timer className="size-3" /> {running ? `Running for ${uptimeSince(d.createdAt)}` : `Stopped · ${timeAgo(d.updatedAt)}`}
+   682→              </span>
+   683→              {d.volumeDataSize != null && (
+   684→                <span className="inline-flex items-center gap-1">
+   685→                  <Database className="size-3" /> {formatDataSize(d.volumeDataSize)}
+   686→                </span>
+   687→              )}
+   688→              {/* Uptime indicator */}
+   689→              <span className="inline-flex items-center gap-1 tabular-nums">
+   690→                <Activity className="size-3" />
+   691→                {running ? `${uptime}% uptime` : "Stopped"}
+   692→              </span>
+   693→              {/* Memory usage bar */}
+   694→              <span className="inline-flex items-center gap-1.5">
+   695→                <span className="text-[10px] tabular-nums">{metrics.memoryUsagePercent}%</span>
+   696→                <Progress value={metrics.memoryUsagePercent} className="h-1.5 w-16" />
+   697→              </span>
+   698→            </div>
+   699→          </div>
+   700→        </button>
+   701→      </div>
+   702→
+   703→      <div className="flex items-center gap-1.5">
+   704→        <Button
+   705→          size="sm"
+   706→          variant="outline"
+   707→          className="gap-1.5"
+   708→          onClick={() => window.open(d.previewPath, "_blank")}
+   709→          disabled={!running}
+   710→        >
+   711→          <ExternalLink className="size-3.5" /> Open
+   712→        </Button>
+   713→        {running ? (
+   714→          <Button size="sm" variant="outline" className="gap-1.5" onClick={onStop} disabled={busy}>
+   715→            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5" />} Stop
+   716→          </Button>
+   717→        ) : (
+   718→          <Button size="sm" variant="outline" className="gap-1.5" onClick={onStart} disabled={busy}>
+   719→            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />} Start
+   720→          </Button>
+   721→        )}
+   722→        <Button size="sm" variant="outline" className="gap-1.5" onClick={onRestart} disabled={busy}>
+   723→          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCw className="size-3.5" />} Restart
+   724→        </Button>
+   725→        <AlertDialog>
+   726→          <AlertDialogTrigger asChild>
+   727→            <Button size="sm" variant="outline" className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy}>
+   728→              <Trash2 className="size-3.5" /> Delete
+   729→            </Button>
+   730→          </AlertDialogTrigger>
+   731→          <AlertDialogContent>
+   732→            <AlertDialogHeader>
+   733→              <AlertDialogTitle>Delete this deployment?</AlertDialogTitle>
+   734→              <AlertDialogDescription>
+   735→                This permanently removes the container <span className="font-mono">{d.containerName}</span> and its
+   736→                volume <span className="font-mono">{d.volumeName}</span>. All persisted data will be lost.
+   737→              </AlertDialogDescription>
+   738→            </AlertDialogHeader>
+   739→            <AlertDialogFooter>
+   740→              <AlertDialogCancel>Cancel</AlertDialogCancel>
+   741→              <AlertDialogAction
+   742→                onClick={onDelete}
+   743→                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+   744→              >
+   745→                Delete
+   746→              </AlertDialogAction>
+   747→            </AlertDialogFooter>
+   748→          </AlertDialogContent>
+   749→        </AlertDialog>
+   750→      </div>
+   751→    </div>
+   752→  );
+   753→}
+   754→
+   755→function EmptyState() {
+   756→  return (
+   757→    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-20 text-center">
+   758→      <div className="relative">
+   759→        <div className="flex size-16 items-center justify-center rounded-2xl bg-brand-soft text-brand">
+   760→          <Container className="size-8" />
+   761→        </div>
+   762→        <div className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-brand text-brand-foreground">
+   763→          <Plus className="size-3" />
+   764→        </div>
+   765→      </div>
+   766→      <h3 className="mt-5 text-lg font-semibold">No deployments yet</h3>
+   767→      <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+   768→        Browse the marketplace and deploy your first open-source application in one click.
+   769→      </p>
+   770→      <Button className="mt-5 bg-brand text-brand-foreground hover:bg-brand/90" onClick={() => navigate({ name: "marketplace" })}>
+   771→        Browse marketplace <ArrowRight className="ml-2 size-4" />
+   772→      </Button>
+   773→    </div>
+   774→  );
+   775→}
+   776→
+   777→function timeAgo(iso: string): string {
+   778→  const diff = Date.now() - new Date(iso).getTime();
+   779→  const mins = Math.floor(diff / 60000);
+   780→  if (mins < 1) return "just now";
+   781→  if (mins < 60) return `${mins}m ago`;
+   782→  const hrs = Math.floor(mins / 60);
+   783→  if (hrs < 24) return `${hrs}h ago`;
+   784→  const days = Math.floor(hrs / 24);
+   785→  return `${days}d ago`;
+   786→}
+   787→
+   788→function uptimeSince(iso: string): string {
+   789→  const diff = Date.now() - new Date(iso).getTime();
+   790→  const mins = Math.floor(diff / 60000);
+   791→  if (mins < 1) return "<1m";
+   792→  if (mins < 60) return `${mins}m`;
+   793→  const hrs = Math.floor(mins / 60);
+   794→  const remainMins = mins % 60;
+   795→  if (hrs < 24) return remainMins > 0 ? `${hrs}h ${remainMins}m` : `${hrs}h`;
+   796→  const days = Math.floor(hrs / 24);
+   797→  return `${days}d`;
+   798→}
+   799→
+   800→function formatDataSize(bytes: number): string {
+   801→  if (bytes < 1024) return `${bytes} B`;
+   802→  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+   803→  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+   804→}
+   805→
+   806→function estimateCost(deployments: DeploymentItem[]) {
+   807→  const running = deployments.filter((d) => d.status === "running").length;
+   808→  const cpuCost = 0.5 * running * 5;  // $5/core/month
+   809→  const memCost = 0.5 * running * 3;   // $3/512MB/month
+   810→  const totalStorage = deployments.reduce((a, d) => a + (d.volumeDataSize ?? 0), 0);
+   811→  const storageGB = Math.max(1, totalStorage / 1024 / 1024);
+   812→  const storageCost = storageGB * 0.10; // $0.10/GB/month
+   813→  const monthly = cpuCost + memCost + storageCost;
+   814→  const daily = monthly / 30;
+   815→  return { monthly, daily };
+   816→}
+   817→
+   818→export { Badge };
+   819→
+   820→/* ---------- Resource Usage Sparklines ---------- */
+   821→
+   822→const SPARKLINE_POINTS = 20;
+   823→
+   824→function ResourceUsageSparklines({ deployments }: { deployments: DeploymentItem[] }) {
+   825→  const runningDeployments = deployments.filter((d) => d.status === "running");
+   826→  const hasRunning = runningDeployments.length > 0;
+   827→
+   828→  // Compute aggregate base metrics across all running deployments
+   829→  const aggMetrics = useMemo(() => {
+   830→    if (runningDeployments.length === 0) {
+   831→      return { cpu: 0, memory: 0, network: 0, disk: 0 };
+   832→    }
+   833→    let cpu = 0;
+   834→    let memory = 0;
+   835→    let network = 0;
+   836→    let disk = 0;
+   837→    for (const d of runningDeployments) {
+   838→      const containerId = d.containerId ?? d.id;
+   839→      const m = getContainerMetrics(containerId);
+   840→      cpu += m.cpuUsagePercent;
+   841→      memory += m.memoryUsagePercent;
+   842→      // Derive network/disk from other metrics for realism
+   843→      network += m.responseLatencyMs / 150 * 40 + 10; // ~10-50 range
+   844→      disk += m.healthScore * 0.3 + 5; // ~5-35 range
+   845→    }
+   846→    const n = runningDeployments.length;
+   847→    return {
+   848→      cpu: cpu / n,
+   849→      memory: memory / n,
+   850→      network: network / n,
+   851→      disk: disk / n,
+   852→    };
+   853→  }, [runningDeployments]);
+   854→
+   855→  // Stable seed for initial series generation
+   856→  const seed = useMemo(
+   857→    () => `dash-${runningDeployments.map((d) => d.id).join(",")}`,
+   858→    [runningDeployments],
+   859→  );
+   860→
+   861→  // Tick counter drives series evolution
+   862→  const [tick, setTick] = useState(0);
+   863→
+   864→  // Auto-refresh every 10 seconds
+   865→  useEffect(() => {
+   866→    const t = setInterval(() => setTick((n) => n + 1), 10000);
+   867→    return () => clearInterval(t);
+   868→  }, []);
+   869→
+   870→  // Compute full series from seed + tick (fully derived, no intermediate state)
+   871→  const series = useMemo(() => {
+   872→    const cpu = generateTimeSeries(aggMetrics.cpu, SPARKLINE_POINTS, 5, `${seed}:cpu`);
+   873→    const memory = generateTimeSeries(aggMetrics.memory, SPARKLINE_POINTS, 4, `${seed}:mem`);
+   874→    const network = generateTimeSeries(aggMetrics.network, SPARKLINE_POINTS, 6, `${seed}:net`);
+   875→    const disk = generateTimeSeries(aggMetrics.disk, SPARKLINE_POINTS, 4, `${seed}:disk`);
+   876→    // Apply tick-based evolution
+   877→    let c = cpu, m = memory, n = network, d = disk;
+   878→    for (let i = 0; i < tick; i++) {
+   879→      c = tickTimeSeries(c, aggMetrics.cpu, 5, i + 1);
+   880→      m = tickTimeSeries(m, aggMetrics.memory, 4, i + 1);
+   881→      n = tickTimeSeries(n, aggMetrics.network, 6, i + 1);
+   882→      d = tickTimeSeries(d, aggMetrics.disk, 4, i + 1);
+   883→    }
+   884→    return { cpu: c, memory: m, network: n, disk: d };
+   885→  }, [aggMetrics, seed, tick]);
+   886→
+   887→  const color = hasRunning ? "#10b981" : "#a1a1aa";
+   888→
+   889→  const charts: {
+   890→    key: string;
+   891→    label: string;
+   892→    icon: React.ReactNode;
+   893→    data: number[];
+   894→    unit: string;
+   895→    decimals?: number;
+   896→  }[] = [
+   897→    {
+   898→      key: "cpu",
+   899→      label: "CPU Usage",
+   900→      icon: <Cpu className="size-3.5" />,
+   901→      data: series.cpu,
+   902→      unit: "%",
+   903→    },
+   904→    {
+   905→      key: "memory",
+   906→      label: "Memory Usage",
+   907→      icon: <MemoryStick className="size-3.5" />,
+   908→      data: series.memory,
+   909→      unit: "%",
+   910→    },
+   911→    {
+   912→      key: "network",
+   913→      label: "Network I/O",
+   914→      icon: <Wifi className="size-3.5" />,
+   915→      data: series.network,
+   916→      unit: " MB/s",
+   917→      decimals: 1,
+   918→    },
+   919→    {
+   920→      key: "disk",
+   921→      label: "Disk I/O",
+   922→      icon: <HardDriveUpload className="size-3.5" />,
+   923→      data: series.disk,
+   924→      unit: " MB/s",
+   925→      decimals: 1,
+   926→    },
+   927→  ];
+   928→
+   929→  return (
+   930→    <div className="mt-8">
+   931→      <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+   932→        <Activity className="size-4" /> Resource usage
+   933→      </h2>
+   934→      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+   935→        {charts.map((c) => {
+   936→          const current = c.data[c.data.length - 1] ?? 0;
+   937→          const prev = c.data[c.data.length - 2] ?? current;
+   938→          const trendUp = current >= prev;
+   939→          const displayVal = c.decimals ? current.toFixed(c.decimals) : Math.round(current);
+   940→          return (
+   941→            <div
+   942→              key={c.key}
+   943→              className="flex flex-col rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:border-brand/30"
+   944→            >
+   945→              <div className="flex items-center justify-between">
+   946→                <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+   947→                  {c.icon} {c.label}
+   948→                </span>
+   949→                <span className={`flex items-center gap-0.5 text-[10px] tabular-nums ${trendUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
+   950→                  {trendUp ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+   951→                  {Math.abs(Math.round(current - prev))}
+   952→                </span>
+   953→              </div>
+   954→              <p className="mt-1 text-lg font-bold tabular-nums">
+   955→                {displayVal}{c.unit}
+   956→              </p>
+   957→              <Sparkline
+   958→                data={c.data}
+   959→                color={color}
+   960→                width={100}
+   961→                height={24}
+   962→                strokeWidth={1.5}
+   963→                showArea
+   964→                id={`dash-${c.key}`}
+   965→                className="mt-1 w-full"
+   966→              />
+   967→            </div>
+   968→          );
+   969→        })}
+   970→      </div>
+   971→    </div>
+   972→  );
+   973→}
+   974→
