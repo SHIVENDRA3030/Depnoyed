@@ -1,18 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Rocket, Search, Boxes, Container, Database, Globe, ArrowRight, Loader2, Sparkles, Zap } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Rocket, Search, Boxes, Container, Database, Globe, ArrowRight, Loader2, Sparkles, Zap, Flame, Star, TrendingUp } from "lucide-react";
 import { api, navigate, useAuth, type AppItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
+
+type SortMode = "popular" | "newest" | "alpha";
 
 export function MarketplaceView() {
   const [apps, setApps] = useState<AppItem[] | null>(null);
   const [query, setQuery] = useState("");
   const [activeCat, setActiveCat] = useState<string>("All");
+  const [sort, setSort] = useState<SortMode>("popular");
 
   useEffect(() => {
     (async () => {
@@ -27,12 +37,29 @@ export function MarketplaceView() {
   }, []);
 
   const categories = ["All", ...Array.from(new Set((apps ?? []).map((a) => a.category)))];
-  const filtered = (apps ?? []).filter((a) => {
-    const matchesCat = activeCat === "All" || a.category === activeCat;
-    const q = query.trim().toLowerCase();
-    const matchesQuery = !q || a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q);
-    return matchesCat && matchesQuery;
-  });
+  const filtered = useMemo(() => {
+    const base = (apps ?? []).filter((a) => {
+      const matchesCat = activeCat === "All" || a.category === activeCat;
+      const q = query.trim().toLowerCase();
+      const matchesQuery = !q || a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q);
+      return matchesCat && matchesQuery;
+    });
+    const sorted = [...base];
+    if (sort === "popular") {
+      sorted.sort((a, b) => b.deploymentCount - a.deploymentCount);
+    } else if (sort === "newest") {
+      sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } else if (sort === "alpha") {
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return sorted;
+  }, [apps, activeCat, query, sort]);
+
+  // Featured apps: top 3 by deployment count (only when no search active)
+  const featured = useMemo(() => {
+    if (query || activeCat !== "All") return [];
+    return [...(apps ?? [])].sort((a, b) => b.deploymentCount - a.deploymentCount).slice(0, 3);
+  }, [apps, query, activeCat]);
 
   return (
     <div>
@@ -52,7 +79,7 @@ export function MarketplaceView() {
               Spin up your own isolated instance of open-source applications. Each deployment gets a
               dedicated container, persistent storage, and a unique public URL.
             </p>
-            <div className="animate-fade-in-up mt-8 grid grid-cols-3 gap-3 [animation-delay:300ms]">
+            <div className="animate-fade-in-up mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3 [animation-delay:300ms]">
               <StatCard icon={<Container className="size-5" />} label="Isolated containers" desc="Per deployment" />
               <StatCard icon={<Database className="size-5" />} label="Persistent volumes" desc="Data survives restarts" />
               <StatCard icon={<Globe className="size-5" />} label="Unique public URLs" desc="Instant access" />
@@ -61,6 +88,27 @@ export function MarketplaceView() {
         </div>
       </section>
 
+      {/* Featured apps */}
+      {featured.length > 0 && (
+        <section className="mx-auto max-w-6xl px-4 pt-10">
+          <div className="flex items-center gap-2">
+            <Flame className="size-5 text-orange-500" />
+            <h2 className="text-xl font-semibold">Trending now</h2>
+            <Badge variant="secondary" className="ml-1 gap-1 font-normal">
+              <TrendingUp className="size-3" /> Most deployed
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            The most popular apps in the marketplace, ranked by deployments.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {featured.map((app, i) => (
+              <FeaturedAppCard key={app.id} app={app} rank={i + 1} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Catalog */}
       <section className="mx-auto max-w-6xl px-4 py-10">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -68,14 +116,26 @@ export function MarketplaceView() {
             <h2 className="text-xl font-semibold">Browse applications</h2>
             <p className="text-sm text-muted-foreground">Pick an app and deploy your own instance.</p>
           </div>
-          <div className="relative w-full sm:w-72">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search apps…"
-              className="pl-9"
-            />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative w-full sm:w-72">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search apps…"
+                className="pl-9"
+              />
+            </div>
+            <Select value={sort} onValueChange={(v) => setSort(v as SortMode)}>
+              <SelectTrigger className="w-full sm:w-44" size="sm">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="popular">Most deployed</SelectItem>
+                <SelectItem value="newest">Newest</SelectItem>
+                <SelectItem value="alpha">A → Z</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -108,6 +168,76 @@ export function MarketplaceView() {
           )}
         </div>
       </section>
+    </div>
+  );
+}
+
+function FeaturedAppCard({ app, rank }: { app: AppItem; rank: number }) {
+  const user = useAuth((s) => s.user);
+  const [deploying, setDeploying] = useState(false);
+
+  async function handleDeploy(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!user) {
+      toast.info("Sign in to deploy");
+      navigate({ name: "login" });
+      return;
+    }
+    setDeploying(true);
+    try {
+      const { deployment } = await api<{ deployment: { id: string } }>("/api/deployments", {
+        method: "POST",
+        body: JSON.stringify({ appId: app.id }),
+      });
+      toast.success("Deployed! Redirecting…");
+      navigate({ name: "deployment", id: deployment.id });
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Deploy failed");
+      setDeploying(false);
+    }
+  }
+
+  const rankColor =
+    rank === 1
+      ? "from-amber-400 to-orange-500 text-white"
+      : rank === 2
+      ? "from-zinc-300 to-zinc-400 text-zinc-900"
+      : "from-orange-700 to-amber-800 text-white";
+
+  return (
+    <div
+      onClick={() => navigate({ name: "app", slug: app.slug })}
+      className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-brand/30 bg-gradient-to-br from-brand-soft/40 via-card to-card p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-brand/60 hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <AppLogo logo={app.logo} simulator={app.simulator} name={app.name} size="lg" />
+            <span className={`absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-gradient-to-br ${rankColor} text-[10px] font-bold shadow-sm`}>
+              {rank}
+            </span>
+          </div>
+          <div>
+            <h3 className="text-base font-semibold leading-tight">{app.name}</h3>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">{app.category}</p>
+          </div>
+        </div>
+        <Badge variant="secondary" className="gap-1 font-normal">
+          <Zap className="size-3 text-orange-500" /> {app.deploymentCount}
+        </Badge>
+      </div>
+      <p className="mt-3 line-clamp-2 flex-1 text-sm text-muted-foreground">{app.description}</p>
+      <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3">
+        <span className="font-mono text-[11px] text-muted-foreground">{app.dockerImage}</span>
+        <button
+          onClick={handleDeploy}
+          disabled={deploying}
+          className="inline-flex items-center gap-1 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground transition-colors hover:bg-brand/90 disabled:opacity-50"
+        >
+          {deploying ? <Loader2 className="size-3 animate-spin" /> : <Star className="size-3" />}
+          Deploy
+        </button>
+      </div>
     </div>
   );
 }
@@ -181,7 +311,7 @@ function AppCard({ app }: { app: AppItem }) {
 
 function StatCard({ icon, label, desc }: { icon: React.ReactNode; label: string; desc: string }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-background/60 px-3 py-4 backdrop-blur-sm">
+    <div className="flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-background/60 px-4 py-5 text-center backdrop-blur-sm transition-colors hover:border-brand/40 hover:bg-brand-soft/30">
       <span className="flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
         {icon}
       </span>

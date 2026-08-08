@@ -13,6 +13,11 @@ import {
   ShieldCheck,
   ExternalLink,
   CheckCircle2,
+  Zap,
+  Calendar,
+  Hash,
+  Server,
+  Layers,
 } from "lucide-react";
 import { api, navigate, useAuth, type AppItem, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -31,7 +36,7 @@ export function AppDetailView({ slug }: { slug: string }) {
       try {
         const { app } = await api<{ app: AppItem }>(`/api/apps/${encodeURIComponent(slug)}`);
         setApp(app);
-      } catch (e) {
+      } catch {
         setNotFound(true);
       }
     })();
@@ -97,13 +102,25 @@ export function AppDetailView({ slug }: { slug: string }) {
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
             <AppLogo logo={app.logo} simulator={app.simulator} name={app.name} size="lg" />
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold tracking-tight">{app.name}</h1>
                 <Badge variant="secondary">{app.category}</Badge>
+                {app.deploymentCount > 0 && (
+                  <Badge variant="outline" className="gap-1 border-brand/30 bg-brand-soft/50 text-brand">
+                    <Zap className="size-3" /> {app.deploymentCount} {app.deploymentCount === 1 ? "deployment" : "deployments"}
+                  </Badge>
+                )}
               </div>
               <p className="mt-1 max-w-xl text-sm text-muted-foreground">{app.description}</p>
-              <p className="mt-2 font-mono text-xs text-muted-foreground">{app.dockerImage}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <Calendar className="size-3" /> Added {new Date(app.createdAt).toLocaleDateString()}
+                </span>
+                <span className="inline-flex items-center gap-1 font-mono">
+                  <Layers className="size-3" /> {app.dockerImage}
+                </span>
+              </div>
             </div>
           </div>
           <Button
@@ -149,6 +166,21 @@ export function AppDetailView({ slug }: { slug: string }) {
         </div>
       </div>
 
+      {/* Tech specs */}
+      <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+          <Server className="size-4" /> Technical specifications
+        </h2>
+        <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Spec icon={<Layers className="size-3.5" />} label="Docker image" value={app.dockerImage} mono />
+          <Spec icon={<Hash className="size-3.5" />} label="Container port" value={String(app.containerPort)} mono />
+          <Spec icon={<Container className="size-3.5" />} label="Runtime" value={app.simulator === "static" ? "Static server" : `${app.simulator} simulator`} />
+          <Spec icon={<Cpu className="size-3.5" />} label="CPU limit" value="0.5 core" />
+          <Spec icon={<MemoryStick className="size-3.5" />} label="Memory limit" value="512 MB" />
+          <Spec icon={<ShieldCheck className="size-3.5" />} label="Isolation" value="Per-tenant volume + container" />
+        </dl>
+      </div>
+
       {!user && (
         <div className="mt-6 flex flex-col items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand-soft p-5 sm:flex-row">
           <div>
@@ -183,6 +215,17 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
         {icon} {label}
       </div>
       <p className="mt-1 text-sm font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function Spec({ icon, label, value, mono }: { icon: React.ReactNode; label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-background/40 p-3">
+      <dt className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        {icon} {label}
+      </dt>
+      <dd className={`mt-1 text-xs ${mono ? "font-mono" : ""} text-foreground/80`}>{value}</dd>
     </div>
   );
 }

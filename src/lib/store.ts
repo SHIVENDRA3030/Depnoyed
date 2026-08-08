@@ -38,6 +38,7 @@ export interface DeploymentItem {
   containerName: string;
   volumeName: string;
   port: number | null;
+  label: string | null;
   createdAt: string;
   updatedAt: string;
   volumeDataSize?: number;

@@ -79,6 +79,7 @@ export function serializeDeployment(
     containerName: dep.containerName,
     volumeName: dep.volumeName,
     port: dep.port,
+    label: dep.label ?? null,
     createdAt: dep.createdAt.toISOString(),
     updatedAt: dep.updatedAt.toISOString(),
     app: dep.app

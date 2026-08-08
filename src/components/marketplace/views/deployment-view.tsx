@@ -20,12 +20,17 @@ import {
   Copy,
   AlertCircle,
   Timer,
+  Tag,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
 import { statusColor, statusDot } from "@/components/marketplace/status";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -88,6 +93,12 @@ export function DeploymentView({ id }: { id: string }) {
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [busy, setBusy] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [volumeKeys, setVolumeKeys] = useState<string[] | null>(null);
+  const [volumeValues, setVolumeValues] = useState<Record<string, string>>({});
+  const [volumeLoading, setVolumeLoading] = useState(false);
+  const [labelEditing, setLabelEditing] = useState(false);
+  const [labelDraft, setLabelDraft] = useState("");
+  const [labelSaving, setLabelSaving] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -107,6 +118,35 @@ export function DeploymentView({ id }: { id: string }) {
       /* ignore */
     }
   }, [id]);
+
+  const loadVolume = useCallback(async () => {
+    if (!dep) return;
+    setVolumeLoading(true);
+    try {
+      const res = await api<{ result: { ok: boolean; keys?: string[] } }>(`/api/deployments/${id}/volume`);
+      const keys = res.result.keys ?? [];
+      setVolumeKeys(keys);
+      // Fetch values for each key (limit to first 20 keys to avoid overload).
+      const limited = keys.slice(0, 20);
+      const entries = await Promise.all(
+        limited.map(async (k) => {
+          try {
+            const r = await api<{ result: { ok: boolean; value?: string | null } }>(
+              `/api/deployments/${id}/volume?op=get&key=${encodeURIComponent(k)}`
+            );
+            return [k, r.result.value ?? ""] as const;
+          } catch {
+            return [k, ""] as const;
+          }
+        })
+      );
+      setVolumeValues(Object.fromEntries(entries));
+    } catch {
+      setVolumeKeys([]);
+    } finally {
+      setVolumeLoading(false);
+    }
+  }, [id, dep]);
 
   useEffect(() => {
     load();
@@ -147,6 +187,28 @@ export function DeploymentView({ id }: { id: string }) {
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "Failed to delete");
       setBusy(false);
+    }
+  }
+
+  function startEditLabel() {
+    setLabelDraft(dep?.label ?? "");
+    setLabelEditing(true);
+  }
+
+  async function saveLabel() {
+    setLabelSaving(true);
+    try {
+      const { deployment } = await api<{ deployment: DeploymentItem }>(`/api/deployments/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ label: labelDraft }),
+      });
+      setDep(deployment);
+      setLabelEditing(false);
+      toast.success("Label updated");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Failed to update label");
+    } finally {
+      setLabelSaving(false);
     }
   }
 
@@ -194,32 +256,83 @@ export function DeploymentView({ id }: { id: string }) {
       </div>
 
       {/* Header */}
-      <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <AppLogo logo={dep.app?.logo ?? null} simulator={dep.app?.simulator ?? "static"} name={dep.app?.name ?? "App"} size="lg" />
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight">{dep.app?.name ?? "Deployment"}</h1>
-              <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusColor(dep.status)}`}>
-                <span className={`size-1.5 rounded-full ${statusDot(dep.status)}`} />
-                {dep.status}
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                <Timer className="size-3" />
-                {running ? `Uptime: ${uptimeSince(dep.createdAt)}` : `Downtime: ${timeAgo(dep.updatedAt)}`}
-              </span>
+      <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <AppLogo logo={dep.app?.logo ?? null} simulator={dep.app?.simulator ?? "static"} name={dep.app?.name ?? "App"} size="lg" />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-bold tracking-tight">{dep.app?.name ?? "Deployment"}</h1>
+                <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusColor(dep.status)}`}>
+                  <span className={`size-1.5 rounded-full ${statusDot(dep.status)}`} />
+                  {dep.status}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  <Timer className="size-3" />
+                  {running ? `Uptime: ${uptimeSince(dep.createdAt)}` : `Downtime: ${timeAgo(dep.updatedAt)}`}
+                </span>
+              </div>
+              <a
+                href={dep.previewPath}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-flex max-w-full items-center gap-1 font-mono text-xs text-brand hover:underline"
+              >
+                <Globe className="size-3 shrink-0" /> <span className="truncate">{dep.subdomain}.apps.local</span>
+              </a>
+              {/* Label row */}
+              <div className="mt-2 flex items-center gap-2">
+                {labelEditing ? (
+                  <div className="flex items-center gap-1.5">
+                    <Tag className="size-3.5 text-muted-foreground" />
+                    <Input
+                      value={labelDraft}
+                      onChange={(e) => setLabelDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveLabel();
+                        if (e.key === "Escape") setLabelEditing(false);
+                      }}
+                      placeholder="Add a label (e.g. 'prod', 'staging', 'client-A')"
+                      className="h-7 w-64 text-xs"
+                      autoFocus
+                      disabled={labelSaving}
+                    />
+                    <button
+                      onClick={saveLabel}
+                      disabled={labelSaving}
+                      className="inline-flex size-7 items-center justify-center rounded-md bg-brand text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
+                      aria-label="Save label"
+                    >
+                      {labelSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => setLabelEditing(false)}
+                      className="inline-flex size-7 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
+                      aria-label="Cancel"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={startEditLabel}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-brand/40 hover:text-foreground"
+                  >
+                    <Tag className="size-3" />
+                    {dep.label ? (
+                      <span className="text-foreground">{dep.label}</span>
+                    ) : (
+                      <span>Add label</span>
+                    )}
+                    <Pencil className="size-2.5 opacity-60" />
+                  </button>
+                )}
+              </div>
             </div>
-            <a
-              href={dep.previewPath}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-0.5 inline-flex items-center gap-1 font-mono text-xs text-brand hover:underline"
-            >
-              <Globe className="size-3" /> {dep.subdomain}.apps.local <ExternalLink className="size-3" />
-            </a>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
+
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-3">
           <Button
             size="sm"
             className="bg-brand text-brand-foreground hover:bg-brand/90"
@@ -242,7 +355,7 @@ export function DeploymentView({ id }: { id: string }) {
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" disabled={busy}>
+              <Button size="sm" variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy}>
                 <Trash2 className="mr-1.5 size-3.5" /> Delete
               </Button>
             </AlertDialogTrigger>
@@ -352,6 +465,88 @@ export function DeploymentView({ id }: { id: string }) {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Volume data browser */}
+      <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+              <Database className="size-4" /> Persistent volume data
+            </h2>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              The keys stored in <span className="font-mono">{dep.volumeName}</span>. Survives stop / restart.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadVolume}
+            disabled={volumeLoading}
+            className="gap-1.5"
+          >
+            {volumeLoading ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <RotateCw className="size-3.5" />
+            )}
+            Refresh
+          </Button>
+        </div>
+
+        {volumeKeys === null ? (
+          <div className="mt-4 rounded-lg border border-dashed border-border p-6 text-center">
+            <Database className="mx-auto size-6 text-muted-foreground/40" />
+            <p className="mt-2 text-xs text-muted-foreground">
+              Click "Refresh" to inspect the volume contents.
+            </p>
+          </div>
+        ) : volumeKeys.length === 0 ? (
+          <div className="mt-4 rounded-lg border border-dashed border-border p-6 text-center">
+            <Database className="mx-auto size-6 text-muted-foreground/40" />
+            <p className="mt-2 text-xs text-muted-foreground">
+              Volume is empty. Use the deployed app to write some data, then refresh.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 max-h-72 overflow-y-auto scroll-thin rounded-lg border border-border/60">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-muted/60 backdrop-blur">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium uppercase tracking-wider text-muted-foreground">
+                    Key
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium uppercase tracking-wider text-muted-foreground">
+                    Value
+                  </th>
+                  <th className="px-3 py-2 text-right font-medium uppercase tracking-wider text-muted-foreground">
+                    Size
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {volumeKeys.map((k) => {
+                  const v = volumeValues[k] ?? "";
+                  const display = v.length > 80 ? v.slice(0, 80) + "…" : v;
+                  return (
+                    <tr key={k} className="border-t border-border/40 hover:bg-muted/30">
+                      <td className="px-3 py-2 font-mono text-brand">{k}</td>
+                      <td className="px-3 py-2 font-mono text-foreground/80 break-all">{display || <span className="text-muted-foreground/40">—</span>}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                        {new Blob([v]).size} B
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {volumeKeys && volumeKeys.length > 20 && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Showing first 20 of {volumeKeys.length} keys.
+          </p>
+        )}
       </div>
     </div>
   );

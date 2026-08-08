@@ -45,6 +45,7 @@ model Deployment {
   status        String   @default("pending")
   subdomain     String   @unique
   port          Int?
+  label         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

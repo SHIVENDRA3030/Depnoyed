@@ -66,7 +66,7 @@ export function CounterSimulator(props: AppSimulatorProps) {
           Stop and restart your deployment — this number will still be here.
         </p>
 
-        <div className="my-8 flex size-40 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-5xl font-bold tabular-nums text-white shadow-lg shadow-emerald-500/20">
+        <div className="my-6 flex size-36 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-5xl font-bold tabular-nums text-white shadow-lg shadow-emerald-500/20">
           {count}
         </div>
 
@@ -96,7 +96,7 @@ export function CounterSimulator(props: AppSimulatorProps) {
           </button>
         </div>
 
-        <div className="mt-8 w-full max-w-sm">
+        <div className="mt-6 w-full max-w-sm">
           <label className="mb-1.5 block text-left text-xs font-medium text-muted-foreground">Counter name</label>
           <div className="flex gap-2">
             <input

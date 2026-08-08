@@ -231,6 +231,49 @@
         }
       ],
       "startedAt": "2026-08-08T11:59:09.429Z"
+    },
+    "ossmp-demo-counter-sksx89-g8d4": {
+      "id": "cnt_397b3529f263",
+      "name": "ossmp-demo-counter-sksx89-g8d4",
+      "status": "running",
+      "image": "ossmp/demo-counter:1.0",
+      "port": 80,
+      "volumeName": "ossmp-vol-demo-counter-sksx89-bcqr",
+      "simulator": "counter",
+      "cpuLimit": 0.5,
+      "memoryLimitMb": 512,
+      "env": {
+        "DEPLOYMENT_ID": "cmskbtucd000fq6ua82y18lrq",
+        "APP_SLUG": "demo-counter"
+      },
+      "logs": [
+        {
+          "t": "2026-08-08T12:05:07.168Z",
+          "stream": "stdout",
+          "message": "Creating container from image ossmp/demo-counter:1.0"
+        },
+        {
+          "t": "2026-08-08T12:05:07.168Z",
+          "stream": "stdout",
+          "message": "Mounting volume ossmp-vol-demo-counter-sksx89-bcqr at /data"
+        },
+        {
+          "t": "2026-08-08T12:05:07.168Z",
+          "stream": "stdout",
+          "message": "Resource limits: cpu=0.5 memory=512MB"
+        },
+        {
+          "t": "2026-08-08T12:05:07.319Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=counter) on port 80"
+        },
+        {
+          "t": "2026-08-08T12:05:07.319Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:80"
+        }
+      ],
+      "startedAt": "2026-08-08T12:05:07.319Z"
     }
   },
   "volumes": {
@@ -249,6 +292,10 @@
     "ossmp-vol-markdown-wiki-7igia6-hesn": {
       "name": "ossmp-vol-markdown-wiki-7igia6-hesn",
       "createdAt": "2026-08-08T11:59:09.271Z"
+    },
+    "ossmp-vol-demo-counter-sksx89-bcqr": {
+      "name": "ossmp-vol-demo-counter-sksx89-bcqr",
+      "createdAt": "2026-08-08T12:05:07.165Z"
     }
   }
 }

@@ -15,6 +15,11 @@ import {
   RefreshCw,
   Timer,
   Database,
+  Activity,
+  Boxes,
+  HardDrive,
+  TrendingUp,
+  Tag,
 } from "lucide-react";
 import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -143,6 +148,38 @@ export function DashboardView() {
         </div>
       </div>
 
+      {/* Stats cards */}
+      {deployments && deployments.length > 0 && (
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard
+            icon={<Boxes className="size-4" />}
+            label="Total"
+            value={String(deployments.length)}
+            tone="default"
+          />
+          <StatCard
+            icon={<Activity className="size-4" />}
+            label="Running"
+            value={String(deployments.filter((d) => d.status === "running").length)}
+            tone="emerald"
+          />
+          <StatCard
+            icon={<Square className="size-4" />}
+            label="Stopped"
+            value={String(deployments.filter((d) => d.status === "stopped" || d.status === "exited").length)}
+            tone="zinc"
+          />
+          <StatCard
+            icon={<HardDrive className="size-4" />}
+            label="Data stored"
+            value={formatDataSize(
+              deployments.reduce((acc, d) => acc + (d.volumeDataSize ?? 0), 0)
+            )}
+            tone="brand"
+          />
+        </div>
+      )}
+
       <div className="mt-6">
         {deployments === null ? (
           <div className="space-y-3">
@@ -167,6 +204,85 @@ export function DashboardView() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Activity timeline */}
+      {deployments && deployments.length > 0 && (
+        <div className="mt-8">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <TrendingUp className="size-4" /> Recent activity
+          </h2>
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <ol className="relative space-y-3">
+              <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-border" />
+              {[...deployments]
+                .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+                .slice(0, 5)
+                .map((d) => {
+                  const isActive = d.status === "running";
+                  return (
+                    <li key={d.id} className="relative flex items-start gap-3 pl-6">
+                      <span
+                        className={`absolute left-0 top-1.5 size-4 rounded-full border-2 border-background ${
+                          isActive
+                            ? "bg-emerald-500"
+                            : d.status === "failed" || d.status === "dead"
+                            ? "bg-red-500"
+                            : "bg-zinc-400"
+                        }`}
+                      />
+                      <button
+                        className="flex flex-1 items-center justify-between gap-2 text-left text-sm hover:opacity-80"
+                        onClick={() => navigate({ name: "deployment", id: d.id })}
+                      >
+                        <span className="min-w-0">
+                          <span className="font-medium">{d.app?.name ?? "Unknown app"}</span>{" "}
+                          <span className="text-muted-foreground">
+                            {isActive ? "is running" : `was ${d.status}`}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {timeAgo(d.updatedAt)}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+            </ol>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  tone: "default" | "emerald" | "zinc" | "brand";
+}) {
+  const toneClasses = {
+    default: "bg-muted/60 text-foreground",
+    emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+    zinc: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
+    brand: "bg-brand-soft text-brand",
+  }[tone];
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:border-brand/30">
+      <span className={`flex size-9 items-center justify-center rounded-lg ${toneClasses}`}>
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          {label}
+        </p>
+        <p className="truncate text-lg font-bold tabular-nums">{value}</p>
       </div>
     </div>
   );
@@ -198,7 +314,12 @@ function DeploymentRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="truncate font-semibold">{d.app?.name ?? "Unknown app"}</h3>
-            <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusColor(d.status)}`}>
+            {d.label && (
+              <Badge variant="outline" className="shrink-0 gap-1 border-brand/30 bg-brand-soft/50 px-1.5 py-0 text-[10px] font-medium text-brand">
+                <Tag className="size-2.5" /> {d.label}
+              </Badge>
+            )}
+            <span className={`inline-flex shrink-0 items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusColor(d.status)}`}>
               <span className="relative flex size-1.5">
                 <span className={`absolute inline-flex size-full rounded-full ${statusDotClass(d.status)} opacity-75`} />
                 {d.status === "running" && (
@@ -213,13 +334,13 @@ function DeploymentRow({
               href={d.previewPath}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 font-mono text-brand hover:underline"
+              className="inline-flex max-w-[180px] items-center gap-1 font-mono text-brand hover:underline sm:max-w-[220px]"
               onClick={(e) => e.stopPropagation()}
             >
-              <ExternalLink className="size-3" /> {d.subdomain}.apps.local
+              <ExternalLink className="size-3 shrink-0" /> <span className="truncate">{d.subdomain}.apps.local</span>
             </a>
-            <span className="inline-flex items-center gap-1">
-              <Container className="size-3" /> {d.containerName}
+            <span className="inline-flex items-center gap-1 font-mono">
+              <Container className="size-3" /> <span className="truncate max-w-[150px]">{d.containerName}</span>
             </span>
             <span className="inline-flex items-center gap-1">
               <Timer className="size-3" /> {running ? `Running for ${uptimeSince(d.createdAt)}` : `Stopped · ${timeAgo(d.updatedAt)}`}
@@ -257,7 +378,7 @@ function DeploymentRow({
         </Button>
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button size="sm" variant="outline" className="gap-1.5 text-destructive hover:text-destructive" disabled={busy}>
+            <Button size="sm" variant="outline" className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy}>
               <Trash2 className="size-3.5" /> Delete
             </Button>
           </AlertDialogTrigger>

@@ -376,3 +376,78 @@ Unresolved / Next-phase recommendations:
 - Add an admin page for catalog management (add/remove apps without code changes).
 - Consider a "duplicate deployment" feature (clone an existing deployment's config).
 - Add more detailed error messages when deployments fail (show container stderr).
+
+---
+Task ID: 5
+Agent: web-dev-reviewer (cron round 2)
+Task: Assess project status, perform QA via agent-browser, fix bugs, improve styling, add new features.
+
+Work Log:
+
+## Status Assessment
+- Read worklog.md — prior rounds delivered MVP + 4 apps + styling polish + 4 features (wiki, uptime, data size, quick deploy).
+- Dev server alive on :3000, lint clean, all APIs responding 200.
+- Performed comprehensive agent-browser QA across marketplace, login, dashboard, deployment detail, deployed-app preview, mobile viewport, and dark mode.
+- VLM (vision) analysis surfaced concrete issues:
+  * Mobile marketplace feature grid was 3-col fixed → squished cards at 375px.
+  * Deployment detail Delete button was on a second line (misaligned).
+  * Counter preview had excessive whitespace between controls and "Counter name" input.
+  * Footer columns were not vertically aligned.
+  * URL/container-name strings didn't truncate gracefully.
+  * Delete buttons were inconsistent (ghost) vs other action buttons (outlined).
+  * Status badge dot was too close to the status word.
+
+## Bug Fixes (Phase A)
+1. **marketplace-view.tsx**: Hero feature cards grid changed from `grid-cols-3` → `grid-cols-1 sm:grid-cols-3` so they stack on mobile. StatCard now has `text-center` and hover state.
+2. **deployment-view.tsx**: Refactored header layout — app identity + status + uptime on top row, action buttons (Open/Stop/Restart/Delete) in their own row separated by `border-t`. Delete button now uses `border-destructive/30 hover:bg-destructive/10` to match weight of other action buttons.
+3. **dashboard-view.tsx**: Delete button styled the same way (red border + red hover bg) to match. URL and container-name now use `truncate max-w-[180px]` (sm: 220px) so they gracefully truncate. Subdomain link uses `truncate` inside flex.
+4. **counter-simulator.tsx**: Reduced circle size from `size-40 my-8` → `size-36 my-6`, and form spacing from `mt-8` → `mt-6` to balance vertical rhythm.
+5. **footer.tsx**: Added `md:items-start` so all 3 columns align at the top. Added brand badges (MVP prototype + v1.0 · mock runtime). Resources list items now have brand-colored bullets for consistency with Platform list.
+
+## New Features (Phase B)
+1. **Dashboard stats cards** (dashboard-view.tsx): 4 KPI cards at the top — Total deployments, Running count, Stopped count, and total Data stored (aggregated volume size). Each card has a colored icon and tone (default/emerald/zinc/brand). Hidden when no deployments exist (empty state takes over).
+2. **Activity timeline** (dashboard-view.tsx): "Recent activity" section below the deployments list. Shows the 5 most recently updated deployments with a colored dot per status (emerald=running, red=failed, zinc=stopped) and "Xm ago" timestamp. Clickable to navigate to the deployment.
+3. **Marketplace sort dropdown + Trending section** (marketplace-view.tsx):
+   - Added a `Select` sort dropdown (Most deployed / Newest / A → Z) next to the search bar.
+   - Added a "Trending now" featured apps section at the top of the marketplace showing top 3 apps by deployment count with rank badges (gold #1, silver #2, bronze #3) on the icon, and a primary "Deploy" CTA. Hidden when a search/category filter is active.
+4. **Deployment labels** (deployment-view.tsx + api/deployments/[id]/route.ts PATCH + prisma schema):
+   - Added `label String?` column to Deployment Prisma model; pushed to DB; regenerated Prisma client (had to restart dev server because the PrismaClient instance was cached on globalThis).
+   - New `PATCH /api/deployments/[id]` endpoint accepts `{ label: string | null }` (validated, trimmed, max 60 chars). Enforces ownership via `getOwnedDeployment`.
+   - Deployment detail header has an inline-editable label pill: click "Add label" or the existing label → input + Save/Cancel buttons. Enter saves, Escape cancels. Label is displayed in the dashboard row as a small brand-colored pill.
+5. **Volume data browser** (deployment-view.tsx): New "Persistent volume data" card at the bottom of the deployment detail. Click "Refresh" → calls `GET /api/deployments/[id]/volume` to list keys, then fetches each value (limited to 20 keys). Renders a table with Key / Value (truncated at 80 chars) / Size columns. Shows empty state with database icon when no keys. Sticky header, scrollable body (max-h-72).
+6. **App detail enhancements** (app-detail-view.tsx):
+   - Deployment count badge in header ("N deployments") when count > 0.
+   - "Added {date}" + Docker image metadata row.
+   - New "Technical specifications" card at the bottom with a 2x3 grid of specs: Docker image, Container port, Runtime, CPU limit, Memory limit, Isolation model.
+
+## Verification
+- Lint: clean (0 errors, 0 warnings).
+- Dev server: 200 OK, no runtime errors in dev.log.
+- VLM-verified screenshots of: marketplace (with Trending section + sort dropdown visible), login page (decorative shapes + glass card), dashboard (4 stats cards + activity timeline + label pill visible), deployment detail (label editor + volume data table with counter/counter_label keys visible), app detail (deployment count badge + 6 tech specs), mobile marketplace (1-col stacked feature cards), mobile deployment (2x2 button grid, label visible).
+- PATCH endpoint verified via curl: `{"label":"My prod deployment"}` correctly updates the DB and returns the updated deployment.
+- Volume API verified: writes via the public volume API (`POST /api/preview/<sub>/volume`) are immediately readable from the authenticated `GET /api/deployments/<id>/volume` endpoint.
+
+## Files Modified
+- prisma/schema.prisma — added `label String?` to Deployment
+- src/lib/api.ts — serializeDeployment now includes `label`
+- src/lib/store.ts — DeploymentItem type now includes `label: string | null`
+- src/app/api/deployments/[id]/route.ts — new PATCH handler
+- src/components/marketplace/views/marketplace-view.tsx — responsive grid, trending section, sort dropdown
+- src/components/marketplace/views/dashboard-view.tsx — stats cards, activity timeline, label pill, button styling, URL truncation
+- src/components/marketplace/views/deployment-view.tsx — label editor, volume data browser, button row refactor, status badge spacing, URL truncation
+- src/components/marketplace/views/app-detail-view.tsx — deployment count badge, metadata row, tech specs section
+- src/components/marketplace/footer.tsx — column alignment, brand badges, resource list bullets
+- src/components/marketplace/simulators/counter-simulator.tsx — reduced whitespace
+
+Stage Summary:
+- All MVP acceptance criteria still met; no regressions.
+- 6 new features added (stats cards, activity timeline, trending section + sort, deployment labels, volume data browser, app detail tech specs).
+- 5 bug fixes / styling polish items (mobile responsive grid, button alignment, footer alignment, URL truncation, Delete button consistency).
+- All changes verified via agent-browser + VLM analysis at both desktop and mobile viewports.
+
+Unresolved / Next-phase recommendations:
+- The Prisma client requires a dev-server restart when the schema changes (cached on globalThis). Consider adding a file-watch trigger or `--force-reload` pattern in dev.
+- Consider surfacing the deployment label in the deployed-app preview shell for end-to-end visibility.
+- An admin UI for catalog management (add/remove/edit apps) is still the next big feature.
+- Consider periodic health pings that auto-update deployment status if the runtime reports a different state than the DB.
+- Could add per-deployment cost estimation (CPU × hours, memory × hours) for a more "marketplace" feel.
