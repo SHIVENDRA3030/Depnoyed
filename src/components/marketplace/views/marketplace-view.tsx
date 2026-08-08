@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Rocket, Search, Boxes, Container, Database, Globe, ArrowRight, Loader2, Sparkles, Zap, Flame, Star, TrendingUp } from "lucide-react";
-import { api, navigate, useAuth, type AppItem, ApiError } from "@/lib/store";
+import { Rocket, Search, Boxes, Container, Database, Globe, ArrowRight, Loader2, Sparkles, Zap, Flame, Star, TrendingUp, FlaskConical, Globe2, Wrench, FileText } from "lucide-react";
+import { api, navigate, useAuth, type AppItem, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
+import { DeployModal } from "@/components/marketplace/deploy-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -144,12 +145,13 @@ export function MarketplaceView() {
             <button
               key={cat}
               onClick={() => setActiveCat(cat)}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 activeCat === cat
                   ? "border-brand bg-brand-soft text-emerald-700 dark:text-emerald-300"
                   : "border-border bg-background text-muted-foreground hover:bg-muted"
               }`}
             >
+              <CategoryIcon category={cat} />
               {cat}
             </button>
           ))}
@@ -174,27 +176,16 @@ export function MarketplaceView() {
 
 function FeaturedAppCard({ app, rank }: { app: AppItem; rank: number }) {
   const user = useAuth((s) => s.user);
-  const [deploying, setDeploying] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
 
-  async function handleDeploy(e: React.MouseEvent) {
+  function handleDeploy(e: React.MouseEvent) {
     e.stopPropagation();
     if (!user) {
       toast.info("Sign in to deploy");
       navigate({ name: "login" });
       return;
     }
-    setDeploying(true);
-    try {
-      const { deployment } = await api<{ deployment: { id: string } }>("/api/deployments", {
-        method: "POST",
-        body: JSON.stringify({ appId: app.id }),
-      });
-      toast.success("Deployed! Redirecting…");
-      navigate({ name: "deployment", id: deployment.id });
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Deploy failed");
-      setDeploying(false);
-    }
+    setModalOpen(true);
   }
 
   const rankColor =
@@ -231,44 +222,33 @@ function FeaturedAppCard({ app, rank }: { app: AppItem; rank: number }) {
         <span className="font-mono text-[11px] text-muted-foreground">{app.dockerImage}</span>
         <button
           onClick={handleDeploy}
-          disabled={deploying}
-          className="inline-flex items-center gap-1 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground transition-colors hover:bg-brand/90 disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground transition-colors hover:bg-brand/90"
         >
-          {deploying ? <Loader2 className="size-3 animate-spin" /> : <Star className="size-3" />}
+          <Star className="size-3" />
           Deploy
         </button>
       </div>
+      <DeployModal app={app} open={modalOpen} onOpenChange={setModalOpen} />
     </div>
   );
 }
 
 function AppCard({ app }: { app: AppItem }) {
   const user = useAuth((s) => s.user);
-  const [deploying, setDeploying] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
 
-  async function handleDeploy(e: React.MouseEvent) {
+  function handleDeploy(e: React.MouseEvent) {
     e.stopPropagation();
     if (!user) {
       toast.info("Sign in to deploy");
       navigate({ name: "login" });
       return;
     }
-    setDeploying(true);
-    try {
-      const { deployment } = await api<{ deployment: { id: string } }>("/api/deployments", {
-        method: "POST",
-        body: JSON.stringify({ appId: app.id }),
-      });
-      toast.success("Deployed! Redirecting…");
-      navigate({ name: "deployment", id: deployment.id });
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Deploy failed");
-      setDeploying(false);
-    }
+    setModalOpen(true);
   }
 
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
+    <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card p-5 text-left shadow-sm card-hover-tilt">
       {/* Gradient border overlay on hover */}
       <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100" style={{ background: "linear-gradient(135deg, oklch(0.696 0.17 162.48 / 0.15), oklch(0.696 0.17 162.48 / 0.05))", padding: "1px", WebkitMask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)", WebkitMaskComposite: "xor", maskComposite: "exclude" } as React.CSSProperties} />
       <button
@@ -294,10 +274,8 @@ function AppCard({ app }: { app: AppItem }) {
         <div className="flex items-center gap-2">
           <button
             onClick={handleDeploy}
-            disabled={deploying}
-            className="inline-flex items-center gap-1 rounded-md bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand transition-colors hover:bg-brand/20 disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-md bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand transition-colors hover:bg-brand/20"
           >
-            {deploying ? <Loader2 className="size-3 animate-spin" /> : null}
             Deploy <ArrowRight className="size-3" />
           </button>
           <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-transform group-hover:translate-x-0.5">
@@ -305,6 +283,7 @@ function AppCard({ app }: { app: AppItem }) {
           </span>
         </div>
       </div>
+      <DeployModal app={app} open={modalOpen} onOpenChange={setModalOpen} />
     </div>
   );
 }
@@ -331,13 +310,31 @@ function Stat({ icon, label }: { icon: React.ReactNode; label: string }) {
 
 function AppCardSkeleton() {
   return (
-    <div className="flex animate-pulse flex-col rounded-2xl border border-border bg-card p-5">
-      <div className="size-14 rounded-xl bg-muted" />
-      <div className="mt-4 h-4 w-1/2 rounded bg-muted" />
-      <div className="mt-2 h-3 w-full rounded bg-muted" />
-      <div className="mt-1.5 h-3 w-2/3 rounded bg-muted" />
+    <div className="flex flex-col rounded-2xl border border-border bg-card p-5">
+      <div className="size-14 rounded-xl shimmer" />
+      <div className="mt-4 h-4 w-1/2 rounded shimmer" />
+      <div className="mt-2 h-3 w-full rounded shimmer" />
+      <div className="mt-1.5 h-3 w-2/3 rounded shimmer" />
     </div>
   );
+}
+
+function CategoryIcon({ category }: { category: string }) {
+  const props = { className: "size-3" };
+  switch (category) {
+    case "Demo":
+      return <FlaskConical {...props} />;
+    case "Web":
+      return <Globe2 {...props} />;
+    case "DevOps":
+      return <Wrench {...props} />;
+    case "Productivity":
+      return <FileText {...props} />;
+    case "All":
+      return <Boxes {...props} />;
+    default:
+      return null;
+  }
 }
 
 export { Loader2, Rocket };

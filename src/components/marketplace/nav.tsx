@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Rocket, LayoutDashboard, LogOut, Store, Menu } from "lucide-react";
+import { Rocket, LayoutDashboard, LogOut, Store, Menu, Command } from "lucide-react";
 import { useAuth, navigate } from "@/lib/store";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -90,6 +90,19 @@ export function Nav() {
           )}
 
           <ThemeToggle />
+
+          {/* Cmd+K hint */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden gap-1.5 text-muted-foreground sm:flex"
+            onClick={() => {
+              document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
+            }}
+          >
+            <Command className="size-3.5" />
+            <span className="text-xs">K</span>
+          </Button>
 
           {hydrated && user ? (
             <DropdownMenu>

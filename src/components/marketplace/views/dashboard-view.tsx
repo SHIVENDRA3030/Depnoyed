@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus,
   ExternalLink,
@@ -20,12 +20,21 @@ import {
   HardDrive,
   TrendingUp,
   Tag,
+  X,
+  CheckSquare,
 } from "lucide-react";
 import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
 import { statusColor } from "@/components/marketplace/status";
+import {
+  calculateUptime,
+  getContainerMetrics,
+  healthDotColor,
+} from "@/lib/metrics";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -79,6 +88,8 @@ export function DashboardView() {
   const [deployments, setDeployments] = useState<DeploymentItem[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchBusy, setBatchBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -128,6 +139,77 @@ export function DashboardView() {
     } finally {
       setBusyId(null);
     }
+  }
+
+  // Batch operations
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (!deployments) return;
+    if (selectedIds.size === deployments.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(deployments.map((d) => d.id)));
+    }
+  }
+
+  function deselectAll() {
+    setSelectedIds(new Set());
+  }
+
+  const batchInfo = useMemo(() => {
+    if (!deployments) return { hasStopped: false, hasRunning: false, count: 0 };
+    const selected = deployments.filter((d) => selectedIds.has(d.id));
+    return {
+      hasStopped: selected.some((d) => d.status === "stopped" || d.status === "exited"),
+      hasRunning: selected.some((d) => d.status === "running"),
+      count: selected.length,
+    };
+  }, [deployments, selectedIds]);
+
+  async function batchAction(action: "start" | "stop" | "restart") {
+    setBatchBusy(true);
+    let successCount = 0;
+    let failCount = 0;
+    for (const id of selectedIds) {
+      try {
+        await api<{ deployment: DeploymentItem }>(`/api/deployments/${id}/${action}`, { method: "POST" });
+        successCount++;
+      } catch {
+        failCount++;
+      }
+    }
+    await load();
+    setBatchBusy(false);
+    deselectAll();
+    if (failCount === 0) toast.success(`${successCount} deployment(s) ${action}ed`);
+    else toast.error(`${failCount} failed, ${successCount} succeeded`);
+  }
+
+  async function batchDelete() {
+    setBatchBusy(true);
+    let successCount = 0;
+    let failCount = 0;
+    for (const id of selectedIds) {
+      try {
+        await api(`/api/deployments/${id}`, { method: "DELETE" });
+        successCount++;
+      } catch {
+        failCount++;
+      }
+    }
+    await load();
+    setBatchBusy(false);
+    deselectAll();
+    if (failCount === 0) toast.success(`${successCount} deployment(s) deleted`);
+    else toast.error(`${failCount} failed, ${successCount} succeeded`);
   }
 
   return (
@@ -184,7 +266,7 @@ export function DashboardView() {
         {deployments === null ? (
           <div className="space-y-3">
             {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="h-28 animate-pulse rounded-2xl bg-muted" />
+              <div key={i} className="h-28 rounded-2xl shimmer" />
             ))}
           </div>
         ) : deployments.length === 0 ? (
@@ -196,6 +278,8 @@ export function DashboardView() {
                 key={d.id}
                 d={d}
                 busy={busyId === d.id}
+                selected={selectedIds.has(d.id)}
+                onSelect={() => toggleSelect(d.id)}
                 onStart={() => act(d.id, "start")}
                 onStop={() => act(d.id, "stop")}
                 onRestart={() => act(d.id, "restart")}
@@ -252,6 +336,93 @@ export function DashboardView() {
           </div>
         </div>
       )}
+
+      {/* Batch action bar - fixed at bottom */}
+      {batchInfo.count > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 shadow-lg backdrop-blur-sm animate-in slide-in-from-bottom-4 duration-200">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Checkbox
+                checked={deployments ? selectedIds.size === deployments.length : false}
+                onCheckedChange={toggleSelectAll}
+                aria-label="Select all"
+              />
+              <span className="text-sm font-medium">
+                {batchInfo.count} selected
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => batchAction("start")}
+                disabled={batchBusy || !batchInfo.hasStopped}
+              >
+                {batchBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+                Start all
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => batchAction("stop")}
+                disabled={batchBusy || !batchInfo.hasRunning}
+              >
+                {batchBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5" />}
+                Stop all
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => batchAction("restart")}
+                disabled={batchBusy}
+              >
+                {batchBusy ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCw className="size-3.5" />}
+                Restart all
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    disabled={batchBusy}
+                  >
+                    <Trash2 className="size-3.5" /> Delete all
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete {batchInfo.count} deployment(s)?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This permanently removes {batchInfo.count} container(s) and their volumes. All persisted data will be lost.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={batchDelete}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Delete all
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-1.5"
+                onClick={deselectAll}
+              >
+                <X className="size-3.5" /> Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -291,6 +462,8 @@ function StatCard({
 function DeploymentRow({
   d,
   busy,
+  selected,
+  onSelect,
   onStart,
   onStop,
   onRestart,
@@ -298,61 +471,91 @@ function DeploymentRow({
 }: {
   d: DeploymentItem;
   busy: boolean;
+  selected: boolean;
+  onSelect: () => void;
   onStart: () => void;
   onStop: () => void;
   onRestart: () => void;
   onDelete: () => void;
 }) {
   const running = d.status === "running";
+  const containerId = d.containerId ?? d.id;
+  const metrics = getContainerMetrics(containerId);
+  const uptime = calculateUptime(d.createdAt, d.status);
+
   return (
     <div className={`group flex flex-col gap-4 rounded-2xl border border-border border-l-4 ${statusAccentBorder(d.status)} bg-card p-4 shadow-sm transition-colors hover:border-brand/40 sm:flex-row sm:items-center sm:justify-between`}>
-      <button
-        className="flex min-w-0 flex-1 items-center gap-4 text-left"
-        onClick={() => navigate({ name: "deployment", id: d.id })}
-      >
-        <AppLogo logo={d.app?.logo ?? null} simulator={d.app?.simulator ?? "static"} name={d.app?.name ?? "App"} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate font-semibold">{d.app?.name ?? "Unknown app"}</h3>
-            {d.label && (
-              <Badge variant="outline" className="shrink-0 gap-1 border-brand/30 bg-brand-soft/50 px-1.5 py-0 text-[10px] font-medium text-brand">
-                <Tag className="size-2.5" /> {d.label}
-              </Badge>
-            )}
-            <span className={`inline-flex shrink-0 items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusColor(d.status)}`}>
-              <span className="relative flex size-1.5">
-                <span className={`absolute inline-flex size-full rounded-full ${statusDotClass(d.status)} opacity-75`} />
-                {d.status === "running" && (
-                  <span className={`inline-flex size-full rounded-full ${statusDotClass(d.status)} animate-status-pulse`} />
-                )}
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        {/* Checkbox */}
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onSelect}
+          aria-label={`Select ${d.app?.name ?? "deployment"}`}
+          onClick={(e) => e.stopPropagation()}
+        />
+
+        <button
+          className="flex min-w-0 flex-1 items-center gap-4 text-left"
+          onClick={() => navigate({ name: "deployment", id: d.id })}
+        >
+          <AppLogo logo={d.app?.logo ?? null} simulator={d.app?.simulator ?? "static"} name={d.app?.name ?? "App"} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="truncate font-semibold">{d.app?.name ?? "Unknown app"}</h3>
+              {d.label && (
+                <Badge variant="outline" className="shrink-0 gap-1 border-brand/30 bg-brand-soft/50 px-1.5 py-0 text-[10px] font-medium text-brand">
+                  <Tag className="size-2.5" /> {d.label}
+                </Badge>
+              )}
+              <span className={`inline-flex shrink-0 items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusColor(d.status)}`}>
+                <span className="relative flex size-1.5">
+                  <span className={`absolute inline-flex size-full rounded-full ${statusDotClass(d.status)} opacity-75`} />
+                  {d.status === "running" && (
+                    <span className={`inline-flex size-full rounded-full ${statusDotClass(d.status)} animate-status-pulse`} />
+                  )}
+                </span>
+                {d.status}
               </span>
-              {d.status}
-            </span>
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-            <a
-              href={d.previewPath}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex max-w-[180px] items-center gap-1 font-mono text-brand hover:underline sm:max-w-[220px]"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <ExternalLink className="size-3 shrink-0" /> <span className="truncate">{d.subdomain}.apps.local</span>
-            </a>
-            <span className="inline-flex items-center gap-1 font-mono">
-              <Container className="size-3" /> <span className="truncate max-w-[150px]">{d.containerName}</span>
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <Timer className="size-3" /> {running ? `Running for ${uptimeSince(d.createdAt)}` : `Stopped · ${timeAgo(d.updatedAt)}`}
-            </span>
-            {d.volumeDataSize != null && (
+              {/* Health dot */}
+              <span className="relative flex size-2" title={`Health: ${d.status}`}>
+                <span className={`size-full rounded-full ${healthDotColor(d.status)}`} />
+              </span>
+            </div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+              <a
+                href={d.previewPath}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex max-w-[180px] items-center gap-1 font-mono text-brand hover:underline sm:max-w-[220px]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ExternalLink className="size-3 shrink-0" /> <span className="truncate">{d.subdomain}.apps.local</span>
+              </a>
+              <span className="inline-flex items-center gap-1 font-mono">
+                <Container className="size-3" /> <span className="truncate max-w-[150px]">{d.containerName}</span>
+              </span>
               <span className="inline-flex items-center gap-1">
-                <Database className="size-3" /> {formatDataSize(d.volumeDataSize)}
+                <Timer className="size-3" /> {running ? `Running for ${uptimeSince(d.createdAt)}` : `Stopped · ${timeAgo(d.updatedAt)}`}
               </span>
-            )}
+              {d.volumeDataSize != null && (
+                <span className="inline-flex items-center gap-1">
+                  <Database className="size-3" /> {formatDataSize(d.volumeDataSize)}
+                </span>
+              )}
+              {/* Uptime indicator */}
+              <span className="inline-flex items-center gap-1 tabular-nums">
+                <Activity className="size-3" />
+                {running ? `${uptime}% uptime` : "Stopped"}
+              </span>
+              {/* Memory usage bar */}
+              <span className="inline-flex items-center gap-1.5">
+                <span className="text-[10px] tabular-nums">{metrics.memoryUsagePercent}%</span>
+                <Progress value={metrics.memoryUsagePercent} className="h-1.5 w-16" />
+              </span>
+            </div>
           </div>
-        </div>
-      </button>
+        </button>
+      </div>
 
       <div className="flex items-center gap-1.5">
         <Button
@@ -409,10 +612,15 @@ function DeploymentRow({
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-20 text-center">
-      <div className="flex size-14 items-center justify-center rounded-2xl bg-brand-soft text-brand">
-        <Container className="size-7" />
+      <div className="relative">
+        <div className="flex size-16 items-center justify-center rounded-2xl bg-brand-soft text-brand">
+          <Container className="size-8" />
+        </div>
+        <div className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-brand text-brand-foreground">
+          <Plus className="size-3" />
+        </div>
       </div>
-      <h3 className="mt-4 text-lg font-semibold">No deployments yet</h3>
+      <h3 className="mt-5 text-lg font-semibold">No deployments yet</h3>
       <p className="mt-1 max-w-sm text-sm text-muted-foreground">
         Browse the marketplace and deploy your first open-source application in one click.
       </p>

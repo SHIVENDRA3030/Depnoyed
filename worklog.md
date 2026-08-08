@@ -451,3 +451,69 @@ Unresolved / Next-phase recommendations:
 - An admin UI for catalog management (add/remove/edit apps) is still the next big feature.
 - Consider periodic health pings that auto-update deployment status if the runtime reports a different state than the DB.
 - Could add per-deployment cost estimation (CPU × hours, memory × hours) for a more "marketplace" feel.
+
+---
+Task ID: 6
+Agent: lead-engineer (Z.ai Code)
+Task: Phase 6 — Assess project status, perform QA, fix bugs, add new features
+(deploy modal, command palette, health metrics, batch operations,
+styling enhancements, onboarding guide, category icons).
+
+Work Log:
+- Assessed current project status via agent-browser QA on marketplace,
+  login, dashboard, deployment detail, and preview pages.
+- Found 0 errors, 0 console errors, lint clean. All existing features
+  working correctly (auth, deploy, persistence, isolation, volume data).
+- Added Deployment Configuration Modal (deploy-modal.tsx): when clicking
+  "Deploy", a dialog shows app info, optional label input, and a
+  summary of what you get before confirming. Deploy API accepts label.
+- Added Command Palette (command-palette.tsx): Cmd+K / Ctrl+K opens a
+  search palette with Navigation, Applications, Quick Deploy, and My
+  Deployments groups. Data is lazy-loaded on open. K button in nav bar.
+- Added Deployment Health Metrics (metrics.ts): deterministic seeded
+  random for stable per-container values. Dashboard shows uptime %,
+  memory usage bar, health dot per row. Deployment detail has 5-metric
+  Health section (uptime, memory, CPU, latency, last check).
+- Added Batch Operations: checkboxes on dashboard rows, fixed bottom
+  action bar with Start all / Stop all / Restart all / Delete all.
+  Delete requires confirmation. Auto-deselects after batch action.
+- Enhanced Styling: shimmer skeleton animation (gradient sweep instead
+  of plain pulse), 3D card hover tilt (perspective + rotateX/Y),
+  smooth view fade-in transitions (key-based RouteView), better empty
+  state with decorative plus icon.
+- Added Category Icons in marketplace filter bar: Demo=FlaskConical,
+  Web=Globe2, DevOps=Wrench, Productivity=FileText, All=Boxes.
+- Added Onboarding Banner (onboarding-banner.tsx): shows for logged-in
+  new users with "Get started" CTA, 3-step progress, and dismiss.
+  Persists dismissal in localStorage.
+- All new features verified via agent-browser: deploy modal opens and
+  creates deployment with label, command palette shows all groups and
+  items, health metrics display in dashboard and detail views, batch
+  operations work, dark mode works, mobile responsive.
+- Lint clean. No console errors. No page errors.
+
+Stage Summary:
+- 8 new features added in this phase:
+  1. Deploy Configuration Modal (label + summary before deploy)
+  2. Command Palette (Cmd+K) with navigation, apps, quick deploy, deployments
+  3. Health Metrics (uptime %, memory bar, CPU bar, latency, health dot)
+  4. Batch Operations (select multiple, start/stop/restart/delete all)
+  5. Enhanced Styling (shimmer, 3D tilt, view transitions, better empty states)
+  6. Category Icons in filter bar
+  7. Onboarding Banner for new users
+  8. Cmd+K button in nav bar
+- New files: deploy-modal.tsx, command-palette.tsx, metrics.ts, onboarding-banner.tsx
+- Modified: marketplace-view.tsx, app-detail-view.tsx, dashboard-view.tsx,
+  deployment-view.tsx, marketplace-app.tsx, nav.tsx, globals.css
+- No regressions. All MVP acceptance criteria still met.
+- QA screenshots saved to /home/z/my-project/download/qa-final-*.png
+
+Unresolved / Next-phase recommendations:
+- Deployment environment variables support (create/edit env vars per deployment)
+- Admin catalog management UI (add/edit/remove apps from the catalog)
+- Real-time WebSocket status updates instead of polling
+- Deployment cost/usage tracking and billing
+- App ratings/reviews system
+- More realistic app simulators (e.g., database admin, code editor)
+- Email notification on deployment status changes
+- SSO/OAuth provider support (GitHub, Google)

@@ -274,6 +274,92 @@
         }
       ],
       "startedAt": "2026-08-08T12:05:07.319Z"
+    },
+    "ossmp-markdown-wiki-sksx89-bx2h": {
+      "id": "cnt_b36a02f513ca",
+      "name": "ossmp-markdown-wiki-sksx89-bx2h",
+      "status": "running",
+      "image": "ossmp/markdown-wiki:1.0",
+      "port": 8080,
+      "volumeName": "ossmp-vol-markdown-wiki-sksx89-a0kn",
+      "simulator": "wiki",
+      "cpuLimit": 0.5,
+      "memoryLimitMb": 512,
+      "env": {
+        "DEPLOYMENT_ID": "cmskcq8vt0001q6wgm5am6wvo",
+        "APP_SLUG": "markdown-wiki"
+      },
+      "logs": [
+        {
+          "t": "2026-08-08T12:30:19.008Z",
+          "stream": "stdout",
+          "message": "Creating container from image ossmp/markdown-wiki:1.0"
+        },
+        {
+          "t": "2026-08-08T12:30:19.008Z",
+          "stream": "stdout",
+          "message": "Mounting volume ossmp-vol-markdown-wiki-sksx89-a0kn at /data"
+        },
+        {
+          "t": "2026-08-08T12:30:19.008Z",
+          "stream": "stdout",
+          "message": "Resource limits: cpu=0.5 memory=512MB"
+        },
+        {
+          "t": "2026-08-08T12:30:19.159Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=wiki) on port 8080"
+        },
+        {
+          "t": "2026-08-08T12:30:19.159Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:8080"
+        }
+      ],
+      "startedAt": "2026-08-08T12:30:19.159Z"
+    },
+    "ossmp-demo-counter-o3lb3q-ck41": {
+      "id": "cnt_40dec0f4e9e1",
+      "name": "ossmp-demo-counter-o3lb3q-ck41",
+      "status": "running",
+      "image": "ossmp/demo-counter:1.0",
+      "port": 80,
+      "volumeName": "ossmp-vol-demo-counter-o3lb3q-h5id",
+      "simulator": "counter",
+      "cpuLimit": 0.5,
+      "memoryLimitMb": 512,
+      "env": {
+        "DEPLOYMENT_ID": "cmskdr7xs0004q6wg7y156kw3",
+        "APP_SLUG": "demo-counter"
+      },
+      "logs": [
+        {
+          "t": "2026-08-08T12:59:04.059Z",
+          "stream": "stdout",
+          "message": "Creating container from image ossmp/demo-counter:1.0"
+        },
+        {
+          "t": "2026-08-08T12:59:04.059Z",
+          "stream": "stdout",
+          "message": "Mounting volume ossmp-vol-demo-counter-o3lb3q-h5id at /data"
+        },
+        {
+          "t": "2026-08-08T12:59:04.059Z",
+          "stream": "stdout",
+          "message": "Resource limits: cpu=0.5 memory=512MB"
+        },
+        {
+          "t": "2026-08-08T12:59:04.231Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=counter) on port 80"
+        },
+        {
+          "t": "2026-08-08T12:59:04.231Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:80"
+        }
+      ],
+      "startedAt": "2026-08-08T12:59:04.231Z"
     }
   },
   "volumes": {
@@ -296,6 +382,14 @@
     "ossmp-vol-demo-counter-sksx89-bcqr": {
       "name": "ossmp-vol-demo-counter-sksx89-bcqr",
       "createdAt": "2026-08-08T12:05:07.165Z"
+    },
+    "ossmp-vol-markdown-wiki-sksx89-a0kn": {
+      "name": "ossmp-vol-markdown-wiki-sksx89-a0kn",
+      "createdAt": "2026-08-08T12:30:19.002Z"
+    },
+    "ossmp-vol-demo-counter-o3lb3q-h5id": {
+      "name": "ossmp-vol-demo-counter-o3lb3q-h5id",
+      "createdAt": "2026-08-08T12:59:04.050Z"
     }
   }
 }

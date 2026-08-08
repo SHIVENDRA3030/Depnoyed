@@ -24,13 +24,23 @@ import {
   Pencil,
   Check,
   X,
+  Activity,
+  Zap,
+  Clock,
+  HeartPulse,
 } from "lucide-react";
 import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
 import { statusColor, statusDot } from "@/components/marketplace/status";
+import {
+  calculateUptime,
+  getContainerMetrics,
+  lastHealthCheck,
+} from "@/lib/metrics";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -236,6 +246,10 @@ export function DeploymentView({ id }: { id: string }) {
   const running = dep.status === "running";
   const steps = computeSteps(dep.status);
   const banner = statusBannerStyle(dep.status);
+  const containerId = dep.containerId ?? dep.id;
+  const metrics = getContainerMetrics(containerId);
+  const uptime = calculateUptime(dep.createdAt, dep.status);
+  const healthCheckTime = lastHealthCheck(containerId);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -252,6 +266,84 @@ export function DeploymentView({ id }: { id: string }) {
         <div>
           <p className="text-sm font-medium">{dep.status.charAt(0).toUpperCase() + dep.status.slice(1)}</p>
           <p className="text-xs text-muted-foreground">{banner.text}</p>
+        </div>
+      </div>
+
+      {/* Health metrics section */}
+      <div className="mb-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
+          <HeartPulse className="size-4 text-rose-500" /> Health
+        </h2>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {/* Uptime */}
+          <MetricCard
+            icon={<Activity className="size-3.5" />}
+            label="Uptime"
+            value={running ? `${uptime}%` : "0%"}
+          >
+            {running && (
+              <Progress
+                value={uptime}
+                className="mt-2 h-1.5"
+              />
+            )}
+          </MetricCard>
+
+          {/* Memory usage */}
+          <MetricCard
+            icon={<MemoryStick className="size-3.5" />}
+            label="Memory"
+            value={`${metrics.memoryUsagePercent}%`}
+          >
+            <Progress
+              value={metrics.memoryUsagePercent}
+              className="mt-2 h-1.5"
+            />
+          </MetricCard>
+
+          {/* CPU usage */}
+          <MetricCard
+            icon={<Cpu className="size-3.5" />}
+            label="CPU"
+            value={`${metrics.cpuUsagePercent}%`}
+          >
+            <Progress
+              value={metrics.cpuUsagePercent}
+              className="mt-2 h-1.5"
+            />
+          </MetricCard>
+
+          {/* Response latency */}
+          <MetricCard
+            icon={<Zap className="size-3.5" />}
+            label="Latency"
+            value={`${metrics.responseLatencyMs}ms`}
+          >
+            <div className="mt-2 flex items-center gap-1.5">
+              <div
+                className={`h-1.5 rounded-full ${
+                  metrics.responseLatencyMs < 50
+                    ? "bg-emerald-500"
+                    : metrics.responseLatencyMs < 100
+                    ? "bg-amber-500"
+                    : "bg-red-500"
+                }`}
+                style={{ width: `${Math.min((metrics.responseLatencyMs / 150) * 100, 100)}%` }}
+              />
+              <div className="h-1.5 flex-1 rounded-full bg-muted" />
+            </div>
+          </MetricCard>
+
+          {/* Last health check */}
+          <MetricCard
+            icon={<Clock className="size-3.5" />}
+            label="Last check"
+            value={formatHealthCheckTime(healthCheckTime)}
+          >
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              {healthCheckTime.toLocaleTimeString()}
+            </p>
+          </MetricCard>
         </div>
       </div>
 
@@ -551,6 +643,40 @@ export function DeploymentView({ id }: { id: string }) {
     </div>
   );
 }
+
+/* ---------- Health metric card ---------- */
+
+function MetricCard({
+  icon,
+  label,
+  value,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col rounded-xl border border-border bg-muted/30 p-3">
+      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {icon} {label}
+      </div>
+      <p className="mt-1 text-base font-bold tabular-nums">{value}</p>
+      {children}
+    </div>
+  );
+}
+
+function formatHealthCheckTime(date: Date): string {
+  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diffSec < 5) return "just now";
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const mins = Math.floor(diffSec / 60);
+  return `${mins}m ago`;
+}
+
+/* ---------- Detail row ---------- */
 
 function Detail({
   icon,

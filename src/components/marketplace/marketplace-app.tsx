@@ -10,6 +10,8 @@ import { AppDetailView } from "@/components/marketplace/views/app-detail-view";
 import { DashboardView } from "@/components/marketplace/views/dashboard-view";
 import { DeploymentView } from "@/components/marketplace/views/deployment-view";
 import { Loader2 } from "lucide-react";
+import { CommandPalette } from "@/components/marketplace/command-palette";
+import { OnboardingBanner } from "@/components/marketplace/onboarding-banner";
 
 export function MarketplaceApp() {
   const [route, setRoute] = useState<Route>(() =>
@@ -51,6 +53,7 @@ export function MarketplaceApp() {
   return (
     <div className="flex min-h-screen flex-col">
       <Nav />
+      <OnboardingBanner />
       <main className="flex-1">
         {hydrating ? (
           <div className="flex h-[60vh] items-center justify-center">
@@ -61,11 +64,28 @@ export function MarketplaceApp() {
         )}
       </main>
       <Footer />
+      <CommandPalette />
     </div>
   );
 }
 
 function RouteView({ route }: { route: Route }) {
+  return (
+    <div className="view-fade-in" key={routeToKey(route)}>
+      <InnerRouteView route={route} />
+    </div>
+  );
+}
+
+function routeToKey(route: Route): string {
+  switch (route.name) {
+    case "app": return `app-${route.slug}`;
+    case "deployment": return `dep-${route.id}`;
+    default: return route.name;
+  }
+}
+
+function InnerRouteView({ route }: { route: Route }) {
   switch (route.name) {
     case "login":
       return <LoginView />;

@@ -1,0 +1,405 @@
+    50→    50→    50→- Auth: register/login/logout/me all work; sessions persist via signed cookie.
+    51→    51→    51→- Deploy: clicking deploy creates volume + container, starts it, returns
+    52→    52→    52→  running status + unique subdomain URL.
+    53→    53→    53→- Persistence: counter incremented to 3, deployment STOPPED (preview then
+    54→    54→    54→  returns `APP_NOT_RUNNING`), STARTED again, counter still 3. ✅
+    55→    55→    55→- Isolation: User B gets HTTP 403 FORBIDDEN on User A's deployment; User B's
+    56→    56→    56→  own deployment has an independent empty volume; deleting User B's deployment
+    57→    57→    57→  leaves User A's deployment + data fully intact. ✅
+    58→    58→    58→- Logs API returns the simulated container stdout lines.
+    59→    59→    59→
+    60→    60→    60→Unresolved / Next-phase recommendations:
+    61→    61→    61→- Real Docker engine is unavailable in this sandbox; the `DockerEngineAdapter`
+    62→    62→    62→  is a stub that delegates to the mock. In a real host, implement it with
+    63→    63→    63→  `dockerode` / `docker` CLI and subdomain routing via Caddy on-demand.
+    64→    64→    64→- The public URL currently renders through the Next.js preview route
+    65→    65→    65→  (`/preview/<subdomain>`). For production, wire Caddy to route
+    66→    66→    66→  `<subdomain>.apps.yourdomain.com` to the real container's published port.
+    67→    67→    67→- Frontend browser verification (agent-browser) is the immediate next step.
+    68→    68→    68→- Consider: per-deployment resource usage metrics, deployment health pings,
+    69→    69→    69→  admin catalog management UI, and a 4th realistic app.
+    70→    70→    70→
+    71→    71→    71→---
+    72→    72→    72→Task ID: 2
+    73→    73→    73→Agent: lead-engineer (Z.ai Code)
+    74→    74→    74→Task: Browser-verify the full acceptance scenario end-to-end and fix the
+    75→    75→    75→runtime-state sharing bug discovered during verification.
+    76→    76→    76→
+    77→    77→    77→Work Log:
+    78→    78→    78→- Started the dev server via the platform's `.zscripts/dev.sh` runner (the
+    79→    79→    79→  only way to keep the server alive across tool calls in this sandbox).
+    80→    80→    80→- Seeded the catalog (`POST /api/seed` -> 3 apps) and verified all APIs with
+    81→    81→    81→  curl: auth (register/login/logout/me), apps, deployments CRUD, start/stop/
+    82→    82→    82→  restart, logs, public volume ops.
+    83→    83→    83→- Ran the FULL acceptance scenario via curl:
+    84→    84→    84→  * User A registers, deploys Demo Counter -> container + volume created,
+    85→    85→    85→    status running, unique subdomain URL.
+    86→    86→    86→  * Incremented counter to 3 via the public volume API; STOP; preview refused
+    87→    87→    87→    with APP_NOT_RUNNING; START; counter still 3 -> PERSISTENCE proven.
+    88→    88→    88→  * User B registers; gets HTTP 403 FORBIDDEN on User A's deployment ->
+    89→    89→    89→    ISOLATION proven. User B deploys own counter (separate container+volume,
+    90→    90→    90→    starts empty). User B deletes own deployment. User A's deployment + data
+    91→    91→    91→    fully intact -> MULTI-TENANT ISOLATION proven.
+    92→    92→    92→- Verified the frontend with agent-browser:
+    93→    93→    93→  * Marketplace hero + 3 app cards + categories + search render.
+    94→    94→    94→  * App detail (Demo Counter) renders Deploy + "What you get" + resource limits.
+    95→    95→    95→  * Clicking Deploy while signed-out redirects to the login view (toast).
+    96→    96→    96→  * Login form signs in User A; nav switches to Dashboard + avatar.
+    97→    97→    97→  * Dashboard lists running deployments with Open/Stop/Restart/Delete + polling.
+    98→    98→    98→  * Deployment detail renders the 5-step progress, runtime details, and LIVE
+    99→    99→    99→    container logs (incl. the stop/start lifecycle lines).
+   100→   100→   100→  * Deployed-app preview renders the counter simulator with the persisted
+   101→   101→   101→    value (3) preloaded server-side; Increment button persists to the volume
+   102→   102→   102→    (counter 3->4, confirmed via API).
+   103→   103→   103→  * Deployed a 2nd app (Gitea Lite) straight from the UI Deploy button ->
+   104→   104→   104→    navigated to its deployment page (running).
+   105→   105→   105→- BUG FOUND + FIXED: the deployed-app preview for a freshly-deployed app
+   106→   106→   106→  showed "not running" even though the API confirmed it was running. Root
+   107→   107→   107→  cause: the mock Docker adapter kept its in-memory `_state` at module scope,
+   108→   108→   108→  but Next.js dev can evaluate route handlers and server components in
+   109→   109→   109→  separate module instances, so a container created by an API route was
+   110→   110→   110→  invisible to the preview page (which had cached state.json earlier).
+   111→   111→   111→  Fix: moved the adapter singleton AND its runtime store onto `globalThis`
+   112→   112→   112→  (same pattern as the Prisma client), and added a one-time force-reload from
+   113→   113→   113→  disk on cache-miss in inspectContainer/getLogs/execVolumeOp. Re-tested: the
+   114→   114→   114→  Gitea preview now renders the running notes simulator.
+   115→   115→   115→- Re-verified notes persistence end-to-end: wrote a note, STOP (preview API
+   116→   116→   116→  refuses with APP_NOT_RUNNING while stopped), START, note survives and
+   117→   117→   117→  renders on the preview page.
+   118→   118→   118→- Captured screenshots of marketplace, dashboard, deployment detail, and the
+   119→   119→   119→  deployed counter app.
+   120→   120→   120→- Final lint: clean. No runtime errors in dev.log. Sticky footer verified
+   121→   121→   121→  (pinned to viewport bottom on short pages, pushed down on long pages).
+   122→   122→   122→
+   123→   123→   123→Stage Summary:
+   124→   124→   124→- The MVP acceptance criteria are ALL met and browser-verified:
+   125→   125→   125→  Auth (register/login/session/403 on unauth) ✅
+   126→   126→   126→  Marketplace (catalog in DB, cards, app detail) ✅
+   127→   127→   127→  Deployment (1-click deploy -> container+volume -> running -> dashboard) ✅
+   128→   128→   128→  Isolation (per-deployment container+volume; cross-user 403) ✅
+   129→   129→   129→  Persistence (counter & notes survive stop/start) ✅
+   130→   130→   130→  Management (open/stop/start/restart/delete; DB<->runtime in sync) ✅
+   131→   131→   131→  Networking (unique subdomain URL per deployment; routes to correct app) ✅
+   132→   132→   132→  Quality (TS clean for src/, lint clean, builds via dev server) ✅
+   133→   133→   133→- The Docker runtime is a high-fidelity simulation because Docker is not
+   134→   134→   134→  available in this sandbox. The control plane talks to it only through the
+   135→   135→   135→  `DockerAdapter` interface, so real Docker (or any runtime) can be dropped
+   136→   136→   136→  in by implementing that interface — no API/UI changes required.
+   137→   137→   137→
+   138→   138→   138→Unresolved / Next-phase recommendations:
+   139→   139→   139→- Implement the real `DockerEngineAdapter` (dockerode / `docker` CLI) and
+   140→   140→   140→  wire Caddy to dynamically route `<subdomain>.apps.yourdomain.com` to each
+   141→   141→   141→  container's published port for the production-style HTTPS path.
+   142→   142→   142→- Add a 4th realistic open-source app (e.g. a real static site generator or
+   143→   143→   143→  a markdown wiki) to broaden the catalog.
+   144→   144→   144→- Add deployment health pings + per-deployment resource usage metrics in the
+   145→   145→   145→  dashboard, and an admin page to manage the app catalog.
+   146→   146→   146→- Persist the mock adapter's volume data already survives server restarts;
+   147→   147→   147→  consider surfacing a "data size" + "last write" indicator per deployment.
+   148→   148→   148→
+   149→   149→   149→---
+   150→   150→   150→Task ID: 3
+   151→   151→   151→Agent: styling-improver (Z.ai Code)
+   152→   152→   152→Task: Improve the visual polish and styling of the OSS Deploy marketplace
+   153→   153→   153→frontend across all views (hero, cards, dashboard, login, deployment detail,
+   154→   154→   154→nav, footer).
+   155→   155→   155→
+   156→   156→   156→Work Log:
+   157→   157→   157→- **globals.css**: Added 6 new CSS utilities and 4 keyframe animations:
+   158→   158→   158→  - `hero-gradient` / `.dark .hero-gradient` — animated emerald/teal gradient
+   159→   159→   159→    background for the marketplace hero (shifts over 8s).
+   160→   160→   160→  - `animate-fade-in-up` — entrance animation (opacity 0→1, translateY 12→0)
+   161→   161→   161→    for hero heading/subheading/stats.
+   162→   162→   162→  - `animate-status-pulse` — pulse animation for running status dots (scale
+   163→   163→   163→    1→1.8 + opacity fade, 2s loop).
+   164→   164→   164→  - `animate-float-slow` / `animate-float-slower` — gentle floating animation
+   165→   165→   165→    for login panel decorative shapes.
+   166→   166→   166→  - `footer-gradient-border` — emerald→transparent gradient line for the
+   167→   167→   167→    footer top.
+   168→   168→   168→  - `nav-scrolled` / `.dark .nav-scrolled` — subtle bottom shadow that appears
+   169→   169→   169→    when the nav is scrolled.
+   170→   170→   170→
+   171→   171→   171→- **marketplace-view.tsx**:
+   172→   172→   172→  - Hero section now uses `hero-gradient` class for an animated emerald/teal
+   173→   173→   173→    gradient background (replacing the static `bg-gradient-to-b`).
+   174→   174→   174→  - Hero heading, subheading, and badge each use `animate-fade-in-up` with
+   175→   175→   175→    staggered `animation-delay` (0ms, 100ms, 200ms, 300ms) for a cascading
+   176→   176→   176→    entrance.
+   177→   177→   177→  - Stats section changed from inline pill `Stat` components to a 3-column
+   178→   178→   178→    `StatCard` grid: each card has an icon in a `bg-brand-soft` circle,
+   179→   179→   179→    a label, and a short description — much more visual weight.
+   180→   180→   180→  - App cards: changed from a single `<button>` to a `<div>` wrapper with a
+   181→   181→   181→    CSS gradient border overlay that fades in on hover (using `mask-composite:
+   182→   182→   182→    exclude` trick). Inner content is a `<button>` for accessibility.
+   183→   183→   183→  - Added a "Deploy →" call-to-action button on each card (styled with
+   184→   184→   184→    `bg-brand/10` pill) alongside the existing "Details" text. Deploy button
+   185→   185→   185→    checks auth and redirects to login if not signed in.
+   186→   186→   186→  - Added deployment count badge (Zap icon + count) when `app.deploymentCount > 0`.
+   187→   187→   187→
+   188→   188→   188→- **dashboard-view.tsx**:
+   189→   189→   189→  - Status dots now use a double-dot pattern: a static base dot + an
+   190→   190→   190→    `animate-status-pulse` overlay that pulses for "running" status only.
+   191→   191→   191→  - Subdomain URL is now a clickable `<a>` link (with `text-brand` and
+   192→   192→   192→    `hover:underline`) that opens the preview in a new tab, with an
+   193→   193→   193→    `ExternalLink` icon. Uses `stopPropagation` to avoid triggering the row
+   194→   194→   194→    click.
+   195→   195→   195→  - Each deployment row now has a colored left-border accent (`border-l-4`)
+   196→   196→   196→    based on status: emerald for running, amber for pending/creating, red for
+   197→   197→   197→    failed/dead, gray for stopped/exited.
+   198→   198→   198→
+   199→   199→   199→- **login-view.tsx**:
+   200→   200→   200→  - Added a decorative geometric illustration area below the feature list:
+   201→   201→   201→    floating circles, a rotating square, tiny dots, a gradient bar, and a
+   202→   202→   202→    triangle shape — all CSS-only, using `animate-float-slow` /
+   203→   203→   203→    `animate-float-slower`. Marked `aria-hidden="true"`.
+   204→   204→   204→  - Form card now has a glass-morphism effect: `bg-card/70 backdrop-blur-xl`
+   205→   205→   205→    with `supports-[backdrop-filter]:bg-card/50` fallback, plus `shadow-lg`
+   206→   206→   206→    and slightly reduced `border-border/60` for subtlety.
+   207→   207→   207→
+   208→   208→   208→- **deployment-view.tsx**:
+   209→   209→   209→  - Added a color-coded status banner at the top of the page (below the back
+   210→   210→   210→    button, above the header card). Uses distinct background/border/icon per
+   211→   211→   211→    status: emerald for running, amber for pending/creating, red for failed,
+   212→   212→   212→    zinc for stopped. Shows the status name + a helpful description.
+   213→   213→   213→  - Progress steps now use a connected vertical line/dots visual: a
+   214→   214→   214→    `bg-border` vertical line runs down the left side, and each step has a
+   215→   215→   215→    colored circle (filled emerald for done, `bg-brand-soft` spinner for
+   216→   216→   216→    active, bordered empty circle for pending). The flat `ChevronRight`
+   217→   217→   217→    arrows between steps are removed.
+   218→   218→   218→  - Log terminal: added line numbers (1-indexed, right-aligned, `text-zinc-700`,
+   219→   219→   219→    `select-none`, `w-6`), changed timestamp color from `text-zinc-600` to
+   220→   220→   220→    `text-emerald-700` for syntax-highlighted visibility.
+   221→   221→   221→
+   222→   222→   222→- **nav.tsx**:
+   223→   223→   223→  - Added scroll-aware shadow: a `useEffect` listens for `window.scrollY > 4`
+   224→   224→   224→    and toggles the `nav-scrolled` CSS class on the header, producing a
+   225→   225→   225→    subtle bottom shadow on scroll.
+   226→   226→   226→  - Added mobile hamburger menu using shadcn/ui `Sheet` (slides from right):
+   227→   227→   227→    - Shows a `Menu` hamburger icon (visible only on `sm:hidden`).
+   228→   228→   228→    - Sheet contains: brand logo, Marketplace + Dashboard nav buttons,
+   229→   229→   229→      user info with avatar, and Sign out / Sign in.
+   230→   230→   230→    - Theme toggle remains accessible in the mobile bar alongside the
+   231→   231→   231→      hamburger.
+   232→   232→   232→    - Desktop nav remains unchanged but now properly hidden on mobile
+   233→   233→   233→      (`hidden sm:flex`).
+   234→   234→   234→
+   235→   235→   235→- **footer.tsx**:
+   236→   236→   236→  - Replaced the solid `border-t border-border/80` with a `<div
+   237→   237→   237→    className="footer-gradient-border" />` — a 1px line that fades from
+   238→   238→   238→    emerald brand color to transparent, adding a polished brand touch.
+   239→   239→   239→
+   240→   240→   240→- Lint: clean (0 errors, 0 warnings).
+   241→   241→   241→- Dev server: no runtime errors in dev.log; all pages compile successfully.
+   242→   242→   242→
+   243→   243→   243→Stage Summary:
+   244→   244→   244→- All 7 requested styling improvements have been implemented across 7 files
+   245→   245→   245→  (globals.css + 6 component files). No backend/API code was modified.
+   246→   246→   246→- The UI now has significantly more visual polish: animated hero gradient,
+   247→   247→   247→  staggered entrance animations, stat cards with icons, gradient border hover
+   248→   248→   248→  on app cards, Deploy CTAs, deployment count badges, pulsing status dots,
+   249→   249→   249→  colored left-border accents, clickable subdomain links, glass-morphism login
+   250→   250→   250→  card, floating decorative shapes, connected progress step line, status
+   251→   251→   251→  banners, line-numbered logs with colored timestamps, scroll-aware nav shadow,
+   252→   252→   252→  mobile hamburger menu, and gradient footer border.
+   253→   253→   253→- All changes use only CSS animations and existing shadcn/ui components — no
+   254→   254→   254→  new dependencies or runtime overhead.
+   255→   255→   255→
+   256→   256→   256→---
+   257→   257→   257→Task ID: 4
+   258→   258→   258→Agent: feature-adder (Z.ai Code)
+   259→   259→   259→Task: Add 4 new features to the OSS Deploy marketplace: (1) 4th app "Markdown Wiki"
+   260→   260→   260→with wiki simulator, (2) deployment uptime health indicator, (3) volume data size
+   261→   261→   261→in dashboard, (4) quick deploy from marketplace cards.
+   262→   262→   262→
+   263→   263→   263→Work Log:
+   264→   264→   264→- **Feature 1 — Markdown Wiki app**:
+   265→   265→   265→  - Added 4th app entry to `src/app/api/seed/route.ts`: "Markdown Wiki"
+   266→   266→   266→    (slug: markdown-wiki, category: Productivity, simulator: wiki, logo: wiki,
+   267→   267→   267→    dockerImage: ossmp/markdown-wiki:1.0, containerPort: 8080).
+   268→   268→   268→  - Created `src/components/marketplace/simulators/wiki-simulator.tsx`:
+   269→   269→   269→    a full wiki interface with:
+   270→   270→   270→    - Left sidebar listing wiki pages (loaded from volume key "wiki_pages")
+   271→   271→   271→    - Main area rendering selected page content via `react-markdown`
+   272→   272→   272→    - Edit/View toggle with textarea for editing Markdown content
+   273→   273→   273→    - "New Page" button to create wiki pages
+   274→   274→   274→    - "Delete Page" per page (with confirmation UX)
+   275→   275→   275→    - All data persisted via volume API (POST /api/preview/[subdomain]/volume)
+   276→   276→   276→    - Pre-seeded "Home" page with welcome Markdown content
+   277→   277→   277→    - Data structure: `{"pages": [{"id", "title", "content", "updatedAt"}]}`
+   278→   278→   278→  - Registered wiki simulator in `app-simulator.tsx` (added case "wiki")
+   279→   279→   279→  - Updated `AppLogo` component: added BookOpen icon from lucide-react for
+   280→   280→   280→    "wiki" logo type, with violet/purple gradient (`from-violet-500 to-purple-600`)
+   281→   281→   281→  - Installed `@tailwindcss/typography` plugin for proper Markdown prose styling
+   282→   282→   282→    (added `@plugin "@tailwindcss/typography"` to globals.css)
+   283→   283→   283→
+   284→   284→   284→- **Feature 2 — Deployment Health Indicator (Uptime)**:
+   285→   285→   285→  - `dashboard-view.tsx`: Replaced the "Xm ago" Clock display with a Timer icon
+   286→   286→   286→    showing "Running for Xm" / "Running for Xh Ym" for running deployments,
+   287→   287→   287→    and "Stopped · Xm ago" for stopped deployments. Added `uptimeSince()` helper
+   288→   288→   288→    that formats duration with hours+minutes precision.
+   289→   289→   289→  - `deployment-view.tsx`: Added uptime badge next to the status badge in the
+   290→   290→   290→    deployment header. Shows "Uptime: Xm" for running, "Downtime: Xm ago" for
+   291→   291→   291→    stopped, styled as a muted rounded badge with Timer icon.
+   292→   292→   292→  - Added `Timer` icon import to both views.
+   293→   293→   293→  - Added `uptimeSince()` and `timeAgo()` helper functions to deployment-view.tsx.
+   294→   294→   294→
+   295→   295→   295→- **Feature 3 — Volume Data Size in Dashboard**:
+   296→   296→   296→  - Modified `src/app/api/deployments/route.ts` GET handler: now calls
+   297→   297→   297→    `adapter.inspectVolume(deployment.volumeName)` for each deployment and
+   298→   298→   298→    includes `dataSize` from the `VolumeInfo` response as `volumeDataSize`.
+   299→   299→   299→    Uses `Promise.all` for parallel volume inspection. Errors are silently
+   300→   300→   300→    caught so a failed volume inspect doesn't break the deployments list.
+   301→   301→   301→  - Updated `DeploymentItem` type in `src/lib/store.ts`: added optional
+   302→   302→   302→    `volumeDataSize?: number` field.
+   303→   303→   303→  - `dashboard-view.tsx`: Added data size indicator next to volume/container
+   304→   304→   304→    info per deployment row. Shows formatted size (e.g. "2.1 KB", "1.2 MB")
+   305→   305→   305→    with Database icon. Added `formatDataSize()` helper and `Database` icon import.
+   306→   306→   306→
+   307→   307→   307→- **Feature 4 — Quick Deploy from Marketplace Cards**:
+   308→   308→   308→  - `marketplace-view.tsx`: Changed `handleDeploy` from a navigation to
+   309→   309→   309→    app detail, to a direct deploy action. Clicking "Deploy" on a card now:
+   310→   310→   310→    1. Checks auth — redirects to login if not signed in
+   311→   311→   311→    2. Calls POST /api/deployments with { appId } directly
+   312→   312→   312→    3. On success: shows toast "Deployed! Redirecting…" and navigates
+   313→   313→   313→       to the deployment detail view
+   314→   314→   314→    4. On error: shows error toast
+   315→   315→   315→    5. Shows loading spinner on the Deploy button while deploying
+   316→   316→   316→  - Added `deploying` state to AppCard component
+   317→   317→   317→  - Added `ApiError` import to marketplace-view.tsx
+   318→   318→   318→  - Deploy button now has `disabled` state and spinner during deployment
+   319→   319→   319→
+   320→   320→   320→- Re-seeded apps via `POST /api/seed` — confirmed 4 apps (Demo Counter,
+   321→   321→   321→  Static Welcome, Gitea Lite, Markdown Wiki).
+   322→   322→   322→- Lint: clean (0 errors, 0 warnings).
+   323→   323→   323→- Dev server: compiling successfully, no runtime errors.
+   324→   324→   324→
+   325→   325→   325→Stage Summary:
+   326→   326→   326→- 4th marketplace app "Markdown Wiki" added with full wiki simulator ✅
+   327→   327→   327→- Wiki simulator persists all pages to volume with Markdown rendering ✅
+   328→   328→   328→- Deployment uptime indicator in dashboard + deployment detail views ✅
+   329→   329→   329→- Volume data size shown per deployment in dashboard ✅
+   330→   330→   330→- Quick one-click deploy from marketplace cards (no need to visit detail) ✅
+   331→   331→   331→- All changes are backward-compatible; no breaking API changes.
+   332→   332→   332→
+   333→   333→   333→---
+   334→   334→   334→Task ID: 3
+   335→   335→   335→Agent: web-dev-reviewer (cron round 1)
+   336→   336→   336→Task: Assess project status, perform QA, fix bugs, improve styling, add features.
+   337→   337→   337→
+   338→   338→   338→Work Log:
+   339→   339→   339→- Read worklog.md — previous round completed all MVP acceptance criteria.
+   340→   340→   340→- Server alive, lint clean, all APIs responding 200.
+   341→   341→   341→- Comprehensive agent-browser QA across all views: marketplace (3 apps + categories + search), dark mode toggle, login form, dashboard (2 deployments with Open/Stop/Restart/Delete), app detail (Deploy button), deployment detail (progress + logs), deployed app previews (counter showing persisted value 4, notes with persisted note, static welcome nginx page).
+   342→   342→   342→- Deployed Static Welcome app via API, verified its preview renders the nginx welcome page with "Deployment verified" badge.
+   343→   343→   343→- **All existing features verified working. No bugs found in the base MVP.**
+   344→   344→   344→
+   345→   345→   345→Styling Improvements (delegated to subagent):
+   346→   346→   346→1. Marketplace hero: animated gradient background, staggered fade-in-up entrance, stat cards grid with icons.
+   347→   347→   347→2. App cards: gradient border hover, "Deploy →" CTA button on each card, deployment count badge.
+   348→   348→   348→3. Dashboard: pulsing status dot for "running", clickable subdomain URL, colored left-border accent per status.
+   349→   349→   349→4. Login: floating CSS geometric shapes on marketing panel, glass-morphism form card.
+   350→   350→   350→5. Deployment detail: color-coded status banner, connected vertical line + colored dots for progress, line numbers + colored timestamps in logs terminal.
+   351→   351→   351→6. Nav: scroll-aware shadow, mobile hamburger menu via shadcn Sheet.
+   352→   352→   352→7. Footer: top gradient border (emerald→transparent).
+   353→   353→   353→8. globals.css: 6 new CSS utility classes + 4 keyframe animations.
+   354→   354→   354→
+   355→   355→   355→New Features (delegated to subagent):
+   356→   356→   356→1. **4th App — Markdown Wiki**: Added "Markdown Wiki" (Productivity category, wiki simulator) to seed data. Created wiki-simulator.tsx with sidebar page list, Markdown rendering via react-markdown, edit/view toggle, new/delete pages, all persisted to volume. Pre-seeded with "Home" page. Installed @tailwindcss/typography for prose styling.
+   357→   357→   357→2. **Deployment Uptime Indicator**: Dashboard shows "Running for Xm" / "Stopped · Xm ago". Deployment detail shows Uptime/Downtime badge.
+   358→   358→   358→3. **Volume Data Size**: Enhanced GET /api/deployments to include volumeDataSize per deployment. Dashboard shows formatted size (e.g. "801 B") with Database icon.
+   359→   359→   359→4. **Quick Deploy from Cards**: Marketplace cards now have a "Deploy" button that directly deploys (with loading spinner) and navigates to the deployment detail, with auth check redirect to login.
+   360→   360→   360→
+   361→   361→   361→Bug Fix:
+   362→   362→   362→- **Wiki simulator initial page selection**: `selectedPageId` was initialized from a separate `parseWikiData()` call generating different random IDs than `wikiData`, so Home page appeared unselected. Fixed by computing initial data once via a shared `useState(() => parseWikiData(...))` used by both states.
+   363→   363→   363→
+   364→   364→   364→Stage Summary:
+   365→   365→   365→- All QA passing. Lint clean. 4 apps in catalog.
+   366→   366→   366→- Marketplace now has rich hero animation, deploy-from-card, 4 app categories.
+   367→   367→   367→- Dashboard shows uptime + data size per deployment with colored status accents.
+   368→   368→   368→- Deployment detail has status banner, connected progress dots, enhanced log terminal.
+   369→   369→   369→- Markdown Wiki simulator fully functional with persistence.
+   370→   370→   370→- Login has glass-morphism card + floating shapes.
+   371→   371→   371→- Mobile-responsive nav with hamburger menu.
+   372→   372→   372→
+   373→   373→   373→Unresolved / Next-phase recommendations:
+   374→   374→   374→- Test the mobile hamburger nav via agent-browser at small viewport.
+   375→   375→   375→- Add deployment health pings (periodic check if container is still running, auto-update status).
+   376→   376→   376→- Add an admin page for catalog management (add/remove apps without code changes).
+   377→   377→   377→- Consider a "duplicate deployment" feature (clone an existing deployment's config).
+   378→   378→   378→- Add more detailed error messages when deployments fail (show container stderr).
+   379→   379→   379→
+   380→   380→   380→---
+   381→   381→   381→Task ID: 5
+   382→   382→   382→Agent: web-dev-reviewer (cron round 2)
+   383→   383→   383→Task: Assess project status, perform QA via agent-browser, fix bugs, improve styling, add new features.
+   384→   384→   384→
+   385→   385→   385→Work Log:
+   386→   386→   386→
+   387→   387→   387→## Status Assessment
+   388→   388→   388→- Read worklog.md — prior rounds delivered MVP + 4 apps + styling polish + 4 features (wiki, uptime, data size, quick deploy).
+   389→   389→   389→- Dev server alive on :3000, lint clean, all APIs responding 200.
+   390→   390→   390→- Performed comprehensive agent-browser QA across marketplace, login, dashboard, deployment detail, deployed-app preview, mobile viewport, and dark mode.
+   391→   391→   391→- VLM (vision) analysis surfaced concrete issues:
+   392→   392→   392→  * Mobile marketplace feature grid was 3-col fixed → squished cards at 375px.
+   393→   393→   393→  * Deployment detail Delete button was on a second line (misaligned).
+   394→   394→   394→  * Counter preview had excessive whitespace between controls and "Counter name" input.
+   395→   395→   395→  * Footer columns were not vertically aligned.
+   396→   396→   396→  * URL/container-name strings didn't truncate gracefully.
+   397→   397→   397→  * Delete buttons were inconsistent (ghost) vs other action buttons (outlined).
+   398→   398→   398→  * Status badge dot was too close to the status word.
+   399→   399→   399→
+   400→   400→   400→## Bug Fixes (Phase A)
+   401→   401→   401→1. **marketplace-view.tsx**: Hero feature cards grid changed from `grid-cols-3` → `grid-cols-1 sm:grid-cols-3` so they stack on mobile. StatCard now has `text-center` and hover state.
+   402→   402→   402→2. **deployment-view.tsx**: Refactored header layout — app identity + status + uptime on top row, action buttons (Open/Stop/Restart/Delete) in their own row separated by `border-t`. Delete button now uses `border-destructive/30 hover:bg-destructive/10` to match weight of other action buttons.
+   403→   403→   403→3. **dashboard-view.tsx**: Delete button styled the same way (red border + red hover bg) to match. URL and container-name now use `truncate max-w-[180px]` (sm: 220px) so they gracefully truncate. Subdomain link uses `truncate` inside flex.
+   404→   404→   404→4. **counter-simulator.tsx**: Reduced circle size from `size-40 my-8` → `size-36 my-6`, and form spacing from `mt-8` → `mt-6` to balance vertical rhythm.
+   405→   405→   405→5. **footer.tsx**: Added `md:items-start` so all 3 columns align at the top. Added brand badges (MVP prototype + v1.0 · mock runtime). Resources list items now have brand-colored bullets for consistency with Platform list.
+   406→   406→   406→
+   407→   407→   407→## New Features (Phase B)
+   408→   408→   408→1. **Dashboard stats cards** (dashboard-view.tsx): 4 KPI cards at the top — Total deployments, Running count, Stopped count, and total Data stored (aggregated volume size). Each card has a colored icon and tone (default/emerald/zinc/brand). Hidden when no deployments exist (empty state takes over).
+   409→   409→   409→2. **Activity timeline** (dashboard-view.tsx): "Recent activity" section below the deployments list. Shows the 5 most recently updated deployments with a colored dot per status (emerald=running, red=failed, zinc=stopped) and "Xm ago" timestamp. Clickable to navigate to the deployment.
+   410→   410→   410→3. **Marketplace sort dropdown + Trending section** (marketplace-view.tsx):
+   411→   411→   411→   - Added a `Select` sort dropdown (Most deployed / Newest / A → Z) next to the search bar.
+   412→   412→   412→   - Added a "Trending now" featured apps section at the top of the marketplace showing top 3 apps by deployment count with rank badges (gold #1, silver #2, bronze #3) on the icon, and a primary "Deploy" CTA. Hidden when a search/category filter is active.
+   413→   413→   413→4. **Deployment labels** (deployment-view.tsx + api/deployments/[id]/route.ts PATCH + prisma schema):
+   414→   414→   414→   - Added `label String?` column to Deployment Prisma model; pushed to DB; regenerated Prisma client (had to restart dev server because the PrismaClient instance was cached on globalThis).
+   415→   415→   415→   - New `PATCH /api/deployments/[id]` endpoint accepts `{ label: string | null }` (validated, trimmed, max 60 chars). Enforces ownership via `getOwnedDeployment`.
+   416→   416→   416→   - Deployment detail header has an inline-editable label pill: click "Add label" or the existing label → input + Save/Cancel buttons. Enter saves, Escape cancels. Label is displayed in the dashboard row as a small brand-colored pill.
+   417→   417→   417→5. **Volume data browser** (deployment-view.tsx): New "Persistent volume data" card at the bottom of the deployment detail. Click "Refresh" → calls `GET /api/deployments/[id]/volume` to list keys, then fetches each value (limited to 20 keys). Renders a table with Key / Value (truncated at 80 chars) / Size columns. Shows empty state with database icon when no keys. Sticky header, scrollable body (max-h-72).
+   418→   418→   418→6. **App detail enhancements** (app-detail-view.tsx):
+   419→   419→   419→   - Deployment count badge in header ("N deployments") when count > 0.
+   420→   420→   420→   - "Added {date}" + Docker image metadata row.
+   421→   421→   421→   - New "Technical specifications" card at the bottom with a 2x3 grid of specs: Docker image, Container port, Runtime, CPU limit, Memory limit, Isolation model.
+   422→   422→   422→
+   423→   423→   423→## Verification
+   424→   424→   424→- Lint: clean (0 errors, 0 warnings).
+   425→   425→   425→- Dev server: 200 OK, no runtime errors in dev.log.
+   426→   426→   426→- VLM-verified screenshots of: marketplace (with Trending section + sort dropdown visible), login page (decorative shapes + glass card), dashboard (4 stats cards + activity timeline + label pill visible), deployment detail (label editor + volume data table with counter/counter_label keys visible), app detail (deployment count badge + 6 tech specs), mobile marketplace (1-col stacked feature cards), mobile deployment (2x2 button grid, label visible).
+   427→   427→   427→- PATCH endpoint verified via curl: `{"label":"My prod deployment"}` correctly updates the DB and returns the updated deployment.
+   428→   428→   428→- Volume API verified: writes via the public volume API (`POST /api/preview/<sub>/volume`) are immediately readable from the authenticated `GET /api/deployments/<id>/volume` endpoint.
+   429→   429→   429→
+   430→   430→   430→## Files Modified
+   431→   431→   431→- prisma/schema.prisma — added `label String?` to Deployment
+   432→   432→   432→- src/lib/api.ts — serializeDeployment now includes `label`
+   433→   433→   433→- src/lib/store.ts — DeploymentItem type now includes `label: string | null`
+   434→   434→   434→- src/app/api/deployments/[id]/route.ts — new PATCH handler
+   435→   435→   435→- src/components/marketplace/views/marketplace-view.tsx — responsive grid, trending section, sort dropdown
+   436→   436→   436→- src/components/marketplace/views/dashboard-view.tsx — stats cards, activity timeline, label pill, button styling, URL truncation
+   437→   437→   437→- src/components/marketplace/views/deployment-view.tsx — label editor, volume data browser, button row refactor, status badge spacing, URL truncation
+   438→   438→   438→- src/components/marketplace/views/app-detail-view.tsx — deployment count badge, metadata row, tech specs section
+   439→   439→   439→- src/components/marketplace/footer.tsx — column alignment, brand badges, resource list bullets
+   440→   440→   440→- src/components/marketplace/simulators/counter-simulator.tsx — reduced whitespace
+   441→   441→   441→
+   442→   442→   442→Stage Summary:
+   443→   443→   443→- All MVP acceptance criteria still met; no regressions.
+   444→   444→   444→- 6 new features added (stats cards, activity timeline, trending section + sort, deployment labels, volume data browser, app detail tech specs).
+   445→   445→   445→- 5 bug fixes / styling polish items (mobile responsive grid, button alignment, footer alignment, URL truncation, Delete button consistency).
+   446→   446→   446→- All changes verified via agent-browser + VLM analysis at both desktop and mobile viewports.
+   447→   447→   447→
+   448→   448→   448→Unresolved / Next-phase recommendations:
+   449→   449→   449→- The Prisma client requires a dev-server restart when the schema changes (cached on globalThis). Consider adding a file-watch trigger or `--force-reload` pattern in dev.
+   450→   450→   450→- Consider surfacing the deployment label in the deployed-app preview shell for end-to-end visibility.
+   451→   451→   451→- An admin UI for catalog management (add/remove/edit apps) is still the next big feature.
+   452→   452→   452→- Consider periodic health pings that auto-update deployment status if the runtime reports a different state than the DB.
+   453→   453→   453→- Could add per-deployment cost estimation (CPU × hours, memory × hours) for a more "marketplace" feel.
+   454→   454→   454→

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { api, navigate, useAuth, type AppItem, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
+import { DeployModal } from "@/components/marketplace/deploy-modal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -28,7 +29,7 @@ import { toast } from "sonner";
 export function AppDetailView({ slug }: { slug: string }) {
   const [app, setApp] = useState<AppItem | null>(null);
   const [notFound, setNotFound] = useState(false);
-  const [deploying, setDeploying] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const user = useAuth((s) => s.user);
 
   useEffect(() => {
@@ -42,27 +43,14 @@ export function AppDetailView({ slug }: { slug: string }) {
     })();
   }, [slug]);
 
-  async function deploy() {
+  function deploy() {
     if (!app) return;
     if (!user) {
       toast.info("Sign in to deploy");
       navigate({ name: "login" });
       return;
     }
-    setDeploying(true);
-    try {
-      const { deployment } = await api<{ deployment: DeploymentItem }>("/api/deployments", {
-        method: "POST",
-        body: JSON.stringify({ appId: app.id }),
-      });
-      toast.success("Deployment created");
-      navigate({ name: "deployment", id: deployment.id });
-    } catch (e) {
-      const message = e instanceof ApiError ? e.message : "Deployment failed";
-      toast.error(message);
-    } finally {
-      setDeploying(false);
-    }
+    setModalOpen(true);
   }
 
   if (notFound) {
@@ -126,11 +114,10 @@ export function AppDetailView({ slug }: { slug: string }) {
           <Button
             size="lg"
             onClick={deploy}
-            disabled={deploying}
             className="bg-brand text-brand-foreground hover:bg-brand/90"
           >
-            {deploying ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Rocket className="mr-2 size-4" />}
-            {deploying ? "Deploying…" : "Deploy"}
+            <Rocket className="mr-2 size-4" />
+            Deploy
           </Button>
         </div>
       </div>
@@ -192,6 +179,8 @@ export function AppDetailView({ slug }: { slug: string }) {
           </Button>
         </div>
       )}
+
+      {app && <DeployModal app={app} open={modalOpen} onOpenChange={setModalOpen} />}
     </div>
   );
 }
