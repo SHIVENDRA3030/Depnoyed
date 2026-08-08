@@ -1,7 +1,7 @@
-import { db } from "@/lib/db";
-import { getSessionUser } from "@/lib/auth";
-import { json, errorResponse, withErrors, serializeDeployment } from "@/lib/api";
-import { syncDeploymentStatus, deleteDeployment, getOwnedDeployment } from "@/lib/deployments";
+import { db } from "@backend/db";
+import { getSessionUser } from "@backend/auth";
+import { json, errorResponse, withErrors, serializeDeployment } from "@backend/api";
+import { syncDeploymentStatus, deleteDeployment, getOwnedDeployment } from "@backend/deployments";
 
 export const GET = withErrors(async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const user = await getSessionUser();

@@ -1,6 +1,8 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ============================================================================
+# OSS Deploy / Depnoyed — .gitignore
+# ============================================================================
 
-# dependencies
+# --- Dependencies ---
 node_modules
 /.pnp
 .pnp.*
@@ -10,45 +12,66 @@ node_modules
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
-
-# next.js
+# --- Next.js ---
 /.next/
 /out/
+next-env.d.ts
 
-# production
+# --- Production build ---
 /build
 
-# misc
-.DS_Store
+# --- TypeScript ---
+*.tsbuildinfo
+
+# --- Environment & secrets (NEVER commit) ---
+.env
+.env.*
+!.env.example
 *.pem
 
-# debug
+# --- Database (SQLite local data) ---
+db/*.db
+db/*.db-journal
+backend/prisma/*.db
+backend/prisma/migrations/dev.db*
+
+# --- Mock runtime state (sandbox only) ---
+.ossmp-data/
+
+# --- Logs ---
+*.log
+dev.log
+dev.out.log
+server.log
+
+# --- Debug ---
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
+# --- Vercel ---
 .vercel
 
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-local-*
+# --- Local sandbox / agent artifacts (NOT part of the project) ---
+.zscripts/
 .claude
 .z-ai-config
-*.log
-dev.log
-dev.out.log
-test
-prompt
-
-server.log
-# Skills directory
 /skills/
+prompt
+test
+upload/
+download/
+tool-results/
+agent-ctx/
+worklog.md
+
+# --- Misc ---
+local-*

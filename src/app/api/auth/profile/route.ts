@@ -1,6 +1,6 @@
-import { db } from "@/lib/db";
-import { getSessionUser } from "@/lib/auth";
-import { json, errorResponse, withErrors, serializeUser } from "@/lib/api";
+import { db } from "@backend/db";
+import { getSessionUser } from "@backend/auth";
+import { json, errorResponse, withErrors, serializeUser } from "@backend/api";
 
 export const PATCH = withErrors(async (req: Request) => {
   const user = await getSessionUser();

@@ -1,6 +1,6 @@
-import { getSessionUser } from "@/lib/auth";
-import { json, errorResponse, withErrors, serializeDeployment } from "@/lib/api";
-import { stopDeployment } from "@/lib/deployments";
+import { getSessionUser } from "@backend/auth";
+import { json, errorResponse, withErrors, serializeDeployment } from "@backend/api";
+import { stopDeployment } from "@backend/deployments";
 
 export const POST = withErrors(async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const user = await getSessionUser();

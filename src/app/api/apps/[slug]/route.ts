@@ -1,5 +1,5 @@
-import { db } from "@/lib/db";
-import { json, serializeApp, errorResponse, withErrors } from "@/lib/api";
+import { db } from "@backend/db";
+import { json, serializeApp, errorResponse, withErrors } from "@backend/api";
 
 export const GET = withErrors(async (_req: Request, { params }: { params: Promise<{ slug: string }> }) => {
   const { slug } = await params;

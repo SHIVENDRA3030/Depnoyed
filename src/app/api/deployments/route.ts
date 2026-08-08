@@ -1,8 +1,8 @@
-import { db } from "@/lib/db";
-import { getSessionUser } from "@/lib/auth";
-import { json, errorResponse, withErrors, serializeDeployment } from "@/lib/api";
-import { createDeployment, DeployError } from "@/lib/deployments";
-import { getDockerAdapter } from "@/lib/docker/adapter";
+import { db } from "@backend/db";
+import { getSessionUser } from "@backend/auth";
+import { json, errorResponse, withErrors, serializeDeployment } from "@backend/api";
+import { createDeployment, DeployError } from "@backend/deployments";
+import { getDockerAdapter } from "@backend/docker/adapter";
 
 export const POST = withErrors(async (req: Request) => {
   const user = await getSessionUser();

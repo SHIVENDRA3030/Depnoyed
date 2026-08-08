@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
-import { db } from "@/lib/db";
-import { getDockerAdapter } from "@/lib/docker/adapter";
-import { getDeploymentBySubdomain, isDeploymentRunning } from "@/lib/deployments";
+import { db } from "@backend/db";
+import { getDockerAdapter } from "@backend/docker/adapter";
+import { getDeploymentBySubdomain, isDeploymentRunning } from "@backend/deployments";
 import { AppSimulator } from "@/components/marketplace/app-simulator";
 
 export const dynamic = "force-dynamic";

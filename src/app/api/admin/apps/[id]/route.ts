@@ -1,6 +1,6 @@
-import { db } from "@/lib/db";
-import { getSessionUser } from "@/lib/auth";
-import { json, errorResponse, withErrors, serializeApp } from "@/lib/api";
+import { db } from "@backend/db";
+import { getSessionUser } from "@backend/auth";
+import { json, errorResponse, withErrors, serializeApp } from "@backend/api";
 
 async function requireAdmin() {
   const user = await getSessionUser();

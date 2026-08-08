@@ -1,6 +1,6 @@
-import { db } from "@/lib/db";
-import { getSessionUser } from "@/lib/auth";
-import { json, errorResponse, withErrors } from "@/lib/api";
+import { db } from "@backend/db";
+import { getSessionUser } from "@backend/auth";
+import { json, errorResponse, withErrors } from "@backend/api";
 import { scrypt, timingSafeEqual, randomBytes } from "crypto";
 import { promisify } from "util";
 

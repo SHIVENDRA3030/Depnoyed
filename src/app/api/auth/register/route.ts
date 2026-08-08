@@ -1,6 +1,6 @@
-import { db } from "@/lib/db";
-import { hashPassword, setSessionCookie } from "@/lib/auth";
-import { json, errorResponse, withErrors } from "@/lib/api";
+import { db } from "@backend/db";
+import { hashPassword, setSessionCookie } from "@backend/auth";
+import { json, errorResponse, withErrors } from "@backend/api";
 
 export const POST = withErrors(async (req: Request) => {
   const body = await req.json().catch(() => null);

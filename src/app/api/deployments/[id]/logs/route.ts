@@ -1,6 +1,6 @@
-import { getSessionUser } from "@/lib/auth";
-import { json, errorResponse, withErrors } from "@/lib/api";
-import { getDeploymentLogs } from "@/lib/deployments";
+import { getSessionUser } from "@backend/auth";
+import { json, errorResponse, withErrors } from "@backend/api";
+import { getDeploymentLogs } from "@backend/deployments";
 
 export const GET = withErrors(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const user = await getSessionUser();

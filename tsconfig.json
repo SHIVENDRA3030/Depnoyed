@@ -26,6 +26,12 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@backend/*": [
+        "./backend/*"
+      ],
+      "@deployed/*": [
+        "./deployed/*"
       ]
     }
   },

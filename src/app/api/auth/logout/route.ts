@@ -1,5 +1,5 @@
-import { clearSessionCookie } from "@/lib/auth";
-import { json, withErrors } from "@/lib/api";
+import { clearSessionCookie } from "@backend/auth";
+import { json, withErrors } from "@backend/api";
 
 export const POST = withErrors(async () => {
   await clearSessionCookie();

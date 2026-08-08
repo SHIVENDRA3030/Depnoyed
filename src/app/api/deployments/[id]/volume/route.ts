@@ -1,7 +1,7 @@
-import { getSessionUser } from "@/lib/auth";
-import { json, errorResponse, withErrors } from "@/lib/api";
-import { execVolumeOp } from "@/lib/deployments";
-import type { VolumeOp } from "@/lib/docker/adapter";
+import { getSessionUser } from "@backend/auth";
+import { json, errorResponse, withErrors } from "@backend/api";
+import { execVolumeOp } from "@backend/deployments";
+import type { VolumeOp } from "@backend/docker/adapter";
 
 /**
  * Persistent-volume operations for a deployment.

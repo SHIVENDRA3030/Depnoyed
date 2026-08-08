@@ -1,5 +1,5 @@
-import { db } from "@/lib/db";
-import { json, serializeApp, withErrors } from "@/lib/api";
+import { db } from "@backend/db";
+import { json, serializeApp, withErrors } from "@backend/api";
 
 export const GET = withErrors(async () => {
   const apps = await db.app.findMany({

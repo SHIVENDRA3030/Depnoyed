@@ -1,11 +1,11 @@
-import { db } from "@/lib/db";
-import { json, errorResponse, withErrors } from "@/lib/api";
+import { db } from "@backend/db";
+import { json, errorResponse, withErrors } from "@backend/api";
 import {
   getDeploymentBySubdomain,
   isDeploymentRunning,
   execVolumeOpBySubdomain,
-} from "@/lib/deployments";
-import { getDockerAdapter, type VolumeOp } from "@/lib/docker/adapter";
+} from "@backend/deployments";
+import { getDockerAdapter, type VolumeOp } from "@backend/docker/adapter";
 
 /**
  * Public data-plane for a deployed application, keyed by its subdomain.

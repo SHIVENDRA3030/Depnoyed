@@ -1,5 +1,5 @@
-import { getSessionUser } from "@/lib/auth";
-import { json, serializeUser } from "@/lib/api";
+import { getSessionUser } from "@backend/auth";
+import { json, serializeUser } from "@backend/api";
 
 export async function GET() {
   const user = await getSessionUser();
