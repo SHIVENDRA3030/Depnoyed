@@ -18,7 +18,8 @@ import {
   MemoryStick,
   Terminal,
   Copy,
-  ChevronRight,
+  AlertCircle,
+  Timer,
 } from "lucide-react";
 import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -42,6 +43,44 @@ interface LogLine {
   t: string;
   stream: string;
   message: string;
+}
+
+function statusBannerStyle(status: string): { bg: string; icon: React.ReactNode; text: string } {
+  switch (status) {
+    case "running":
+      return {
+        bg: "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800",
+        icon: <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400" />,
+        text: "This deployment is running and accessible.",
+      };
+    case "pending":
+    case "creating":
+      return {
+        bg: "bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800",
+        icon: <Loader2 className="size-5 animate-spin text-amber-600 dark:text-amber-400" />,
+        text: "Deployment is being provisioned…",
+      };
+    case "failed":
+    case "dead":
+      return {
+        bg: "bg-red-50 border-red-200 dark:bg-red-950/40 dark:border-red-800",
+        icon: <AlertCircle className="size-5 text-red-600 dark:text-red-400" />,
+        text: "Deployment failed. Try restarting or delete and re-deploy.",
+      };
+    case "stopped":
+    case "exited":
+      return {
+        bg: "bg-zinc-50 border-zinc-200 dark:bg-zinc-900/40 dark:border-zinc-700",
+        icon: <Square className="size-5 text-zinc-500 dark:text-zinc-400" />,
+        text: "Deployment is stopped. Start it to make it accessible.",
+      };
+    default:
+      return {
+        bg: "bg-muted border-border",
+        icon: <Circle className="size-5 text-muted-foreground" />,
+        text: "Unknown status.",
+      };
+  }
 }
 
 export function DeploymentView({ id }: { id: string }) {
@@ -134,6 +173,7 @@ export function DeploymentView({ id }: { id: string }) {
 
   const running = dep.status === "running";
   const steps = computeSteps(dep.status);
+  const banner = statusBannerStyle(dep.status);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -143,6 +183,15 @@ export function DeploymentView({ id }: { id: string }) {
       >
         <ArrowLeft className="size-4" /> Dashboard
       </button>
+
+      {/* Status banner */}
+      <div className={`mb-6 flex items-center gap-3 rounded-xl border p-4 ${banner.bg}`}>
+        {banner.icon}
+        <div>
+          <p className="text-sm font-medium">{dep.status.charAt(0).toUpperCase() + dep.status.slice(1)}</p>
+          <p className="text-xs text-muted-foreground">{banner.text}</p>
+        </div>
+      </div>
 
       {/* Header */}
       <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -154,6 +203,10 @@ export function DeploymentView({ id }: { id: string }) {
               <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusColor(dep.status)}`}>
                 <span className={`size-1.5 rounded-full ${statusDot(dep.status)}`} />
                 {dep.status}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                <Timer className="size-3" />
+                {running ? `Uptime: ${uptimeSince(dep.createdAt)}` : `Downtime: ${timeAgo(dep.updatedAt)}`}
               </span>
             </div>
             <a
@@ -215,32 +268,44 @@ export function DeploymentView({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* Deploy progress */}
+      {/* Deploy progress — connected line/dots visual */}
       <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
         <h2 className="text-sm font-semibold">Deployment progress</h2>
-        <ol className="mt-4 space-y-3">
-          {steps.map((s, i) => (
-            <li key={s.label} className="flex items-center gap-3">
-              {s.state === "done" ? (
-                <CheckCircle2 className="size-5 text-emerald-600" />
-              ) : s.state === "active" ? (
-                <Loader2 className="size-5 animate-spin text-brand" />
-              ) : (
-                <Circle className="size-5 text-muted-foreground/40" />
-              )}
-              <span
-                className={`text-sm ${
-                  s.state === "done" ? "text-foreground" : s.state === "active" ? "font-medium text-foreground" : "text-muted-foreground"
-                }`}
-              >
-                {s.label}
-              </span>
-              {i < steps.length - 1 && (
-                <ChevronRight className="ml-auto size-4 text-muted-foreground/30" />
-              )}
-            </li>
-          ))}
-        </ol>
+        <div className="relative mt-4">
+          {/* Vertical connecting line */}
+          <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-border" />
+          <ol className="relative space-y-4">
+            {steps.map((s, i) => (
+              <li key={s.label} className="flex items-start gap-4">
+                <div className="relative z-10 flex size-6 shrink-0 items-center justify-center">
+                  {s.state === "done" ? (
+                    <span className="flex size-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/50">
+                      <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                    </span>
+                  ) : s.state === "active" ? (
+                    <span className="flex size-6 items-center justify-center rounded-full bg-brand-soft">
+                      <Loader2 className="size-4 animate-spin text-brand" />
+                    </span>
+                  ) : (
+                    <span className="flex size-6 items-center justify-center rounded-full border border-border bg-background">
+                      <Circle className="size-3 text-muted-foreground/40" />
+                    </span>
+                  )}
+                </div>
+                <span
+                  className={`pt-1 text-sm ${
+                    s.state === "done" ? "text-foreground" : s.state === "active" ? "font-medium text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  {s.label}
+                  {s.state === "done" && i === steps.length - 1 && (
+                    <span className="ml-2 text-xs text-emerald-600 dark:text-emerald-400">✓</span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
       </div>
 
       {/* Details + logs */}
@@ -278,8 +343,9 @@ export function DeploymentView({ id }: { id: string }) {
               <p className="text-zinc-500">No logs yet.</p>
             ) : (
               logs.map((l, i) => (
-                <div key={i} className="flex gap-2">
-                  <span className="shrink-0 text-zinc-600">{new Date(l.t).toLocaleTimeString()}</span>
+                <div key={i} className="flex gap-3">
+                  <span className="shrink-0 text-zinc-700 select-none w-6 text-right">{i + 1}</span>
+                  <span className="shrink-0 text-emerald-700">{new Date(l.t).toLocaleTimeString()}</span>
                   <span className={l.stream === "stderr" ? "text-red-400" : "text-zinc-300"}>{l.message}</span>
                 </div>
               ))
@@ -353,4 +419,27 @@ function computeSteps(status: string): { label: string; state: "done" | "active"
     if (i === progress) return { label, state: "active" as const };
     return { label, state: "pending" as const };
   });
+}
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+function uptimeSince(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "<1m";
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  const remainMins = mins % 60;
+  if (hrs < 24) return remainMins > 0 ? `${hrs}h ${remainMins}m` : `${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d`;
 }

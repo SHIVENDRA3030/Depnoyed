@@ -40,6 +40,7 @@ export interface DeploymentItem {
   port: number | null;
   createdAt: string;
   updatedAt: string;
+  volumeDataSize?: number;
   app: DeploymentApp | null;
 }
 

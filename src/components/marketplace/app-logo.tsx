@@ -1,6 +1,6 @@
 "use client";
 
-import { Boxes, Hash, StickyNote, Server, Rocket, Container } from "lucide-react";
+import { Boxes, Hash, StickyNote, Server, Rocket, Container, BookOpen } from "lucide-react";
 
 const PALETTE: Record<string, string> = {
   counter: "from-emerald-500 to-teal-600",
@@ -8,6 +8,7 @@ const PALETTE: Record<string, string> = {
   notes: "from-fuchsia-500 to-purple-600",
   nginx: "from-emerald-500 to-green-600",
   gitea: "from-orange-500 to-amber-600",
+  wiki: "from-violet-500 to-purple-600",
 };
 
 export function AppLogo({
@@ -30,6 +31,8 @@ export function AppLogo({
       <Hash className={size === "lg" ? "size-7" : "size-5"} />
     ) : key === "notes" || key === "gitea" ? (
       <StickyNote className={size === "lg" ? "size-7" : "size-5"} />
+    ) : key === "wiki" ? (
+      <BookOpen className={size === "lg" ? "size-7" : "size-5"} />
     ) : key === "static" || key === "nginx" ? (
       <Server className={size === "lg" ? "size-7" : "size-5"} />
     ) : (

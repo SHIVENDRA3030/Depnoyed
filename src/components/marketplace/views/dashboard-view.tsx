@@ -13,10 +13,12 @@ import {
   Clock,
   ArrowRight,
   RefreshCw,
+  Timer,
+  Database,
 } from "lucide-react";
 import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
-import { statusColor, statusDot } from "@/components/marketplace/status";
+import { statusColor } from "@/components/marketplace/status";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -31,6 +33,42 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+
+function statusAccentBorder(status: string): string {
+  switch (status) {
+    case "running":
+      return "border-l-emerald-500";
+    case "pending":
+    case "creating":
+      return "border-l-amber-500";
+    case "failed":
+    case "dead":
+      return "border-l-red-500";
+    case "stopped":
+    case "exited":
+      return "border-l-zinc-400 dark:border-l-zinc-500";
+    default:
+      return "border-l-muted-foreground";
+  }
+}
+
+function statusDotClass(status: string): string {
+  switch (status) {
+    case "running":
+      return "bg-emerald-500";
+    case "stopped":
+    case "exited":
+      return "bg-zinc-400";
+    case "pending":
+    case "creating":
+      return "bg-amber-500";
+    case "failed":
+    case "dead":
+      return "bg-red-500";
+    default:
+      return "bg-muted-foreground";
+  }
+}
 
 export function DashboardView() {
   const [deployments, setDeployments] = useState<DeploymentItem[] | null>(null);
@@ -49,8 +87,6 @@ export function DashboardView() {
 
   useEffect(() => {
     load();
-    // Poll for status updates every few seconds so the dashboard stays in sync
-    // with the runtime (e.g. while a deployment is starting/stopping).
     const t = setInterval(load, 5000);
     return () => clearInterval(t);
   }, [load]);
@@ -153,7 +189,7 @@ function DeploymentRow({
 }) {
   const running = d.status === "running";
   return (
-    <div className="group flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-brand/40 sm:flex-row sm:items-center sm:justify-between">
+    <div className={`group flex flex-col gap-4 rounded-2xl border border-border border-l-4 ${statusAccentBorder(d.status)} bg-card p-4 shadow-sm transition-colors hover:border-brand/40 sm:flex-row sm:items-center sm:justify-between`}>
       <button
         className="flex min-w-0 flex-1 items-center gap-4 text-left"
         onClick={() => navigate({ name: "deployment", id: d.id })}
@@ -163,20 +199,36 @@ function DeploymentRow({
           <div className="flex items-center gap-2">
             <h3 className="truncate font-semibold">{d.app?.name ?? "Unknown app"}</h3>
             <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusColor(d.status)}`}>
-              <span className={`size-1.5 rounded-full ${statusDot(d.status)}`} />
+              <span className="relative flex size-1.5">
+                <span className={`absolute inline-flex size-full rounded-full ${statusDotClass(d.status)} opacity-75`} />
+                {d.status === "running" && (
+                  <span className={`inline-flex size-full rounded-full ${statusDotClass(d.status)} animate-status-pulse`} />
+                )}
+              </span>
               {d.status}
             </span>
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1 font-mono">
+            <a
+              href={d.previewPath}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 font-mono text-brand hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
               <ExternalLink className="size-3" /> {d.subdomain}.apps.local
-            </span>
+            </a>
             <span className="inline-flex items-center gap-1">
               <Container className="size-3" /> {d.containerName}
             </span>
             <span className="inline-flex items-center gap-1">
-              <Clock className="size-3" /> {timeAgo(d.createdAt)}
+              <Timer className="size-3" /> {running ? `Running for ${uptimeSince(d.createdAt)}` : `Stopped · ${timeAgo(d.updatedAt)}`}
             </span>
+            {d.volumeDataSize != null && (
+              <span className="inline-flex items-center gap-1">
+                <Database className="size-3" /> {formatDataSize(d.volumeDataSize)}
+              </span>
+            )}
           </div>
         </div>
       </button>
@@ -259,6 +311,24 @@ function timeAgo(iso: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
+}
+
+function uptimeSince(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "<1m";
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  const remainMins = mins % 60;
+  if (hrs < 24) return remainMins > 0 ? `${hrs}h ${remainMins}m` : `${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d`;
+}
+
+function formatDataSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export { Badge };

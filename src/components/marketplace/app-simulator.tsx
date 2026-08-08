@@ -3,6 +3,7 @@
 import { CounterSimulator } from "./simulators/counter-simulator";
 import { StaticSimulator } from "./simulators/static-simulator";
 import { NotesSimulator } from "./simulators/notes-simulator";
+import { WikiSimulator } from "./simulators/wiki-simulator";
 import { SimulatorShell } from "./simulators/simulator-shell";
 
 export interface AppSimulatorProps {
@@ -26,6 +27,8 @@ export function AppSimulator(props: AppSimulatorProps) {
         return <CounterSimulator {...props} />;
       case "notes":
         return <NotesSimulator {...props} />;
+      case "wiki":
+        return <WikiSimulator {...props} />;
       case "static":
       default:
         return <StaticSimulator {...props} />;

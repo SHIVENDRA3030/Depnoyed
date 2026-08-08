@@ -145,3 +145,234 @@ Unresolved / Next-phase recommendations:
   dashboard, and an admin page to manage the app catalog.
 - Persist the mock adapter's volume data already survives server restarts;
   consider surfacing a "data size" + "last write" indicator per deployment.
+
+---
+Task ID: 3
+Agent: styling-improver (Z.ai Code)
+Task: Improve the visual polish and styling of the OSS Deploy marketplace
+frontend across all views (hero, cards, dashboard, login, deployment detail,
+nav, footer).
+
+Work Log:
+- **globals.css**: Added 6 new CSS utilities and 4 keyframe animations:
+  - `hero-gradient` / `.dark .hero-gradient` — animated emerald/teal gradient
+    background for the marketplace hero (shifts over 8s).
+  - `animate-fade-in-up` — entrance animation (opacity 0→1, translateY 12→0)
+    for hero heading/subheading/stats.
+  - `animate-status-pulse` — pulse animation for running status dots (scale
+    1→1.8 + opacity fade, 2s loop).
+  - `animate-float-slow` / `animate-float-slower` — gentle floating animation
+    for login panel decorative shapes.
+  - `footer-gradient-border` — emerald→transparent gradient line for the
+    footer top.
+  - `nav-scrolled` / `.dark .nav-scrolled` — subtle bottom shadow that appears
+    when the nav is scrolled.
+
+- **marketplace-view.tsx**:
+  - Hero section now uses `hero-gradient` class for an animated emerald/teal
+    gradient background (replacing the static `bg-gradient-to-b`).
+  - Hero heading, subheading, and badge each use `animate-fade-in-up` with
+    staggered `animation-delay` (0ms, 100ms, 200ms, 300ms) for a cascading
+    entrance.
+  - Stats section changed from inline pill `Stat` components to a 3-column
+    `StatCard` grid: each card has an icon in a `bg-brand-soft` circle,
+    a label, and a short description — much more visual weight.
+  - App cards: changed from a single `<button>` to a `<div>` wrapper with a
+    CSS gradient border overlay that fades in on hover (using `mask-composite:
+    exclude` trick). Inner content is a `<button>` for accessibility.
+  - Added a "Deploy →" call-to-action button on each card (styled with
+    `bg-brand/10` pill) alongside the existing "Details" text. Deploy button
+    checks auth and redirects to login if not signed in.
+  - Added deployment count badge (Zap icon + count) when `app.deploymentCount > 0`.
+
+- **dashboard-view.tsx**:
+  - Status dots now use a double-dot pattern: a static base dot + an
+    `animate-status-pulse` overlay that pulses for "running" status only.
+  - Subdomain URL is now a clickable `<a>` link (with `text-brand` and
+    `hover:underline`) that opens the preview in a new tab, with an
+    `ExternalLink` icon. Uses `stopPropagation` to avoid triggering the row
+    click.
+  - Each deployment row now has a colored left-border accent (`border-l-4`)
+    based on status: emerald for running, amber for pending/creating, red for
+    failed/dead, gray for stopped/exited.
+
+- **login-view.tsx**:
+  - Added a decorative geometric illustration area below the feature list:
+    floating circles, a rotating square, tiny dots, a gradient bar, and a
+    triangle shape — all CSS-only, using `animate-float-slow` /
+    `animate-float-slower`. Marked `aria-hidden="true"`.
+  - Form card now has a glass-morphism effect: `bg-card/70 backdrop-blur-xl`
+    with `supports-[backdrop-filter]:bg-card/50` fallback, plus `shadow-lg`
+    and slightly reduced `border-border/60` for subtlety.
+
+- **deployment-view.tsx**:
+  - Added a color-coded status banner at the top of the page (below the back
+    button, above the header card). Uses distinct background/border/icon per
+    status: emerald for running, amber for pending/creating, red for failed,
+    zinc for stopped. Shows the status name + a helpful description.
+  - Progress steps now use a connected vertical line/dots visual: a
+    `bg-border` vertical line runs down the left side, and each step has a
+    colored circle (filled emerald for done, `bg-brand-soft` spinner for
+    active, bordered empty circle for pending). The flat `ChevronRight`
+    arrows between steps are removed.
+  - Log terminal: added line numbers (1-indexed, right-aligned, `text-zinc-700`,
+    `select-none`, `w-6`), changed timestamp color from `text-zinc-600` to
+    `text-emerald-700` for syntax-highlighted visibility.
+
+- **nav.tsx**:
+  - Added scroll-aware shadow: a `useEffect` listens for `window.scrollY > 4`
+    and toggles the `nav-scrolled` CSS class on the header, producing a
+    subtle bottom shadow on scroll.
+  - Added mobile hamburger menu using shadcn/ui `Sheet` (slides from right):
+    - Shows a `Menu` hamburger icon (visible only on `sm:hidden`).
+    - Sheet contains: brand logo, Marketplace + Dashboard nav buttons,
+      user info with avatar, and Sign out / Sign in.
+    - Theme toggle remains accessible in the mobile bar alongside the
+      hamburger.
+    - Desktop nav remains unchanged but now properly hidden on mobile
+      (`hidden sm:flex`).
+
+- **footer.tsx**:
+  - Replaced the solid `border-t border-border/80` with a `<div
+    className="footer-gradient-border" />` — a 1px line that fades from
+    emerald brand color to transparent, adding a polished brand touch.
+
+- Lint: clean (0 errors, 0 warnings).
+- Dev server: no runtime errors in dev.log; all pages compile successfully.
+
+Stage Summary:
+- All 7 requested styling improvements have been implemented across 7 files
+  (globals.css + 6 component files). No backend/API code was modified.
+- The UI now has significantly more visual polish: animated hero gradient,
+  staggered entrance animations, stat cards with icons, gradient border hover
+  on app cards, Deploy CTAs, deployment count badges, pulsing status dots,
+  colored left-border accents, clickable subdomain links, glass-morphism login
+  card, floating decorative shapes, connected progress step line, status
+  banners, line-numbered logs with colored timestamps, scroll-aware nav shadow,
+  mobile hamburger menu, and gradient footer border.
+- All changes use only CSS animations and existing shadcn/ui components — no
+  new dependencies or runtime overhead.
+
+---
+Task ID: 4
+Agent: feature-adder (Z.ai Code)
+Task: Add 4 new features to the OSS Deploy marketplace: (1) 4th app "Markdown Wiki"
+with wiki simulator, (2) deployment uptime health indicator, (3) volume data size
+in dashboard, (4) quick deploy from marketplace cards.
+
+Work Log:
+- **Feature 1 — Markdown Wiki app**:
+  - Added 4th app entry to `src/app/api/seed/route.ts`: "Markdown Wiki"
+    (slug: markdown-wiki, category: Productivity, simulator: wiki, logo: wiki,
+    dockerImage: ossmp/markdown-wiki:1.0, containerPort: 8080).
+  - Created `src/components/marketplace/simulators/wiki-simulator.tsx`:
+    a full wiki interface with:
+    - Left sidebar listing wiki pages (loaded from volume key "wiki_pages")
+    - Main area rendering selected page content via `react-markdown`
+    - Edit/View toggle with textarea for editing Markdown content
+    - "New Page" button to create wiki pages
+    - "Delete Page" per page (with confirmation UX)
+    - All data persisted via volume API (POST /api/preview/[subdomain]/volume)
+    - Pre-seeded "Home" page with welcome Markdown content
+    - Data structure: `{"pages": [{"id", "title", "content", "updatedAt"}]}`
+  - Registered wiki simulator in `app-simulator.tsx` (added case "wiki")
+  - Updated `AppLogo` component: added BookOpen icon from lucide-react for
+    "wiki" logo type, with violet/purple gradient (`from-violet-500 to-purple-600`)
+  - Installed `@tailwindcss/typography` plugin for proper Markdown prose styling
+    (added `@plugin "@tailwindcss/typography"` to globals.css)
+
+- **Feature 2 — Deployment Health Indicator (Uptime)**:
+  - `dashboard-view.tsx`: Replaced the "Xm ago" Clock display with a Timer icon
+    showing "Running for Xm" / "Running for Xh Ym" for running deployments,
+    and "Stopped · Xm ago" for stopped deployments. Added `uptimeSince()` helper
+    that formats duration with hours+minutes precision.
+  - `deployment-view.tsx`: Added uptime badge next to the status badge in the
+    deployment header. Shows "Uptime: Xm" for running, "Downtime: Xm ago" for
+    stopped, styled as a muted rounded badge with Timer icon.
+  - Added `Timer` icon import to both views.
+  - Added `uptimeSince()` and `timeAgo()` helper functions to deployment-view.tsx.
+
+- **Feature 3 — Volume Data Size in Dashboard**:
+  - Modified `src/app/api/deployments/route.ts` GET handler: now calls
+    `adapter.inspectVolume(deployment.volumeName)` for each deployment and
+    includes `dataSize` from the `VolumeInfo` response as `volumeDataSize`.
+    Uses `Promise.all` for parallel volume inspection. Errors are silently
+    caught so a failed volume inspect doesn't break the deployments list.
+  - Updated `DeploymentItem` type in `src/lib/store.ts`: added optional
+    `volumeDataSize?: number` field.
+  - `dashboard-view.tsx`: Added data size indicator next to volume/container
+    info per deployment row. Shows formatted size (e.g. "2.1 KB", "1.2 MB")
+    with Database icon. Added `formatDataSize()` helper and `Database` icon import.
+
+- **Feature 4 — Quick Deploy from Marketplace Cards**:
+  - `marketplace-view.tsx`: Changed `handleDeploy` from a navigation to
+    app detail, to a direct deploy action. Clicking "Deploy" on a card now:
+    1. Checks auth — redirects to login if not signed in
+    2. Calls POST /api/deployments with { appId } directly
+    3. On success: shows toast "Deployed! Redirecting…" and navigates
+       to the deployment detail view
+    4. On error: shows error toast
+    5. Shows loading spinner on the Deploy button while deploying
+  - Added `deploying` state to AppCard component
+  - Added `ApiError` import to marketplace-view.tsx
+  - Deploy button now has `disabled` state and spinner during deployment
+
+- Re-seeded apps via `POST /api/seed` — confirmed 4 apps (Demo Counter,
+  Static Welcome, Gitea Lite, Markdown Wiki).
+- Lint: clean (0 errors, 0 warnings).
+- Dev server: compiling successfully, no runtime errors.
+
+Stage Summary:
+- 4th marketplace app "Markdown Wiki" added with full wiki simulator ✅
+- Wiki simulator persists all pages to volume with Markdown rendering ✅
+- Deployment uptime indicator in dashboard + deployment detail views ✅
+- Volume data size shown per deployment in dashboard ✅
+- Quick one-click deploy from marketplace cards (no need to visit detail) ✅
+- All changes are backward-compatible; no breaking API changes.
+
+---
+Task ID: 3
+Agent: web-dev-reviewer (cron round 1)
+Task: Assess project status, perform QA, fix bugs, improve styling, add features.
+
+Work Log:
+- Read worklog.md — previous round completed all MVP acceptance criteria.
+- Server alive, lint clean, all APIs responding 200.
+- Comprehensive agent-browser QA across all views: marketplace (3 apps + categories + search), dark mode toggle, login form, dashboard (2 deployments with Open/Stop/Restart/Delete), app detail (Deploy button), deployment detail (progress + logs), deployed app previews (counter showing persisted value 4, notes with persisted note, static welcome nginx page).
+- Deployed Static Welcome app via API, verified its preview renders the nginx welcome page with "Deployment verified" badge.
+- **All existing features verified working. No bugs found in the base MVP.**
+
+Styling Improvements (delegated to subagent):
+1. Marketplace hero: animated gradient background, staggered fade-in-up entrance, stat cards grid with icons.
+2. App cards: gradient border hover, "Deploy →" CTA button on each card, deployment count badge.
+3. Dashboard: pulsing status dot for "running", clickable subdomain URL, colored left-border accent per status.
+4. Login: floating CSS geometric shapes on marketing panel, glass-morphism form card.
+5. Deployment detail: color-coded status banner, connected vertical line + colored dots for progress, line numbers + colored timestamps in logs terminal.
+6. Nav: scroll-aware shadow, mobile hamburger menu via shadcn Sheet.
+7. Footer: top gradient border (emerald→transparent).
+8. globals.css: 6 new CSS utility classes + 4 keyframe animations.
+
+New Features (delegated to subagent):
+1. **4th App — Markdown Wiki**: Added "Markdown Wiki" (Productivity category, wiki simulator) to seed data. Created wiki-simulator.tsx with sidebar page list, Markdown rendering via react-markdown, edit/view toggle, new/delete pages, all persisted to volume. Pre-seeded with "Home" page. Installed @tailwindcss/typography for prose styling.
+2. **Deployment Uptime Indicator**: Dashboard shows "Running for Xm" / "Stopped · Xm ago". Deployment detail shows Uptime/Downtime badge.
+3. **Volume Data Size**: Enhanced GET /api/deployments to include volumeDataSize per deployment. Dashboard shows formatted size (e.g. "801 B") with Database icon.
+4. **Quick Deploy from Cards**: Marketplace cards now have a "Deploy" button that directly deploys (with loading spinner) and navigates to the deployment detail, with auth check redirect to login.
+
+Bug Fix:
+- **Wiki simulator initial page selection**: `selectedPageId` was initialized from a separate `parseWikiData()` call generating different random IDs than `wikiData`, so Home page appeared unselected. Fixed by computing initial data once via a shared `useState(() => parseWikiData(...))` used by both states.
+
+Stage Summary:
+- All QA passing. Lint clean. 4 apps in catalog.
+- Marketplace now has rich hero animation, deploy-from-card, 4 app categories.
+- Dashboard shows uptime + data size per deployment with colored status accents.
+- Deployment detail has status banner, connected progress dots, enhanced log terminal.
+- Markdown Wiki simulator fully functional with persistence.
+- Login has glass-morphism card + floating shapes.
+- Mobile-responsive nav with hamburger menu.
+
+Unresolved / Next-phase recommendations:
+- Test the mobile hamburger nav via agent-browser at small viewport.
+- Add deployment health pings (periodic check if container is still running, auto-update status).
+- Add an admin page for catalog management (add/remove apps without code changes).
+- Consider a "duplicate deployment" feature (clone an existing deployment's config).
+- Add more detailed error messages when deployments fail (show container stderr).

@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { json, errorResponse, withErrors, serializeDeployment } from "@/lib/api";
 import { createDeployment, DeployError } from "@/lib/deployments";
+import { getDockerAdapter } from "@/lib/docker/adapter";
 
 export const POST = withErrors(async (req: Request) => {
   const user = await getSessionUser();
@@ -31,5 +32,20 @@ export const GET = withErrors(async () => {
     orderBy: { createdAt: "desc" },
   });
 
-  return json({ deployments: deployments.map((d) => serializeDeployment(d)) });
+  const adapter = getDockerAdapter();
+  const serialized = await Promise.all(
+    deployments.map(async (d) => {
+      const base = serializeDeployment(d);
+      let volumeDataSize: number | undefined;
+      try {
+        const volInfo = await adapter.inspectVolume(d.volumeName);
+        if (volInfo) volumeDataSize = volInfo.dataSize;
+      } catch {
+        /* ignore volume inspect failure */
+      }
+      return { ...base, volumeDataSize };
+    })
+  );
+
+  return json({ deployments: serialized });
 });

@@ -57,11 +57,28 @@ export function LoginView() {
             <Feature title="Persistent storage" desc="Data survives stop / restart cycles." />
             <Feature title="Unique public URL" desc="Each deployment is reachable on its own subdomain." />
           </ul>
+
+          {/* Decorative geometric shapes */}
+          <div className="relative mt-8 h-40 overflow-hidden" aria-hidden="true">
+            {/* Large circle */}
+            <div className="animate-float-slow absolute -left-8 top-0 size-32 rounded-full border border-brand/20 bg-brand/5" />
+            {/* Small filled circle */}
+            <div className="animate-float-slower absolute left-24 top-12 size-16 rounded-full bg-gradient-to-br from-emerald-400/20 to-teal-500/10" />
+            {/* Rotating square */}
+            <div className="animate-float-slow absolute right-16 top-4 size-20 rotate-12 rounded-xl border border-brand/15 bg-brand-soft/50" />
+            {/* Tiny dots */}
+            <div className="animate-float-slower absolute right-8 top-20 size-3 rounded-full bg-brand/40" />
+            <div className="animate-float-slow absolute left-40 top-20 size-2 rounded-full bg-emerald-400/30" />
+            {/* Gradient bar */}
+            <div className="animate-float-slower absolute bottom-4 left-12 h-1.5 w-28 rounded-full bg-gradient-to-r from-emerald-500/30 via-teal-500/20 to-transparent" />
+            {/* Triangle-ish shape */}
+            <div className="animate-float-slow absolute right-40 bottom-2 size-0 border-x-[12px] border-b-[20px] border-x-transparent border-b-brand/20" />
+          </div>
         </div>
 
         {/* Auth form */}
         <div className="mx-auto w-full max-w-md">
-          <div className="rounded-2xl border border-border bg-card p-7 shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-card/70 p-7 shadow-lg backdrop-blur-xl supports-[backdrop-filter]:bg-card/50">
             <div className="mb-6 flex items-center gap-2.5 lg:hidden">
               <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
                 <Rocket className="size-5" />

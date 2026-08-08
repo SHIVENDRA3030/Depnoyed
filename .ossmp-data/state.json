@@ -145,6 +145,92 @@
         }
       ],
       "startedAt": "2026-08-08T11:25:34.674Z"
+    },
+    "ossmp-static-welcome-e3ykm4-whrr": {
+      "id": "cnt_ec48d04eb439",
+      "name": "ossmp-static-welcome-e3ykm4-whrr",
+      "status": "running",
+      "image": "nginx:alpine",
+      "port": 80,
+      "volumeName": "ossmp-vol-static-welcome-e3ykm4-nat2",
+      "simulator": "static",
+      "cpuLimit": 0.5,
+      "memoryLimitMb": 512,
+      "env": {
+        "DEPLOYMENT_ID": "cmskal5vw0002q6ua5qrt6bxh",
+        "APP_SLUG": "static-welcome"
+      },
+      "logs": [
+        {
+          "t": "2026-08-08T11:30:22.608Z",
+          "stream": "stdout",
+          "message": "Creating container from image nginx:alpine"
+        },
+        {
+          "t": "2026-08-08T11:30:22.608Z",
+          "stream": "stdout",
+          "message": "Mounting volume ossmp-vol-static-welcome-e3ykm4-nat2 at /data"
+        },
+        {
+          "t": "2026-08-08T11:30:22.608Z",
+          "stream": "stdout",
+          "message": "Resource limits: cpu=0.5 memory=512MB"
+        },
+        {
+          "t": "2026-08-08T11:30:22.759Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=static) on port 80"
+        },
+        {
+          "t": "2026-08-08T11:30:22.759Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:80"
+        }
+      ],
+      "startedAt": "2026-08-08T11:30:22.759Z"
+    },
+    "ossmp-markdown-wiki-7igia6-8zmv": {
+      "id": "cnt_ab7ce0e38fa8",
+      "name": "ossmp-markdown-wiki-7igia6-8zmv",
+      "status": "running",
+      "image": "ossmp/markdown-wiki:1.0",
+      "port": 8080,
+      "volumeName": "ossmp-vol-markdown-wiki-7igia6-hesn",
+      "simulator": "wiki",
+      "cpuLimit": 0.5,
+      "memoryLimitMb": 512,
+      "env": {
+        "DEPLOYMENT_ID": "cmskbm66u000cq6ua84wxquvx",
+        "APP_SLUG": "markdown-wiki"
+      },
+      "logs": [
+        {
+          "t": "2026-08-08T11:59:09.276Z",
+          "stream": "stdout",
+          "message": "Creating container from image ossmp/markdown-wiki:1.0"
+        },
+        {
+          "t": "2026-08-08T11:59:09.276Z",
+          "stream": "stdout",
+          "message": "Mounting volume ossmp-vol-markdown-wiki-7igia6-hesn at /data"
+        },
+        {
+          "t": "2026-08-08T11:59:09.276Z",
+          "stream": "stdout",
+          "message": "Resource limits: cpu=0.5 memory=512MB"
+        },
+        {
+          "t": "2026-08-08T11:59:09.429Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=wiki) on port 8080"
+        },
+        {
+          "t": "2026-08-08T11:59:09.429Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:8080"
+        }
+      ],
+      "startedAt": "2026-08-08T11:59:09.429Z"
     }
   },
   "volumes": {
@@ -155,6 +241,14 @@
     "ossmp-vol-gitea-lite-7igia6-w9ra": {
       "name": "ossmp-vol-gitea-lite-7igia6-w9ra",
       "createdAt": "2026-08-08T11:21:46.360Z"
+    },
+    "ossmp-vol-static-welcome-e3ykm4-nat2": {
+      "name": "ossmp-vol-static-welcome-e3ykm4-nat2",
+      "createdAt": "2026-08-08T11:30:22.605Z"
+    },
+    "ossmp-vol-markdown-wiki-7igia6-hesn": {
+      "name": "ossmp-vol-markdown-wiki-7igia6-hesn",
+      "createdAt": "2026-08-08T11:59:09.271Z"
     }
   }
 }
