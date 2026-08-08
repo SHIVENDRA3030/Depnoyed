@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Rocket, Search, Boxes, Container, Database, Globe, ArrowRight, Loader2, Sparkles, Zap, Flame, Star, TrendingUp, FlaskConical, Globe2, Wrench, FileText } from "lucide-react";
+import { Rocket, Search, Boxes, Container, Database, Globe, ArrowRight, Loader2, Sparkles, Zap, Flame, Star, TrendingUp, FlaskConical, Globe2, Wrench, FileText, Heart, Download, Clock } from "lucide-react";
 import { api, navigate, useAuth, type AppItem, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
 import { DeployModal } from "@/components/marketplace/deploy-modal";
@@ -24,6 +24,7 @@ export function MarketplaceView() {
   const [query, setQuery] = useState("");
   const [activeCat, setActiveCat] = useState<string>("All");
   const [sort, setSort] = useState<SortMode>("popular");
+  const user = useAuth((s) => s.user);
 
   useEffect(() => {
     (async () => {
@@ -62,6 +63,8 @@ export function MarketplaceView() {
     return [...(apps ?? [])].sort((a, b) => b.deploymentCount - a.deploymentCount).slice(0, 3);
   }, [apps, query, activeCat]);
 
+  const totalDeploys = useMemo(() => (apps ?? []).reduce((sum, a) => sum + a.deploymentCount, 0), [apps]);
+
   return (
     <div>
       {/* Hero */}
@@ -70,7 +73,7 @@ export function MarketplaceView() {
         <div className="absolute inset-0 -z-10 bg-grid opacity-30 [mask-image:radial-gradient(ellipse_at_top,black,transparent_75%)]" />
         <div className="mx-auto max-w-6xl px-4 py-14 sm:py-20">
           <div className="mx-auto max-w-2xl text-center">
-            <span className="animate-fade-in-up inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand-soft px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+            <span className="animate-fade-in-up inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
               <Sparkles className="size-3" /> Deploy in one click
             </span>
             <h1 className="animate-fade-in-up mt-5 text-4xl font-bold tracking-tight sm:text-5xl [animation-delay:100ms]">
@@ -85,6 +88,17 @@ export function MarketplaceView() {
               <StatCard icon={<Database className="size-5" />} label="Persistent volumes" desc="Data survives restarts" />
               <StatCard icon={<Globe className="size-5" />} label="Unique public URLs" desc="Instant access" />
             </div>
+            {/* Quick stats row */}
+            {apps && apps.length > 0 && (
+              <div className="animate-fade-in-up mt-6 flex flex-wrap items-center justify-center gap-3 text-sm text-muted-foreground [animation-delay:400ms]">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-3 py-1">
+                  <Boxes className="size-3.5 text-brand" /> {apps.length} apps available
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-3 py-1">
+                  <Download className="size-3.5 text-brand" /> {totalDeploys} total deployments
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -102,7 +116,7 @@ export function MarketplaceView() {
           <p className="mt-1 text-sm text-muted-foreground">
             The most popular apps in the marketplace, ranked by deployments.
           </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
             {featured.map((app, i) => (
               <FeaturedAppCard key={app.id} app={app} rank={i + 1} />
             ))}
@@ -145,25 +159,35 @@ export function MarketplaceView() {
             <button
               key={cat}
               onClick={() => setActiveCat(cat)}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
                 activeCat === cat
-                  ? "border-brand bg-brand-soft text-emerald-700 dark:text-emerald-300"
-                  : "border-border bg-background text-muted-foreground hover:bg-muted"
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 shadow-sm dark:text-emerald-300"
+                  : "border-border bg-background text-muted-foreground hover:bg-muted hover:border-border/80"
               }`}
             >
               <CategoryIcon category={cat} />
               {cat}
+              {cat !== "All" && (
+                <span className="ml-0.5 text-[10px] text-muted-foreground/70">
+                  {(apps ?? []).filter(a => a.category === cat).length}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {apps === null ? (
-            Array.from({ length: 3 }).map((_, i) => <AppCardSkeleton key={i} />)
+            Array.from({ length: 6 }).map((_, i) => <AppCardSkeleton key={i} />)
           ) : filtered.length === 0 ? (
             <div className="col-span-full flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
               <Boxes className="size-8 text-muted-foreground/50" />
               <p className="mt-2 text-sm text-muted-foreground">No applications match your search.</p>
+              {query && (
+                <Button variant="outline" size="sm" className="mt-3" onClick={() => setQuery("")}>
+                  Clear search
+                </Button>
+              )}
             </div>
           ) : (
             filtered.map((app) => <AppCard key={app.id} app={app} />)
@@ -180,6 +204,7 @@ function FeaturedAppCard({ app, rank }: { app: AppItem; rank: number }) {
 
   function handleDeploy(e: React.MouseEvent) {
     e.stopPropagation();
+    e.preventDefault();
     if (!user) {
       toast.info("Sign in to deploy");
       navigate({ name: "login" });
@@ -195,16 +220,26 @@ function FeaturedAppCard({ app, rank }: { app: AppItem; rank: number }) {
       ? "from-zinc-300 to-zinc-400 text-zinc-900"
       : "from-orange-700 to-amber-800 text-white";
 
+  const rankGlow =
+    rank === 1
+      ? "shadow-amber-500/20"
+      : rank === 2
+      ? "shadow-zinc-400/20"
+      : "shadow-orange-500/20";
+
   return (
     <div
       onClick={() => navigate({ name: "app", slug: app.slug })}
-      className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-brand/30 bg-gradient-to-br from-brand-soft/40 via-card to-card p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-brand/60 hover:shadow-md"
+      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-50/60 via-card to-card p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-500/40 hover:shadow-lg dark:from-emerald-950/20 ${rankGlow}`}
     >
+      {/* Decorative glow */}
+      <div className="pointer-events-none absolute -right-8 -top-8 size-24 rounded-full bg-emerald-500/5 blur-2xl transition-opacity group-hover:opacity-100" />
+      
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="relative">
             <AppLogo logo={app.logo} simulator={app.simulator} name={app.name} size="lg" />
-            <span className={`absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-gradient-to-br ${rankColor} text-[10px] font-bold shadow-sm`}>
+            <span className={`absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-gradient-to-br ${rankColor} text-[10px] font-bold shadow-sm ring-2 ring-background`}>
               {rank}
             </span>
           </div>
@@ -213,18 +248,18 @@ function FeaturedAppCard({ app, rank }: { app: AppItem; rank: number }) {
             <p className="mt-0.5 text-[11px] text-muted-foreground">{app.category}</p>
           </div>
         </div>
-        <Badge variant="secondary" className="gap-1 font-normal">
+        <Badge variant="secondary" className="gap-1 font-normal shadow-sm">
           <Zap className="size-3 text-orange-500" /> {app.deploymentCount}
         </Badge>
       </div>
       <p className="mt-3 line-clamp-2 flex-1 text-sm text-muted-foreground">{app.description}</p>
-      <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3">
-        <span className="font-mono text-[11px] text-muted-foreground">{app.dockerImage}</span>
+      <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-3">
+        <span className="font-mono text-[11px] text-muted-foreground/80">{app.dockerImage}</span>
         <button
           onClick={handleDeploy}
-          className="inline-flex items-center gap-1 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground transition-colors hover:bg-brand/90"
+          className="relative z-20 inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:shadow-md hover:brightness-110"
         >
-          <Star className="size-3" />
+          <Rocket className="size-3" />
           Deploy
         </button>
       </div>
@@ -236,9 +271,16 @@ function FeaturedAppCard({ app, rank }: { app: AppItem; rank: number }) {
 function AppCard({ app }: { app: AppItem }) {
   const user = useAuth((s) => s.user);
   const [modalOpen, setModalOpen] = useState(false);
+  const [fav, setFav] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return JSON.parse(localStorage.getItem("oss-favorites") || "[]").includes(app.slug);
+    } catch { return false; }
+  });
 
   function handleDeploy(e: React.MouseEvent) {
     e.stopPropagation();
+    e.preventDefault();
     if (!user) {
       toast.info("Sign in to deploy");
       navigate({ name: "login" });
@@ -247,38 +289,60 @@ function AppCard({ app }: { app: AppItem }) {
     setModalOpen(true);
   }
 
+  function toggleFav(e: React.MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    try {
+      const favs: string[] = JSON.parse(localStorage.getItem("oss-favorites") || "[]");
+      const next = favs.includes(app.slug) ? favs.filter(f => f !== app.slug) : [...favs, app.slug];
+      localStorage.setItem("oss-favorites", JSON.stringify(next));
+      setFav(!fav);
+    } catch {}
+  }
+
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card p-5 text-left shadow-sm card-hover-tilt">
-      {/* Gradient border overlay on hover */}
-      <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100" style={{ background: "linear-gradient(135deg, oklch(0.696 0.17 162.48 / 0.15), oklch(0.696 0.17 162.48 / 0.05))", padding: "1px", WebkitMask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)", WebkitMaskComposite: "xor", maskComposite: "exclude" } as React.CSSProperties} />
-      <button
-        onClick={() => navigate({ name: "app", slug: app.slug })}
-        className="relative z-10 flex flex-1 flex-col"
-      >
+    <div
+      onClick={() => navigate({ name: "app", slug: app.slug })}
+      className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border bg-card p-0 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-500/30 hover:shadow-lg"
+    >
+      {/* Top accent bar */}
+      <div className="h-1 w-full bg-gradient-to-r from-emerald-500/0 via-emerald-500/40 to-teal-500/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      
+      <div className="flex flex-1 flex-col p-5">
+        {/* Header */}
         <div className="flex items-start justify-between">
           <AppLogo logo={app.logo} simulator={app.simulator} name={app.name} size="lg" />
           <div className="flex items-center gap-1.5">
             {app.deploymentCount > 0 && (
               <Badge variant="secondary" className="gap-1 font-normal">
-                <Zap className="size-3 text-brand" /> {app.deploymentCount}
+                <Zap className="size-3 text-emerald-500" /> {app.deploymentCount}
               </Badge>
             )}
             <Badge variant="secondary" className="font-normal">{app.category}</Badge>
           </div>
         </div>
-        <h3 className="mt-4 text-base font-semibold">{app.name}</h3>
-        <p className="mt-1 line-clamp-3 flex-1 text-sm text-muted-foreground">{app.description}</p>
-      </button>
-      <div className="relative z-10 mt-4 flex items-center justify-between border-t border-border/60 pt-3">
-        <span className="font-mono text-[11px] text-muted-foreground">{app.dockerImage}</span>
+        <h3 className="mt-4 text-base font-semibold group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{app.name}</h3>
+        <p className="mt-1.5 line-clamp-2 flex-1 text-sm text-muted-foreground">{app.description}</p>
+      </div>
+
+      {/* Footer */}
+      <div className="relative z-20 flex items-center justify-between border-t border-border/40 bg-muted/20 px-5 py-3">
+        <span className="font-mono text-[11px] text-muted-foreground/70">{app.dockerImage}</span>
         <div className="flex items-center gap-2">
           <button
-            onClick={handleDeploy}
-            className="inline-flex items-center gap-1 rounded-md bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand transition-colors hover:bg-brand/20"
+            onClick={toggleFav}
+            className="inline-flex items-center justify-center rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-rose-500"
+            aria-label={fav ? "Remove from favorites" : "Add to favorites"}
           >
-            Deploy <ArrowRight className="size-3" />
+            <Heart className={`size-3.5 transition-colors ${fav ? "fill-rose-500 text-rose-500" : ""}`} />
           </button>
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-transform group-hover:translate-x-0.5">
+          <button
+            onClick={handleDeploy}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-all hover:bg-emerald-500/20 hover:shadow-sm dark:text-emerald-400"
+          >
+            <Rocket className="size-3" /> Deploy
+          </button>
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground/60 transition-all group-hover:translate-x-0.5 group-hover:text-muted-foreground">
             Details <ArrowRight className="size-3" />
           </span>
         </div>
@@ -290,8 +354,8 @@ function AppCard({ app }: { app: AppItem }) {
 
 function StatCard({ icon, label, desc }: { icon: React.ReactNode; label: string; desc: string }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-background/60 px-4 py-5 text-center backdrop-blur-sm transition-colors hover:border-brand/40 hover:bg-brand-soft/30">
-      <span className="flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
+    <div className="group flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-background/60 px-4 py-5 text-center backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:bg-emerald-50/30 hover:shadow-sm dark:hover:bg-emerald-950/10">
+      <span className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 transition-colors group-hover:bg-emerald-500/20 dark:text-emerald-400">
         {icon}
       </span>
       <span className="text-sm font-semibold">{label}</span>
@@ -310,11 +374,18 @@ function Stat({ icon, label }: { icon: React.ReactNode; label: string }) {
 
 function AppCardSkeleton() {
   return (
-    <div className="flex flex-col rounded-2xl border border-border bg-card p-5">
-      <div className="size-14 rounded-xl shimmer" />
-      <div className="mt-4 h-4 w-1/2 rounded shimmer" />
-      <div className="mt-2 h-3 w-full rounded shimmer" />
-      <div className="mt-1.5 h-3 w-2/3 rounded shimmer" />
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card p-0">
+      <div className="h-1 w-full shimmer" />
+      <div className="flex flex-1 flex-col p-5">
+        <div className="flex items-start justify-between">
+          <div className="size-14 rounded-xl shimmer" />
+          <div className="h-5 w-16 rounded-full shimmer" />
+        </div>
+        <div className="mt-4 h-4 w-1/2 rounded shimmer" />
+        <div className="mt-2 h-3 w-full rounded shimmer" />
+        <div className="mt-1.5 h-3 w-3/4 rounded shimmer" />
+      </div>
+      <div className="h-10 shimmer" />
     </div>
   );
 }
@@ -330,6 +401,10 @@ function CategoryIcon({ category }: { category: string }) {
       return <Wrench {...props} />;
     case "Productivity":
       return <FileText {...props} />;
+    case "Database":
+      return <Database {...props} />;
+    case "Monitoring":
+      return <TrendingUp {...props} />;
     case "All":
       return <Boxes {...props} />;
     default:

@@ -251,6 +251,17 @@
     animation: view-fade-in 0.3s ease-out both;
   }
 
+  /* Sparkline draw-in animation */
+  .sparkline-line {
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 1000;
+    animation: sparkline-draw 0.8s ease-out forwards;
+  }
+  .sparkline-area {
+    opacity: 0;
+    animation: sparkline-fade 0.6s ease-out 0.4s forwards;
+  }
+
   /* Card 3D tilt on hover — subtle perspective shift */
   .card-hover-tilt {
     transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -302,4 +313,14 @@
 @keyframes view-fade-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Sparkline draw-in animation */
+@keyframes sparkline-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Sparkline area fade-in */
+@keyframes sparkline-fade {
+  to { opacity: 1; }
 }

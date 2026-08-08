@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Rocket, LayoutDashboard, LogOut, Store, Menu, Command } from "lucide-react";
 import { useAuth, navigate } from "@/lib/store";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationCenter } from "@/components/marketplace/notification-center";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -89,6 +90,7 @@ export function Nav() {
             </Button>
           )}
 
+          {user && <NotificationCenter />}
           <ThemeToggle />
 
           {/* Cmd+K hint */}
@@ -147,6 +149,7 @@ export function Nav() {
 
         {/* Mobile hamburger + minimal actions */}
         <div className="flex items-center gap-1.5 sm:hidden">
+          {user && <NotificationCenter />}
           <ThemeToggle />
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>

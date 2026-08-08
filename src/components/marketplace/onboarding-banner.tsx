@@ -6,12 +6,14 @@ import { navigate, useAuth } from "@/lib/store";
 
 const ONBOARDING_KEY = "oss-deploy-onboarding-dismissed";
 
+function getIsDismissed(): boolean {
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(ONBOARDING_KEY) === "true";
+}
+
 export function OnboardingBanner() {
   const user = useAuth((s) => s.user);
-  const [dismissed, setDismissed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem(ONBOARDING_KEY) === "true";
-  });
+  const [dismissed, setDismissed] = useState(getIsDismissed);
 
   if (!user || dismissed) return null;
 
@@ -22,9 +24,9 @@ export function OnboardingBanner() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-3">
-      <div className="flex items-center justify-between gap-4 rounded-xl border border-brand/30 bg-gradient-to-r from-brand-soft/60 via-brand-soft/30 to-transparent p-4">
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-emerald-500/20 bg-gradient-to-r from-emerald-50/80 via-emerald-50/40 to-transparent p-4 shadow-sm dark:from-emerald-950/30 dark:via-emerald-950/15">
         <div className="flex items-center gap-4">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand text-brand-foreground shadow-sm">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
             <Rocket className="size-5" />
           </span>
           <div className="min-w-0">
@@ -44,13 +46,13 @@ export function OnboardingBanner() {
           </div>
           <button
             onClick={() => navigate({ name: "marketplace" })}
-            className="inline-flex items-center gap-1 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground transition-colors hover:bg-brand/90"
+            className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:shadow-md hover:brightness-110"
           >
             Get started <ArrowRight className="size-3" />
           </button>
           <button
             onClick={dismiss}
-            className="text-muted-foreground transition-colors hover:text-foreground"
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="Dismiss"
           >
             <X className="size-4" />
@@ -65,7 +67,7 @@ function Step({ num, label, done }: { num: number; label: string; done?: boolean
   return (
     <div className="flex items-center gap-1.5">
       {done ? (
-        <CheckCircle2 className="size-4 text-brand" />
+        <CheckCircle2 className="size-4 text-emerald-500" />
       ) : (
         <span className="flex size-4 items-center justify-center rounded-full border border-border text-[10px] font-medium text-muted-foreground">
           {num}

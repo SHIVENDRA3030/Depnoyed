@@ -517,3 +517,124 @@ Unresolved / Next-phase recommendations:
 - More realistic app simulators (e.g., database admin, code editor)
 - Email notification on deployment status changes
 - SSO/OAuth provider support (GitHub, Google)
+
+---
+Task ID: 4-d
+Agent: seed-apps-agent
+Task: Add more diverse marketplace apps to seed data
+
+Work Log:
+- Read existing seed route at /src/app/api/seed/route.ts (had 4 apps: Demo Counter, Static Welcome, Gitea Lite, Markdown Wiki)
+- Read Prisma schema to confirm App model fields (name, slug, description, dockerImage, containerPort, logo, category, simulator, defaultEnv)
+- Added 6 new apps to the seed data array:
+  - Redis Cache (Database, counter simulator, redis:7-alpine, port 6379)
+  - PostgreSQL (Database, static simulator, postgres:16-alpine, port 5432)
+  - Grafana Dashboard (Monitoring, static simulator, grafana/grafana:latest, port 3000)
+  - Prometheus (Monitoring, static simulator, prom/prometheus:latest, port 9090)
+  - Nginx Proxy (Web, static simulator, nginx:alpine, port 80)
+  - Mattermost Chat (Productivity, notes simulator, mattermost/mattermost-preview:latest, port 8065)
+- Updated the upsert `update` block to include `defaultEnv` field for consistency
+- Called POST /api/seed — confirmed 10 apps upserted, total 10
+- Called GET /api/apps — verified all 10 apps appear with correct fields and categories
+
+Stage Summary:
+- Marketplace now has 10 apps across 5 categories: Demo, Web, DevOps, Productivity, Database, Monitoring
+- All new apps properly upserted with idempotent seed logic (slug-based upsert)
+- Seed API returns { ok: true, upserted: 10, total: 10 }
+- Apps API returns all 10 apps with correct metadata
+
+---
+Task ID: 4-a
+Agent: notification-center-agent
+Task: Add notification center component
+
+Work Log:
+- Read worklog.md to understand prior agent contributions (Tasks 1-3)
+- Read nav.tsx to understand current nav structure and import patterns
+- Read store.ts to understand api() helper, DeploymentItem type, navigate(), and useAuth
+- Read /api/auth/me/route.ts to understand session handling
+- Read /api/deployments/route.ts to understand GET deployments response shape
+- Read existing shadcn/ui components: popover, scroll-area, badge, separator
+- Read theme-toggle.tsx for reference on small nav icon button styling
+- Created /src/components/marketplace/notification-center.tsx with full implementation:
+  - Bell/BellRing icon with emerald unread count badge
+  - Popover dropdown showing recent deployment activity events
+  - Events fetched from /api/deployments, transformed to ActivityEvent items
+  - Each event shows: app name, action verb (deployed/started/stopped/restarted/deleted), time ago
+  - Unread count computed by comparing localStorage lastViewed timestamp with most recent events
+  - "Mark all read" button clears unread badge
+  - "View all deployments" footer link navigates to dashboard
+  - Auto-refresh every 30 seconds via setInterval
+  - Loading spinner and empty state handling
+  - Action-specific icons (Rocket, Play, Square, RotateCw, Trash2) with emerald/teal/amber color coding
+  - Uses "use client" directive; follows existing code patterns
+- Updated nav.tsx:
+  - Added import for NotificationCenter
+  - Placed NotificationCenter before ThemeToggle in both desktop and mobile nav bars
+  - Only renders when user is logged in (user && <NotificationCenter />)
+- Ran lint: no errors
+- Verified dev.log: no compilation errors, /api/deployments working correctly
+
+Stage Summary:
+- Notification center component fully functional in nav bar for authenticated users
+- Bell icon with animated BellRing variant and emerald unread count badge
+- Popover with scrollable activity feed showing deployment events with contextual icons and time-ago
+- localStorage-based read state tracking with "Mark all read" capability
+- 30-second auto-refresh polling
+- Responsive: works in both desktop and mobile nav layouts
+- No new API routes created — reuses existing /api/deployments endpoint
+- Lint clean, no build errors
+
+---
+Task ID: 4-b
+Agent: sparkline-agent
+Task: Add resource usage sparkline charts
+
+Work Log:
+- Created `/src/components/marketplace/sparkline.tsx` — lightweight SVG sparkline component with cubic bezier smoothing, optional gradient area fill, and status-based color helpers
+- Added `generateTimeSeries()` and `tickTimeSeries()` helper functions for producing realistic time-series data from `getContainerMetrics()` base values
+- Updated `dashboard-view.tsx` — added `ResourceUsageSparklines` component below stats cards showing CPU Usage, Memory Usage, Network I/O, and Disk I/O mini sparkline charts with trend indicators (up/down arrows) and current values; auto-refreshes every 10 seconds
+- Updated `deployment-view.tsx` — added `DeploymentPerformanceSparklines` component showing larger Performance section with CPU, Memory, Network, Disk sparkline charts including min/max range; auto-refreshes every 5 seconds for running deployments
+- Added sparkline draw-in CSS animations to `globals.css` — stroke-dashoffset draw animation and area fade-in
+- Used pure SVG for sparklines (no chart libraries installed)
+- Refactored state management to use `useMemo`-derived series + `useState` tick counter pattern to satisfy strict `react-hooks/set-state-in-effect` and `react-hooks/refs` lint rules
+- Lint clean
+
+Stage Summary:
+- Sparkline component: SVG polyline with Catmull-Rom → cubic bezier smoothing, gradient area fill, draw-in animation
+- Dashboard: 4-card "Resource Usage" grid (CPU %, Memory %, Network MB/s, Disk MB/s) with sparklines, trend arrows, 10s auto-refresh
+- Deployment detail: "Performance" section with 4 larger sparkline charts showing current value + min/max range, 5s auto-refresh for running deployments
+- Status-aware colors: emerald for running, zinc for stopped, red for failed
+- All data derived from existing `getContainerMetrics()` — no modifications to metrics.ts
+
+---
+Task ID: 5
+Agent: lead-engineer (Z.ai Code)
+Task: QA assessment, bug fixes, styling improvements, and new feature additions
+
+Work Log:
+- Performed comprehensive QA testing via agent-browser: marketplace, login/register, dashboard, deploy flow, stop/start, notification center
+- Found and fixed bug: "stoped" typo in toast messages → "stopped" (dashboard-view.tsx, deployment-view.tsx)
+- Fixed onboarding banner: improved localStorage-based dismissal, fixed React lint error (setState in effect), better visual styling with gradient buttons
+- Fixed Deploy button click interception: restructured AppCard to use div-based clickable area instead of nested buttons, added z-20 to Deploy button, added e.preventDefault() alongside e.stopPropagation()
+- Enhanced marketplace styling:
+  - Category pills now show app counts (e.g., "Database 2")
+  - App cards redesigned with top accent bar, better hover states (translate-y, shadow-lg), emerald color transitions
+  - Featured cards get decorative glow effect and ring on rank badge
+  - Stat cards have improved hover states with emerald-500/30 border
+  - Added total deployment stats in hero section
+  - Added "Clear search" button in empty state
+  - Better skeleton loading states
+  - Heart/favorite button on each app card (localStorage-based)
+- Added 6 new marketplace apps via seed API: Redis Cache, PostgreSQL, Grafana Dashboard, Prometheus, Nginx Proxy, Mattermost Chat (now 10 apps across 5 categories)
+- Notification center working: bell icon with unread count, popover with activity events, mark all read, auto-refresh
+- Resource usage sparklines: dashboard and deployment detail both show CPU/Memory/Network/Disk charts with trend indicators
+- Dark mode verified working
+- All lint checks pass
+
+Stage Summary:
+- **Current project status**: Fully functional MVP with 10 apps, auth, deploy, management, notifications, sparklines, favorites
+- **Completed modifications**: Bug fixes (3), styling overhaul (marketplace cards, hero, categories), new features (notification center, sparklines, favorites, 6 more apps)
+- **Verification results**: All pages render correctly, deploy/stop/start/restart flows work, notification center works, sparklines auto-refresh, dark mode works, lint clean
+- **Unresolved issues/risks**: Deploy button on featured cards can still be tricky to click in automated testing (works fine in manual testing), notification popover requires programmatic click in agent-browser (Radix portal rendering)
+- **Priority recommendations for next phase**: (1) Add deployment environment variables configuration, (2) Add user profile/settings page, (3) Add deployment sharing/collaboration, (4) Improve mobile responsiveness of deployment detail view, (5) Add deployment health check monitoring with alerts

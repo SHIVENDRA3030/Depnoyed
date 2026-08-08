@@ -22,6 +22,12 @@ import {
   Tag,
   X,
   CheckSquare,
+  Cpu,
+  MemoryStick,
+  ArrowUpRight,
+  ArrowDownRight,
+  Wifi,
+  HardDriveUpload,
 } from "lucide-react";
 import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -47,6 +53,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import {
+  Sparkline,
+  sparklineColor,
+  generateTimeSeries,
+  tickTimeSeries,
+} from "@/components/marketplace/sparkline";
 
 function statusAccentBorder(status: string): string {
   switch (status) {
@@ -120,7 +132,7 @@ export function DashboardView() {
         method: "POST",
       });
       setDeployments((d) => (d ?? []).map((x) => (x.id === id ? deployment : x)));
-      toast.success(`Deployment ${action}ed`);
+      toast.success(`Deployment ${action === 'stop' ? 'stopped' : action + 'ed'}`);
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : `Failed to ${action}`);
     } finally {
@@ -189,7 +201,7 @@ export function DashboardView() {
     await load();
     setBatchBusy(false);
     deselectAll();
-    if (failCount === 0) toast.success(`${successCount} deployment(s) ${action}ed`);
+    if (failCount === 0) toast.success(`${successCount} deployment(s) ${action === 'stop' ? 'stopped' : action + 'ed'}`);
     else toast.error(`${failCount} failed, ${successCount} succeeded`);
   }
 
@@ -289,6 +301,11 @@ export function DashboardView() {
           </div>
         )}
       </div>
+
+      {/* Resource Usage sparkline section */}
+      {deployments && deployments.length > 0 && (
+        <ResourceUsageSparklines deployments={deployments} />
+      )}
 
       {/* Activity timeline */}
       {deployments && deployments.length > 0 && (
@@ -661,3 +678,158 @@ function formatDataSize(bytes: number): string {
 }
 
 export { Badge };
+
+/* ---------- Resource Usage Sparklines ---------- */
+
+const SPARKLINE_POINTS = 20;
+
+function ResourceUsageSparklines({ deployments }: { deployments: DeploymentItem[] }) {
+  const runningDeployments = deployments.filter((d) => d.status === "running");
+  const hasRunning = runningDeployments.length > 0;
+
+  // Compute aggregate base metrics across all running deployments
+  const aggMetrics = useMemo(() => {
+    if (runningDeployments.length === 0) {
+      return { cpu: 0, memory: 0, network: 0, disk: 0 };
+    }
+    let cpu = 0;
+    let memory = 0;
+    let network = 0;
+    let disk = 0;
+    for (const d of runningDeployments) {
+      const containerId = d.containerId ?? d.id;
+      const m = getContainerMetrics(containerId);
+      cpu += m.cpuUsagePercent;
+      memory += m.memoryUsagePercent;
+      // Derive network/disk from other metrics for realism
+      network += m.responseLatencyMs / 150 * 40 + 10; // ~10-50 range
+      disk += m.healthScore * 0.3 + 5; // ~5-35 range
+    }
+    const n = runningDeployments.length;
+    return {
+      cpu: cpu / n,
+      memory: memory / n,
+      network: network / n,
+      disk: disk / n,
+    };
+  }, [runningDeployments]);
+
+  // Stable seed for initial series generation
+  const seed = useMemo(
+    () => `dash-${runningDeployments.map((d) => d.id).join(",")}`,
+    [runningDeployments],
+  );
+
+  // Tick counter drives series evolution
+  const [tick, setTick] = useState(0);
+
+  // Auto-refresh every 10 seconds
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 10000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Compute full series from seed + tick (fully derived, no intermediate state)
+  const series = useMemo(() => {
+    const cpu = generateTimeSeries(aggMetrics.cpu, SPARKLINE_POINTS, 5, `${seed}:cpu`);
+    const memory = generateTimeSeries(aggMetrics.memory, SPARKLINE_POINTS, 4, `${seed}:mem`);
+    const network = generateTimeSeries(aggMetrics.network, SPARKLINE_POINTS, 6, `${seed}:net`);
+    const disk = generateTimeSeries(aggMetrics.disk, SPARKLINE_POINTS, 4, `${seed}:disk`);
+    // Apply tick-based evolution
+    let c = cpu, m = memory, n = network, d = disk;
+    for (let i = 0; i < tick; i++) {
+      c = tickTimeSeries(c, aggMetrics.cpu, 5, i + 1);
+      m = tickTimeSeries(m, aggMetrics.memory, 4, i + 1);
+      n = tickTimeSeries(n, aggMetrics.network, 6, i + 1);
+      d = tickTimeSeries(d, aggMetrics.disk, 4, i + 1);
+    }
+    return { cpu: c, memory: m, network: n, disk: d };
+  }, [aggMetrics, seed, tick]);
+
+  const color = hasRunning ? "#10b981" : "#a1a1aa";
+
+  const charts: {
+    key: string;
+    label: string;
+    icon: React.ReactNode;
+    data: number[];
+    unit: string;
+    decimals?: number;
+  }[] = [
+    {
+      key: "cpu",
+      label: "CPU Usage",
+      icon: <Cpu className="size-3.5" />,
+      data: series.cpu,
+      unit: "%",
+    },
+    {
+      key: "memory",
+      label: "Memory Usage",
+      icon: <MemoryStick className="size-3.5" />,
+      data: series.memory,
+      unit: "%",
+    },
+    {
+      key: "network",
+      label: "Network I/O",
+      icon: <Wifi className="size-3.5" />,
+      data: series.network,
+      unit: " MB/s",
+      decimals: 1,
+    },
+    {
+      key: "disk",
+      label: "Disk I/O",
+      icon: <HardDriveUpload className="size-3.5" />,
+      data: series.disk,
+      unit: " MB/s",
+      decimals: 1,
+    },
+  ];
+
+  return (
+    <div className="mt-8">
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+        <Activity className="size-4" /> Resource usage
+      </h2>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {charts.map((c) => {
+          const current = c.data[c.data.length - 1] ?? 0;
+          const prev = c.data[c.data.length - 2] ?? current;
+          const trendUp = current >= prev;
+          const displayVal = c.decimals ? current.toFixed(c.decimals) : Math.round(current);
+          return (
+            <div
+              key={c.key}
+              className="flex flex-col rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:border-brand/30"
+            >
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  {c.icon} {c.label}
+                </span>
+                <span className={`flex items-center gap-0.5 text-[10px] tabular-nums ${trendUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
+                  {trendUp ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+                  {Math.abs(Math.round(current - prev))}
+                </span>
+              </div>
+              <p className="mt-1 text-lg font-bold tabular-nums">
+                {displayVal}{c.unit}
+              </p>
+              <Sparkline
+                data={c.data}
+                color={color}
+                width={100}
+                height={24}
+                strokeWidth={1.5}
+                showArea
+                id={`dash-${c.key}`}
+                className="mt-1 w-full"
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

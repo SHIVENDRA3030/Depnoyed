@@ -360,6 +360,69 @@
         }
       ],
       "startedAt": "2026-08-08T12:59:04.231Z"
+    },
+    "ossmp-demo-counter-kdmf7x-pwur": {
+      "id": "cnt_31f3622930c1",
+      "name": "ossmp-demo-counter-kdmf7x-pwur",
+      "status": "running",
+      "image": "ossmp/demo-counter:1.0",
+      "port": 80,
+      "volumeName": "ossmp-vol-demo-counter-kdmf7x-ne7d",
+      "simulator": "counter",
+      "cpuLimit": 0.5,
+      "memoryLimitMb": 512,
+      "env": {
+        "DEPLOYMENT_ID": "cmske6cge0007q6wgiazc1o5z",
+        "APP_SLUG": "demo-counter"
+      },
+      "logs": [
+        {
+          "t": "2026-08-08T13:10:49.770Z",
+          "stream": "stdout",
+          "message": "Creating container from image ossmp/demo-counter:1.0"
+        },
+        {
+          "t": "2026-08-08T13:10:49.770Z",
+          "stream": "stdout",
+          "message": "Mounting volume ossmp-vol-demo-counter-kdmf7x-ne7d at /data"
+        },
+        {
+          "t": "2026-08-08T13:10:49.770Z",
+          "stream": "stdout",
+          "message": "Resource limits: cpu=0.5 memory=512MB"
+        },
+        {
+          "t": "2026-08-08T13:10:49.922Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=counter) on port 80"
+        },
+        {
+          "t": "2026-08-08T13:10:49.922Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:80"
+        },
+        {
+          "t": "2026-08-08T13:12:13.381Z",
+          "stream": "stdout",
+          "message": "Received SIGTERM, gracefully stopping application"
+        },
+        {
+          "t": "2026-08-08T13:12:13.381Z",
+          "stream": "stdout",
+          "message": "Container exited (volume data preserved)"
+        },
+        {
+          "t": "2026-08-08T13:12:27.261Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=counter) on port 80"
+        },
+        {
+          "t": "2026-08-08T13:12:27.261Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:80"
+        }
+      ],
+      "startedAt": "2026-08-08T13:12:27.261Z"
     }
   },
   "volumes": {
@@ -390,6 +453,10 @@
     "ossmp-vol-demo-counter-o3lb3q-h5id": {
       "name": "ossmp-vol-demo-counter-o3lb3q-h5id",
       "createdAt": "2026-08-08T12:59:04.050Z"
+    },
+    "ossmp-vol-demo-counter-kdmf7x-ne7d": {
+      "name": "ossmp-vol-demo-counter-kdmf7x-ne7d",
+      "createdAt": "2026-08-08T13:10:49.743Z"
     }
   }
 }

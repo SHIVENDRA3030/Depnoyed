@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ExternalLink,
@@ -28,6 +28,10 @@ import {
   Zap,
   Clock,
   HeartPulse,
+  Wifi,
+  HardDriveUpload,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react";
 import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -53,6 +57,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import {
+  Sparkline,
+  sparklineColor,
+  generateTimeSeries,
+  tickTimeSeries,
+} from "@/components/marketplace/sparkline";
 
 interface LogLine {
   t: string;
@@ -179,7 +189,7 @@ export function DeploymentView({ id }: { id: string }) {
         method: "POST",
       });
       setDep(deployment);
-      toast.success(`Deployment ${action}ed`);
+      toast.success(`Deployment ${action === 'stop' ? 'stopped' : action + 'ed'}`);
       setTimeout(loadLogs, 400);
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : `Failed to ${action}`);
@@ -346,6 +356,13 @@ export function DeploymentView({ id }: { id: string }) {
           </MetricCard>
         </div>
       </div>
+
+      {/* Performance sparkline section */}
+      <DeploymentPerformanceSparklines
+        containerId={containerId}
+        status={dep.status}
+        metrics={metrics}
+      />
 
       {/* Header */}
       <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -763,4 +780,146 @@ function uptimeSince(iso: string): string {
   if (hrs < 24) return remainMins > 0 ? `${hrs}h ${remainMins}m` : `${hrs}h`;
   const days = Math.floor(hrs / 24);
   return `${days}d`;
+}
+
+/* ---------- Performance Sparkline Section ---------- */
+
+const DEPLOY_SPARKLINE_POINTS = 30;
+
+function DeploymentPerformanceSparklines({
+  containerId,
+  status,
+  metrics,
+}: {
+  containerId: string;
+  status: string;
+  metrics: { cpuUsagePercent: number; memoryUsagePercent: number; responseLatencyMs: number; healthScore: number };
+}) {
+  const running = status === "running";
+  const color = sparklineColor(status);
+
+  // Base metrics from getContainerMetrics
+  const baseCpu = metrics.cpuUsagePercent;
+  const baseMemory = metrics.memoryUsagePercent;
+  const baseNetwork = metrics.responseLatencyMs / 150 * 40 + 10; // ~10-50
+  const baseDisk = metrics.healthScore * 0.3 + 5; // ~5-35
+
+  // Tick counter drives series evolution (only ticks for running deployments)
+  const [tick, setTick] = useState(0);
+
+  // Auto-refresh every 5 seconds for running deployments
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => setTick((n) => n + 1), 5000);
+    return () => clearInterval(t);
+  }, [running]);
+
+  // Compute full series from containerId + tick (fully derived)
+  const series = useMemo(() => {
+    const cpu = generateTimeSeries(baseCpu, DEPLOY_SPARKLINE_POINTS, 4, `dep-${containerId}:cpu`);
+    const memory = generateTimeSeries(baseMemory, DEPLOY_SPARKLINE_POINTS, 3, `dep-${containerId}:mem`);
+    const network = generateTimeSeries(baseNetwork, DEPLOY_SPARKLINE_POINTS, 5, `dep-${containerId}:net`);
+    const disk = generateTimeSeries(baseDisk, DEPLOY_SPARKLINE_POINTS, 3, `dep-${containerId}:disk`);
+    // Apply tick-based evolution
+    let c = cpu, m = memory, n = network, d = disk;
+    for (let i = 0; i < tick; i++) {
+      c = tickTimeSeries(c, baseCpu, 4, i + 1);
+      m = tickTimeSeries(m, baseMemory, 3, i + 1);
+      n = tickTimeSeries(n, baseNetwork, 5, i + 1);
+      d = tickTimeSeries(d, baseDisk, 3, i + 1);
+    }
+    return { cpu: c, memory: m, network: n, disk: d };
+  }, [containerId, baseCpu, baseMemory, baseNetwork, baseDisk, tick]);
+
+  const charts: {
+    key: string;
+    label: string;
+    icon: React.ReactNode;
+    data: number[];
+    unit: string;
+    decimals?: number;
+  }[] = [
+    {
+      key: "cpu",
+      label: "CPU Usage",
+      icon: <Cpu className="size-4" />,
+      data: series.cpu,
+      unit: "%",
+    },
+    {
+      key: "memory",
+      label: "Memory Usage",
+      icon: <MemoryStick className="size-4" />,
+      data: series.memory,
+      unit: "%",
+    },
+    {
+      key: "network",
+      label: "Network I/O",
+      icon: <Wifi className="size-4" />,
+      data: series.network,
+      unit: " MB/s",
+      decimals: 1,
+    },
+    {
+      key: "disk",
+      label: "Disk I/O",
+      icon: <HardDriveUpload className="size-4" />,
+      data: series.disk,
+      unit: " MB/s",
+      decimals: 1,
+    },
+  ];
+
+  return (
+    <div className="mb-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <h2 className="flex items-center gap-2 text-sm font-semibold">
+        <Activity className="size-4 text-brand" /> Performance
+      </h2>
+      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {charts.map((c) => {
+          const current = c.data[c.data.length - 1] ?? 0;
+          const prev = c.data[c.data.length - 2] ?? current;
+          const trendUp = current >= prev;
+          const min = Math.min(...c.data);
+          const max = Math.max(...c.data);
+          const displayVal = c.decimals ? current.toFixed(c.decimals) : Math.round(current);
+          const displayMin = c.decimals ? min.toFixed(c.decimals) : Math.round(min);
+          const displayMax = c.decimals ? max.toFixed(c.decimals) : Math.round(max);
+          return (
+            <div
+              key={c.key}
+              className="flex flex-col rounded-xl border border-border bg-muted/30 p-3"
+            >
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  {c.icon} {c.label}
+                </span>
+                <span className={`flex items-center gap-0.5 text-[10px] tabular-nums ${trendUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
+                  {trendUp ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+                  {Math.abs(Math.round(current - prev))}
+                </span>
+              </div>
+              <p className="mt-1 text-xl font-bold tabular-nums">
+                {displayVal}<span className="text-sm font-normal text-muted-foreground">{c.unit}</span>
+              </p>
+              <Sparkline
+                data={c.data}
+                color={color}
+                width={140}
+                height={32}
+                strokeWidth={1.8}
+                showArea
+                id={`dep-${c.key}`}
+                className="mt-2 w-full"
+              />
+              <p className="mt-1.5 text-[10px] tabular-nums text-muted-foreground">
+                Min {displayMin}{c.unit} · Max {displayMax}{c.unit}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }

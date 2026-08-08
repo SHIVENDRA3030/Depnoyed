@@ -1,0 +1,767 @@
+     1→"use client";
+     2→
+     3→import { useCallback, useEffect, useRef, useState } from "react";
+     4→import {
+     5→  ArrowLeft,
+     6→  ExternalLink,
+     7→  Play,
+     8→  Square,
+     9→  RotateCw,
+    10→  Trash2,
+    11→  Loader2,
+    12→  CheckCircle2,
+    13→  Circle,
+    14→  Server,
+    15→  Database,
+    16→  Globe,
+    17→  Cpu,
+    18→  MemoryStick,
+    19→  Terminal,
+    20→  Copy,
+    21→  AlertCircle,
+    22→  Timer,
+    23→  Tag,
+    24→  Pencil,
+    25→  Check,
+    26→  X,
+    27→  Activity,
+    28→  Zap,
+    29→  Clock,
+    30→  HeartPulse,
+    31→} from "lucide-react";
+    32→import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
+    33→import { AppLogo } from "@/components/marketplace/app-logo";
+    34→import { statusColor, statusDot } from "@/components/marketplace/status";
+    35→import {
+    36→  calculateUptime,
+    37→  getContainerMetrics,
+    38→  lastHealthCheck,
+    39→} from "@/lib/metrics";
+    40→import { Button } from "@/components/ui/button";
+    41→import { Badge } from "@/components/ui/badge";
+    42→import { Input } from "@/components/ui/input";
+    43→import { Progress } from "@/components/ui/progress";
+    44→import {
+    45→  AlertDialog,
+    46→  AlertDialogAction,
+    47→  AlertDialogCancel,
+    48→  AlertDialogContent,
+    49→  AlertDialogDescription,
+    50→  AlertDialogFooter,
+    51→  AlertDialogHeader,
+    52→  AlertDialogTitle,
+    53→  AlertDialogTrigger,
+    54→} from "@/components/ui/alert-dialog";
+    55→import { toast } from "sonner";
+    56→
+    57→interface LogLine {
+    58→  t: string;
+    59→  stream: string;
+    60→  message: string;
+    61→}
+    62→
+    63→function statusBannerStyle(status: string): { bg: string; icon: React.ReactNode; text: string } {
+    64→  switch (status) {
+    65→    case "running":
+    66→      return {
+    67→        bg: "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800",
+    68→        icon: <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400" />,
+    69→        text: "This deployment is running and accessible.",
+    70→      };
+    71→    case "pending":
+    72→    case "creating":
+    73→      return {
+    74→        bg: "bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800",
+    75→        icon: <Loader2 className="size-5 animate-spin text-amber-600 dark:text-amber-400" />,
+    76→        text: "Deployment is being provisioned…",
+    77→      };
+    78→    case "failed":
+    79→    case "dead":
+    80→      return {
+    81→        bg: "bg-red-50 border-red-200 dark:bg-red-950/40 dark:border-red-800",
+    82→        icon: <AlertCircle className="size-5 text-red-600 dark:text-red-400" />,
+    83→        text: "Deployment failed. Try restarting or delete and re-deploy.",
+    84→      };
+    85→    case "stopped":
+    86→    case "exited":
+    87→      return {
+    88→        bg: "bg-zinc-50 border-zinc-200 dark:bg-zinc-900/40 dark:border-zinc-700",
+    89→        icon: <Square className="size-5 text-zinc-500 dark:text-zinc-400" />,
+    90→        text: "Deployment is stopped. Start it to make it accessible.",
+    91→      };
+    92→    default:
+    93→      return {
+    94→        bg: "bg-muted border-border",
+    95→        icon: <Circle className="size-5 text-muted-foreground" />,
+    96→        text: "Unknown status.",
+    97→      };
+    98→  }
+    99→}
+   100→
+   101→export function DeploymentView({ id }: { id: string }) {
+   102→  const [dep, setDep] = useState<DeploymentItem | null>(null);
+   103→  const [logs, setLogs] = useState<LogLine[]>([]);
+   104→  const [busy, setBusy] = useState(false);
+   105→  const [notFound, setNotFound] = useState(false);
+   106→  const [volumeKeys, setVolumeKeys] = useState<string[] | null>(null);
+   107→  const [volumeValues, setVolumeValues] = useState<Record<string, string>>({});
+   108→  const [volumeLoading, setVolumeLoading] = useState(false);
+   109→  const [labelEditing, setLabelEditing] = useState(false);
+   110→  const [labelDraft, setLabelDraft] = useState("");
+   111→  const [labelSaving, setLabelSaving] = useState(false);
+   112→  const logRef = useRef<HTMLDivElement>(null);
+   113→
+   114→  const load = useCallback(async () => {
+   115→    try {
+   116→      const { deployment } = await api<{ deployment: DeploymentItem }>(`/api/deployments/${id}`);
+   117→      setDep(deployment);
+   118→    } catch (e) {
+   119→      if (e instanceof ApiError && (e.status === 404 || e.code === "NOT_FOUND")) setNotFound(true);
+   120→    }
+   121→  }, [id]);
+   122→
+   123→  const loadLogs = useCallback(async () => {
+   124→    try {
+   125→      const { logs } = await api<{ logs: LogLine[] }>(`/api/deployments/${id}/logs?tail=200`);
+   126→      setLogs(logs);
+   127→    } catch {
+   128→      /* ignore */
+   129→    }
+   130→  }, [id]);
+   131→
+   132→  const loadVolume = useCallback(async () => {
+   133→    if (!dep) return;
+   134→    setVolumeLoading(true);
+   135→    try {
+   136→      const res = await api<{ result: { ok: boolean; keys?: string[] } }>(`/api/deployments/${id}/volume`);
+   137→      const keys = res.result.keys ?? [];
+   138→      setVolumeKeys(keys);
+   139→      // Fetch values for each key (limit to first 20 keys to avoid overload).
+   140→      const limited = keys.slice(0, 20);
+   141→      const entries = await Promise.all(
+   142→        limited.map(async (k) => {
+   143→          try {
+   144→            const r = await api<{ result: { ok: boolean; value?: string | null } }>(
+   145→              `/api/deployments/${id}/volume?op=get&key=${encodeURIComponent(k)}`
+   146→            );
+   147→            return [k, r.result.value ?? ""] as const;
+   148→          } catch {
+   149→            return [k, ""] as const;
+   150→          }
+   151→        })
+   152→      );
+   153→      setVolumeValues(Object.fromEntries(entries));
+   154→    } catch {
+   155→      setVolumeKeys([]);
+   156→    } finally {
+   157→      setVolumeLoading(false);
+   158→    }
+   159→  }, [id, dep]);
+   160→
+   161→  useEffect(() => {
+   162→    load();
+   163→    loadLogs();
+   164→    const t = setInterval(() => {
+   165→      load();
+   166→      loadLogs();
+   167→    }, 3000);
+   168→    return () => clearInterval(t);
+   169→  }, [load, loadLogs]);
+   170→
+   171→  useEffect(() => {
+   172→    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+   173→  }, [logs]);
+   174→
+   175→  async function act(action: "start" | "stop" | "restart") {
+   176→    setBusy(true);
+   177→    try {
+   178→      const { deployment } = await api<{ deployment: DeploymentItem }>(`/api/deployments/${id}/${action}`, {
+   179→        method: "POST",
+   180→      });
+   181→      setDep(deployment);
+   182→      toast.success(`Deployment ${action}ed`);
+   183→      setTimeout(loadLogs, 400);
+   184→    } catch (e) {
+   185→      toast.error(e instanceof ApiError ? e.message : `Failed to ${action}`);
+   186→    } finally {
+   187→      setBusy(false);
+   188→    }
+   189→  }
+   190→
+   191→  async function remove() {
+   192→    setBusy(true);
+   193→    try {
+   194→      await api(`/api/deployments/${id}`, { method: "DELETE" });
+   195→      toast.success("Deployment deleted");
+   196→      navigate({ name: "dashboard" });
+   197→    } catch (e) {
+   198→      toast.error(e instanceof ApiError ? e.message : "Failed to delete");
+   199→      setBusy(false);
+   200→    }
+   201→  }
+   202→
+   203→  function startEditLabel() {
+   204→    setLabelDraft(dep?.label ?? "");
+   205→    setLabelEditing(true);
+   206→  }
+   207→
+   208→  async function saveLabel() {
+   209→    setLabelSaving(true);
+   210→    try {
+   211→      const { deployment } = await api<{ deployment: DeploymentItem }>(`/api/deployments/${id}`, {
+   212→        method: "PATCH",
+   213→        body: JSON.stringify({ label: labelDraft }),
+   214→      });
+   215→      setDep(deployment);
+   216→      setLabelEditing(false);
+   217→      toast.success("Label updated");
+   218→    } catch (e) {
+   219→      toast.error(e instanceof ApiError ? e.message : "Failed to update label");
+   220→    } finally {
+   221→      setLabelSaving(false);
+   222→    }
+   223→  }
+   224→
+   225→  if (notFound) {
+   226→    return (
+   227→      <div className="mx-auto max-w-2xl px-4 py-20 text-center">
+   228→        <h1 className="text-2xl font-semibold">Deployment not found</h1>
+   229→        <p className="mt-2 text-sm text-muted-foreground">It may have been deleted or belongs to another account.</p>
+   230→        <Button className="mt-6" variant="outline" onClick={() => navigate({ name: "dashboard" })}>
+   231→          <ArrowLeft className="mr-2 size-4" /> Back to dashboard
+   232→        </Button>
+   233→      </div>
+   234→    );
+   235→  }
+   236→
+   237→  if (!dep) {
+   238→    return (
+   239→      <div className="mx-auto max-w-4xl px-4 py-10">
+   240→        <div className="h-6 w-40 animate-pulse rounded bg-muted" />
+   241→        <div className="mt-6 h-64 animate-pulse rounded-2xl bg-muted" />
+   242→      </div>
+   243→    );
+   244→  }
+   245→
+   246→  const running = dep.status === "running";
+   247→  const steps = computeSteps(dep.status);
+   248→  const banner = statusBannerStyle(dep.status);
+   249→  const containerId = dep.containerId ?? dep.id;
+   250→  const metrics = getContainerMetrics(containerId);
+   251→  const uptime = calculateUptime(dep.createdAt, dep.status);
+   252→  const healthCheckTime = lastHealthCheck(containerId);
+   253→
+   254→  return (
+   255→    <div className="mx-auto max-w-4xl px-4 py-8">
+   256→      <button
+   257→        onClick={() => navigate({ name: "dashboard" })}
+   258→        className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+   259→      >
+   260→        <ArrowLeft className="size-4" /> Dashboard
+   261→      </button>
+   262→
+   263→      {/* Status banner */}
+   264→      <div className={`mb-6 flex items-center gap-3 rounded-xl border p-4 ${banner.bg}`}>
+   265→        {banner.icon}
+   266→        <div>
+   267→          <p className="text-sm font-medium">{dep.status.charAt(0).toUpperCase() + dep.status.slice(1)}</p>
+   268→          <p className="text-xs text-muted-foreground">{banner.text}</p>
+   269→        </div>
+   270→      </div>
+   271→
+   272→      {/* Health metrics section */}
+   273→      <div className="mb-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+   274→        <h2 className="flex items-center gap-2 text-sm font-semibold">
+   275→          <HeartPulse className="size-4 text-rose-500" /> Health
+   276→        </h2>
+   277→        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+   278→          {/* Uptime */}
+   279→          <MetricCard
+   280→            icon={<Activity className="size-3.5" />}
+   281→            label="Uptime"
+   282→            value={running ? `${uptime}%` : "0%"}
+   283→          >
+   284→            {running && (
+   285→              <Progress
+   286→                value={uptime}
+   287→                className="mt-2 h-1.5"
+   288→              />
+   289→            )}
+   290→          </MetricCard>
+   291→
+   292→          {/* Memory usage */}
+   293→          <MetricCard
+   294→            icon={<MemoryStick className="size-3.5" />}
+   295→            label="Memory"
+   296→            value={`${metrics.memoryUsagePercent}%`}
+   297→          >
+   298→            <Progress
+   299→              value={metrics.memoryUsagePercent}
+   300→              className="mt-2 h-1.5"
+   301→            />
+   302→          </MetricCard>
+   303→
+   304→          {/* CPU usage */}
+   305→          <MetricCard
+   306→            icon={<Cpu className="size-3.5" />}
+   307→            label="CPU"
+   308→            value={`${metrics.cpuUsagePercent}%`}
+   309→          >
+   310→            <Progress
+   311→              value={metrics.cpuUsagePercent}
+   312→              className="mt-2 h-1.5"
+   313→            />
+   314→          </MetricCard>
+   315→
+   316→          {/* Response latency */}
+   317→          <MetricCard
+   318→            icon={<Zap className="size-3.5" />}
+   319→            label="Latency"
+   320→            value={`${metrics.responseLatencyMs}ms`}
+   321→          >
+   322→            <div className="mt-2 flex items-center gap-1.5">
+   323→              <div
+   324→                className={`h-1.5 rounded-full ${
+   325→                  metrics.responseLatencyMs < 50
+   326→                    ? "bg-emerald-500"
+   327→                    : metrics.responseLatencyMs < 100
+   328→                    ? "bg-amber-500"
+   329→                    : "bg-red-500"
+   330→                }`}
+   331→                style={{ width: `${Math.min((metrics.responseLatencyMs / 150) * 100, 100)}%` }}
+   332→              />
+   333→              <div className="h-1.5 flex-1 rounded-full bg-muted" />
+   334→            </div>
+   335→          </MetricCard>
+   336→
+   337→          {/* Last health check */}
+   338→          <MetricCard
+   339→            icon={<Clock className="size-3.5" />}
+   340→            label="Last check"
+   341→            value={formatHealthCheckTime(healthCheckTime)}
+   342→          >
+   343→            <p className="mt-1 text-[10px] text-muted-foreground">
+   344→              {healthCheckTime.toLocaleTimeString()}
+   345→            </p>
+   346→          </MetricCard>
+   347→        </div>
+   348→      </div>
+   349→
+   350→      {/* Header */}
+   351→      <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+   352→        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   353→          <div className="flex items-center gap-3">
+   354→            <AppLogo logo={dep.app?.logo ?? null} simulator={dep.app?.simulator ?? "static"} name={dep.app?.name ?? "App"} size="lg" />
+   355→            <div className="min-w-0">
+   356→              <div className="flex flex-wrap items-center gap-2">
+   357→                <h1 className="text-xl font-bold tracking-tight">{dep.app?.name ?? "Deployment"}</h1>
+   358→                <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusColor(dep.status)}`}>
+   359→                  <span className={`size-1.5 rounded-full ${statusDot(dep.status)}`} />
+   360→                  {dep.status}
+   361→                </span>
+   362→                <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+   363→                  <Timer className="size-3" />
+   364→                  {running ? `Uptime: ${uptimeSince(dep.createdAt)}` : `Downtime: ${timeAgo(dep.updatedAt)}`}
+   365→                </span>
+   366→              </div>
+   367→              <a
+   368→                href={dep.previewPath}
+   369→                target="_blank"
+   370→                rel="noreferrer"
+   371→                className="mt-1 inline-flex max-w-full items-center gap-1 font-mono text-xs text-brand hover:underline"
+   372→              >
+   373→                <Globe className="size-3 shrink-0" /> <span className="truncate">{dep.subdomain}.apps.local</span>
+   374→              </a>
+   375→              {/* Label row */}
+   376→              <div className="mt-2 flex items-center gap-2">
+   377→                {labelEditing ? (
+   378→                  <div className="flex items-center gap-1.5">
+   379→                    <Tag className="size-3.5 text-muted-foreground" />
+   380→                    <Input
+   381→                      value={labelDraft}
+   382→                      onChange={(e) => setLabelDraft(e.target.value)}
+   383→                      onKeyDown={(e) => {
+   384→                        if (e.key === "Enter") saveLabel();
+   385→                        if (e.key === "Escape") setLabelEditing(false);
+   386→                      }}
+   387→                      placeholder="Add a label (e.g. 'prod', 'staging', 'client-A')"
+   388→                      className="h-7 w-64 text-xs"
+   389→                      autoFocus
+   390→                      disabled={labelSaving}
+   391→                    />
+   392→                    <button
+   393→                      onClick={saveLabel}
+   394→                      disabled={labelSaving}
+   395→                      className="inline-flex size-7 items-center justify-center rounded-md bg-brand text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
+   396→                      aria-label="Save label"
+   397→                    >
+   398→                      {labelSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+   399→                    </button>
+   400→                    <button
+   401→                      onClick={() => setLabelEditing(false)}
+   402→                      className="inline-flex size-7 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
+   403→                      aria-label="Cancel"
+   404→                    >
+   405→                      <X className="size-3.5" />
+   406→                    </button>
+   407→                  </div>
+   408→                ) : (
+   409→                  <button
+   410→                    onClick={startEditLabel}
+   411→                    className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-brand/40 hover:text-foreground"
+   412→                  >
+   413→                    <Tag className="size-3" />
+   414→                    {dep.label ? (
+   415→                      <span className="text-foreground">{dep.label}</span>
+   416→                    ) : (
+   417→                      <span>Add label</span>
+   418→                    )}
+   419→                    <Pencil className="size-2.5 opacity-60" />
+   420→                  </button>
+   421→                )}
+   422→              </div>
+   423→            </div>
+   424→          </div>
+   425→        </div>
+   426→
+   427→        <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-3">
+   428→          <Button
+   429→            size="sm"
+   430→            className="bg-brand text-brand-foreground hover:bg-brand/90"
+   431→            onClick={() => window.open(dep.previewPath, "_blank")}
+   432→            disabled={!running}
+   433→          >
+   434→            <ExternalLink className="mr-1.5 size-3.5" /> Open app
+   435→          </Button>
+   436→          {running ? (
+   437→            <Button size="sm" variant="outline" onClick={() => act("stop")} disabled={busy}>
+   438→              {busy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Square className="mr-1.5 size-3.5" />} Stop
+   439→            </Button>
+   440→          ) : (
+   441→            <Button size="sm" variant="outline" onClick={() => act("start")} disabled={busy}>
+   442→              {busy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Play className="mr-1.5 size-3.5" />} Start
+   443→            </Button>
+   444→          )}
+   445→          <Button size="sm" variant="outline" onClick={() => act("restart")} disabled={busy}>
+   446→            {busy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <RotateCw className="mr-1.5 size-3.5" />} Restart
+   447→          </Button>
+   448→          <AlertDialog>
+   449→            <AlertDialogTrigger asChild>
+   450→              <Button size="sm" variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy}>
+   451→                <Trash2 className="mr-1.5 size-3.5" /> Delete
+   452→              </Button>
+   453→            </AlertDialogTrigger>
+   454→            <AlertDialogContent>
+   455→              <AlertDialogHeader>
+   456→                <AlertDialogTitle>Delete this deployment?</AlertDialogTitle>
+   457→                <AlertDialogDescription>
+   458→                  This permanently removes container <span className="font-mono">{dep.containerName}</span> and volume{" "}
+   459→                  <span className="font-mono">{dep.volumeName}</span>. All data will be lost.
+   460→                </AlertDialogDescription>
+   461→              </AlertDialogHeader>
+   462→              <AlertDialogFooter>
+   463→                <AlertDialogCancel>Cancel</AlertDialogCancel>
+   464→                <AlertDialogAction
+   465→                  onClick={remove}
+   466→                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+   467→                >
+   468→                  Delete
+   469→                </AlertDialogAction>
+   470→              </AlertDialogFooter>
+   471→            </AlertDialogContent>
+   472→          </AlertDialog>
+   473→        </div>
+   474→      </div>
+   475→
+   476→      {/* Deploy progress — connected line/dots visual */}
+   477→      <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+   478→        <h2 className="text-sm font-semibold">Deployment progress</h2>
+   479→        <div className="relative mt-4">
+   480→          {/* Vertical connecting line */}
+   481→          <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-border" />
+   482→          <ol className="relative space-y-4">
+   483→            {steps.map((s, i) => (
+   484→              <li key={s.label} className="flex items-start gap-4">
+   485→                <div className="relative z-10 flex size-6 shrink-0 items-center justify-center">
+   486→                  {s.state === "done" ? (
+   487→                    <span className="flex size-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/50">
+   488→                      <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+   489→                    </span>
+   490→                  ) : s.state === "active" ? (
+   491→                    <span className="flex size-6 items-center justify-center rounded-full bg-brand-soft">
+   492→                      <Loader2 className="size-4 animate-spin text-brand" />
+   493→                    </span>
+   494→                  ) : (
+   495→                    <span className="flex size-6 items-center justify-center rounded-full border border-border bg-background">
+   496→                      <Circle className="size-3 text-muted-foreground/40" />
+   497→                    </span>
+   498→                  )}
+   499→                </div>
+   500→                <span
+   501→                  className={`pt-1 text-sm ${
+   502→                    s.state === "done" ? "text-foreground" : s.state === "active" ? "font-medium text-foreground" : "text-muted-foreground"
+   503→                  }`}
+   504→                >
+   505→                  {s.label}
+   506→                  {s.state === "done" && i === steps.length - 1 && (
+   507→                    <span className="ml-2 text-xs text-emerald-600 dark:text-emerald-400">✓</span>
+   508→                  )}
+   509→                </span>
+   510→              </li>
+   511→            ))}
+   512→          </ol>
+   513→        </div>
+   514→      </div>
+   515→
+   516→      {/* Details + logs */}
+   517→      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+   518→        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+   519→          <h2 className="text-sm font-semibold">Runtime details</h2>
+   520→          <dl className="mt-3 space-y-2.5 text-sm">
+   521→            <Detail icon={<Server className="size-3.5" />} label="Container" value={dep.containerName} mono copyable />
+   522→            <Detail icon={<Database className="size-3.5" />} label="Volume" value={dep.volumeName} mono copyable />
+   523→            <Detail icon={<Server className="size-3.5" />} label="Container ID" value={dep.containerId ?? "—"} mono />
+   524→            <Detail icon={<Globe className="size-3.5" />} label="Subdomain" value={`${dep.subdomain}.apps.local`} mono copyable />
+   525→            <Detail icon={<Cpu className="size-3.5" />} label="CPU limit" value="0.5 core" />
+   526→            <Detail icon={<MemoryStick className="size-3.5" />} label="Memory limit" value="512 MB" />
+   527→          </dl>
+   528→          <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-4">
+   529→            <Badge variant="secondary" className="gap-1">
+   530→              <Server className="size-3" /> {dep.app?.dockerImage ?? "unknown"}
+   531→            </Badge>
+   532→            <Badge variant="outline">port {dep.port ?? "—"}</Badge>
+   533→          </div>
+   534→        </div>
+   535→
+   536→        <div className="flex flex-col rounded-2xl border border-border bg-card p-5 shadow-sm">
+   537→          <div className="flex items-center justify-between">
+   538→            <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+   539→              <Terminal className="size-4" /> Container logs
+   540→            </h2>
+   541→            <span className="text-[11px] text-muted-foreground">{logs.length} lines</span>
+   542→          </div>
+   543→          <div
+   544→            ref={logRef}
+   545→            className="scroll-thin mt-3 h-72 overflow-y-auto rounded-lg bg-zinc-950 p-3 font-mono text-[11px] leading-relaxed text-zinc-300"
+   546→          >
+   547→            {logs.length === 0 ? (
+   548→              <p className="text-zinc-500">No logs yet.</p>
+   549→            ) : (
+   550→              logs.map((l, i) => (
+   551→                <div key={i} className="flex gap-3">
+   552→                  <span className="shrink-0 text-zinc-700 select-none w-6 text-right">{i + 1}</span>
+   553→                  <span className="shrink-0 text-emerald-700">{new Date(l.t).toLocaleTimeString()}</span>
+   554→                  <span className={l.stream === "stderr" ? "text-red-400" : "text-zinc-300"}>{l.message}</span>
+   555→                </div>
+   556→              ))
+   557→            )}
+   558→          </div>
+   559→        </div>
+   560→      </div>
+   561→
+   562→      {/* Volume data browser */}
+   563→      <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+   564→        <div className="flex flex-wrap items-center justify-between gap-2">
+   565→          <div>
+   566→            <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+   567→              <Database className="size-4" /> Persistent volume data
+   568→            </h2>
+   569→            <p className="mt-0.5 text-[11px] text-muted-foreground">
+   570→              The keys stored in <span className="font-mono">{dep.volumeName}</span>. Survives stop / restart.
+   571→            </p>
+   572→          </div>
+   573→          <Button
+   574→            variant="outline"
+   575→            size="sm"
+   576→            onClick={loadVolume}
+   577→            disabled={volumeLoading}
+   578→            className="gap-1.5"
+   579→          >
+   580→            {volumeLoading ? (
+   581→              <Loader2 className="size-3.5 animate-spin" />
+   582→            ) : (
+   583→              <RotateCw className="size-3.5" />
+   584→            )}
+   585→            Refresh
+   586→          </Button>
+   587→        </div>
+   588→
+   589→        {volumeKeys === null ? (
+   590→          <div className="mt-4 rounded-lg border border-dashed border-border p-6 text-center">
+   591→            <Database className="mx-auto size-6 text-muted-foreground/40" />
+   592→            <p className="mt-2 text-xs text-muted-foreground">
+   593→              Click "Refresh" to inspect the volume contents.
+   594→            </p>
+   595→          </div>
+   596→        ) : volumeKeys.length === 0 ? (
+   597→          <div className="mt-4 rounded-lg border border-dashed border-border p-6 text-center">
+   598→            <Database className="mx-auto size-6 text-muted-foreground/40" />
+   599→            <p className="mt-2 text-xs text-muted-foreground">
+   600→              Volume is empty. Use the deployed app to write some data, then refresh.
+   601→            </p>
+   602→          </div>
+   603→        ) : (
+   604→          <div className="mt-4 max-h-72 overflow-y-auto scroll-thin rounded-lg border border-border/60">
+   605→            <table className="w-full text-xs">
+   606→              <thead className="sticky top-0 bg-muted/60 backdrop-blur">
+   607→                <tr>
+   608→                  <th className="px-3 py-2 text-left font-medium uppercase tracking-wider text-muted-foreground">
+   609→                    Key
+   610→                  </th>
+   611→                  <th className="px-3 py-2 text-left font-medium uppercase tracking-wider text-muted-foreground">
+   612→                    Value
+   613→                  </th>
+   614→                  <th className="px-3 py-2 text-right font-medium uppercase tracking-wider text-muted-foreground">
+   615→                    Size
+   616→                  </th>
+   617→                </tr>
+   618→              </thead>
+   619→              <tbody>
+   620→                {volumeKeys.map((k) => {
+   621→                  const v = volumeValues[k] ?? "";
+   622→                  const display = v.length > 80 ? v.slice(0, 80) + "…" : v;
+   623→                  return (
+   624→                    <tr key={k} className="border-t border-border/40 hover:bg-muted/30">
+   625→                      <td className="px-3 py-2 font-mono text-brand">{k}</td>
+   626→                      <td className="px-3 py-2 font-mono text-foreground/80 break-all">{display || <span className="text-muted-foreground/40">—</span>}</td>
+   627→                      <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+   628→                        {new Blob([v]).size} B
+   629→                      </td>
+   630→                    </tr>
+   631→                  );
+   632→                })}
+   633→              </tbody>
+   634→            </table>
+   635→          </div>
+   636→        )}
+   637→        {volumeKeys && volumeKeys.length > 20 && (
+   638→          <p className="mt-2 text-[11px] text-muted-foreground">
+   639→            Showing first 20 of {volumeKeys.length} keys.
+   640→          </p>
+   641→        )}
+   642→      </div>
+   643→    </div>
+   644→  );
+   645→}
+   646→
+   647→/* ---------- Health metric card ---------- */
+   648→
+   649→function MetricCard({
+   650→  icon,
+   651→  label,
+   652→  value,
+   653→  children,
+   654→}: {
+   655→  icon: React.ReactNode;
+   656→  label: string;
+   657→  value: string;
+   658→  children?: React.ReactNode;
+   659→}) {
+   660→  return (
+   661→    <div className="flex flex-col rounded-xl border border-border bg-muted/30 p-3">
+   662→      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+   663→        {icon} {label}
+   664→      </div>
+   665→      <p className="mt-1 text-base font-bold tabular-nums">{value}</p>
+   666→      {children}
+   667→    </div>
+   668→  );
+   669→}
+   670→
+   671→function formatHealthCheckTime(date: Date): string {
+   672→  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+   673→  if (diffSec < 5) return "just now";
+   674→  if (diffSec < 60) return `${diffSec}s ago`;
+   675→  const mins = Math.floor(diffSec / 60);
+   676→  return `${mins}m ago`;
+   677→}
+   678→
+   679→/* ---------- Detail row ---------- */
+   680→
+   681→function Detail({
+   682→  icon,
+   683→  label,
+   684→  value,
+   685→  mono,
+   686→  copyable,
+   687→}: {
+   688→  icon: React.ReactNode;
+   689→  label: string;
+   690→  value: string;
+   691→  mono?: boolean;
+   692→  copyable?: boolean;
+   693→}) {
+   694→  return (
+   695→    <div className="flex items-center justify-between gap-3">
+   696→      <dt className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+   697→        {icon} {label}
+   698→      </dt>
+   699→      <dd className="flex items-center gap-1.5">
+   700→        <span className={`truncate text-xs ${mono ? "font-mono" : ""}`}>{value}</span>
+   701→        {copyable && value !== "—" && (
+   702→          <button
+   703→            onClick={() => {
+   704→              navigator.clipboard?.writeText(value);
+   705→              toast.success("Copied");
+   706→            }}
+   707→            className="text-muted-foreground transition-colors hover:text-foreground"
+   708→            aria-label="Copy"
+   709→          >
+   710→            <Copy className="size-3" />
+   711→          </button>
+   712→        )}
+   713→      </dd>
+   714→    </div>
+   715→  );
+   716→}
+   717→
+   718→function computeSteps(status: string): { label: string; state: "done" | "active" | "pending" }[] {
+   719→  const labels = [
+   720→    "Creating deployment",
+   721→    "Creating volume",
+   722→    "Creating container",
+   723→    "Starting application",
+   724→    "Deployment ready",
+   725→  ];
+   726→  const order: Record<string, number> = {
+   727→    pending: 0,
+   728→    creating: 1,
+   729→    created: 2,
+   730→    running: 5,
+   731→    stopped: 5,
+   732→    exited: 5,
+   733→    failed: 5,
+   734→    dead: 5,
+   735→  };
+   736→  const progress = order[status] ?? 0;
+   737→  return labels.map((label, i) => {
+   738→    if (progress >= 5) return { label, state: "done" as const };
+   739→    if (i < progress) return { label, state: "done" as const };
+   740→    if (i === progress) return { label, state: "active" as const };
+   741→    return { label, state: "pending" as const };
+   742→  });
+   743→}
+   744→
+   745→function timeAgo(iso: string): string {
+   746→  const diff = Date.now() - new Date(iso).getTime();
+   747→  const mins = Math.floor(diff / 60000);
+   748→  if (mins < 1) return "just now";
+   749→  if (mins < 60) return `${mins}m ago`;
+   750→  const hrs = Math.floor(mins / 60);
+   751→  if (hrs < 24) return `${hrs}h ago`;
+   752→  const days = Math.floor(hrs / 24);
+   753→  return `${days}d ago`;
+   754→}
+   755→
+   756→function uptimeSince(iso: string): string {
+   757→  const diff = Date.now() - new Date(iso).getTime();
+   758→  const mins = Math.floor(diff / 60000);
+   759→  if (mins < 1) return "<1m";
+   760→  if (mins < 60) return `${mins}m`;
+   761→  const hrs = Math.floor(mins / 60);
+   762→  const remainMins = mins % 60;
+   763→  if (hrs < 24) return remainMins > 0 ? `${hrs}h ${remainMins}m` : `${hrs}h`;
+   764→  const days = Math.floor(hrs / 24);
+   765→  return `${days}d`;
+   766→}
+   767→
