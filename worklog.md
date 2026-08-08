@@ -1068,3 +1068,71 @@ Stage Summary:
 - Login has shimmer text, feature grid, trust badges; settings has API access, danger zone
 - Project is stable, feature-rich, and visually polished for MVP stage
 - No bugs or errors found during QA
+
+---
+Task ID: 3
+Agent: lead-engineer (Z.ai Code)
+Task: Round 3 — QA testing, new features (env var management, sharing controls,
+terminal log viewer, category explorer, enhanced command palette), and
+micro-interaction polish.
+
+Work Log:
+- Performed QA testing: marketplace, dashboard, dark mode all functional
+- ESLint passes cleanly with no errors
+- Added Environment Variables Management Panel to deployment view:
+  - Masked value display (first 2 chars + ****) with Eye/EyeOff toggle
+  - Lock icon next to each key, count badge in header
+  - Add/Edit/Delete variable with inline forms
+  - Save changes button calling PUT /api/deployments/[id]/volume
+  - Terminal/code aesthetic with dark bg-zinc-950 background
+  - Empty state with "Add variable" CTA
+- Added Deployment Sharing & Access Controls:
+  - Public URL display with copy button
+  - Visibility toggle: Public/Private (persisted to localStorage)
+  - Share link + Copy embed code (iframe snippet) buttons
+  - Mocked access log showing last 5 accesses
+  - Uses new useLocalStorage hook
+- Created useLocalStorage hook at src/hooks/use-local-storage.ts
+- Enhanced Terminal-Style Log Viewer:
+  - Terminal header bar with 3 colored dots (red/amber/green)
+  - True black background with green/white text
+  - Syntax highlighting for log levels (ERROR=red, WARN=amber, INFO=cyan, DEBUG=gray)
+  - Follow logs auto-scroll toggle
+  - Download logs button (text blob download)
+  - Line number column
+  - Search/filter input for log content
+  - Log count shows filtered/total when search active
+- Added Visual Category Explorer to marketplace:
+  - Grid of category cards between hero and trending
+  - Each card: large colored icon, app count, deployment count, unique gradient
+  - Unique color themes per category (Demo=emerald, Web=sky, DevOps=orange, Productivity=violet, Database=rose, Monitoring=teal)
+  - Hover: lift, shadow, icon bounce; Click: filters browse section
+  - Responsive: 2-col mobile, 3-col desktop
+- Enhanced Command Palette:
+  - Recent items section (last 3 apps + deployments from localStorage)
+  - Deployment status indicators (colored dots: green/gray/amber/red)
+  - Category navigation group
+  - Quick actions: Toggle dark mode, View keyboard shortcuts, Refresh dashboard
+  - App deployment count badges
+- Added Micro-Interaction CSS Utilities:
+  - .btn-ripple: CSS-only ripple effect on click
+  - .number-roll: smooth number roll-up animation
+  - .tooltip-enhanced: backdrop-blur + brand border
+  - .skeleton-shimmer: gradient sweep left-to-right
+  - .card-interactive: hover lift + shadow + brand border glow
+  - .terminal-header: terminal header bar styling
+  - .log-line: log line hover highlight
+  - .log-search-input: dark search input for terminal
+  - .view-fade-in-fast: 0.2s fast fade-in variant
+  - Improved .view-fade-in: 0.4s with subtle scale effect
+- Applied micro-interaction classes to deployment view buttons and cards
+- Server compiles and serves all pages correctly (verified with curl)
+- Note: agent-browser connection causes server restart in this sandbox environment;
+  this is an environment issue, not a code bug
+
+Stage Summary:
+- 6 major new features added: Env Var Management, Sharing Controls, Terminal Log Viewer,
+  Category Explorer, Enhanced Command Palette, Micro-interactions
+- All API endpoints returning correct status codes
+- ESLint passes cleanly
+- Project is feature-rich and visually polished

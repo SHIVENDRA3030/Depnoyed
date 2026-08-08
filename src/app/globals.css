@@ -246,9 +246,13 @@
     animation: shimmer 1.5s ease-in-out infinite;
   }
 
-  /* View fade-in transition */
+  /* View fade-in transition — enhanced with subtle scale */
   .view-fade-in {
-    animation: view-fade-in 0.3s ease-out both;
+    animation: view-fade-in 0.4s ease-out both;
+  }
+  /* Fast variant for smaller elements */
+  .view-fade-in-fast {
+    animation: view-fade-in-fast 0.2s ease-out both;
   }
 
   /* Sparkline draw-in animation */
@@ -655,6 +659,122 @@
   .stat-trend-down {
     color: oklch(0.577 0.245 27.325);
   }
+
+  /* ─── Micro-interaction utilities ─── */
+
+  /* Button ripple effect — CSS-only radial gradient on click */
+  .btn-ripple {
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-ripple::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), oklch(1 0 0 / 0.3) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+  }
+  .btn-ripple:active::after {
+    opacity: 1;
+    transition: opacity 0s;
+  }
+
+  /* Smooth number roll animation */
+  .number-roll {
+    display: inline-block;
+    animation: number-roll-up 0.3s ease-out;
+  }
+
+  /* Enhanced tooltip styles */
+  .tooltip-enhanced {
+    backdrop-filter: blur(8px) saturate(150%);
+    -webkit-backdrop-filter: blur(8px) saturate(150%);
+    border: 1px solid oklch(0.696 0.17 162.48 / 0.2);
+    padding: 8px 12px;
+    box-shadow: 0 4px 12px -2px oklch(0.145 0 0 / 0.12), 0 1px 3px oklch(0.145 0 0 / 0.06);
+    border-radius: 8px;
+  }
+  .dark .tooltip-enhanced {
+    border-color: oklch(0.696 0.17 162.48 / 0.15);
+    box-shadow: 0 4px 12px -2px oklch(0 0 0 / 0.3), 0 1px 3px oklch(0 0 0 / 0.2);
+  }
+
+  /* Skeleton shimmer — gradient sweep left-to-right (more natural than opacity pulse) */
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--muted) 25%,
+      oklch(0.92 0 0 / 0.7) 37%,
+      oklch(0.95 0 0 / 0.9) 50%,
+      oklch(0.92 0 0 / 0.7) 63%,
+      var(--muted) 75%
+    );
+    background-size: 400% 100%;
+    animation: skeleton-shimmer 1.8s ease-in-out infinite;
+  }
+  .dark .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--muted) 25%,
+      oklch(0.25 0 0 / 0.7) 37%,
+      oklch(0.3 0 0 / 0.9) 50%,
+      oklch(0.25 0 0 / 0.7) 63%,
+      var(--muted) 75%
+    );
+    background-size: 400% 100%;
+    animation: skeleton-shimmer 1.8s ease-in-out infinite;
+  }
+
+  /* Interactive card hover — lift + glow border */
+  .card-interactive {
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+  }
+  .card-interactive:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px -4px oklch(0.145 0 0 / 0.1), 0 2px 8px -2px oklch(0.145 0 0 / 0.06);
+    border-color: oklch(0.696 0.17 162.48 / 0.3);
+  }
+  .dark .card-interactive:hover {
+    box-shadow: 0 6px 20px -4px oklch(0 0 0 / 0.25), 0 2px 8px -2px oklch(0 0 0 / 0.15);
+    border-color: oklch(0.696 0.17 162.48 / 0.25);
+  }
+  .card-interactive:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 3px oklch(0.145 0 0 / 0.06);
+  }
+  .dark .card-interactive:active {
+    box-shadow: 0 1px 3px oklch(0 0 0 / 0.15);
+  }
+
+  /* Terminal header bar styling */
+  .terminal-header {
+    background: linear-gradient(180deg, oklch(0.27 0 0) 0%, oklch(0.22 0 0) 100%);
+    border-bottom: 1px solid oklch(0.35 0 0);
+  }
+
+  /* Log line highlight on hover */
+  .log-line:hover {
+    background: oklch(0.25 0 0 / 0.5);
+  }
+
+  /* Log search input within terminal context */
+  .log-search-input {
+    background: oklch(0.2 0 0);
+    border: 1px solid oklch(0.35 0 0);
+    color: oklch(0.85 0 0);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .log-search-input:focus {
+    border-color: oklch(0.696 0.17 162.48 / 0.6);
+    box-shadow: 0 0 0 2px oklch(0.696 0.17 162.48 / 0.15);
+    outline: none;
+  }
+  .log-search-input::placeholder {
+    color: oklch(0.5 0 0);
+  }
 }
 
 /* Keyframes */
@@ -691,7 +811,12 @@
 }
 
 @keyframes view-fade-in {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(8px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes view-fade-in-fast {
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -877,4 +1002,16 @@
 @keyframes orb-pulse {
   0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.6; }
   50% { transform: translateX(-50%) scale(1.15); opacity: 0.9; }
+}
+
+/* Number roll up animation */
+@keyframes number-roll-up {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Skeleton shimmer sweep */
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }

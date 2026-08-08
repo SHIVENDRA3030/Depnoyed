@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Rocket, Search, Boxes, Container, Database, Globe, ArrowRight, Loader2, Sparkles, Zap, Flame, Star, TrendingUp, FlaskConical, Globe2, Wrench, FileText, Heart, Download, Clock, GitCompare, X, History, Users, ShieldCheck, Activity } from "lucide-react";
+import { Rocket, Search, Boxes, Container, Database, Globe, ArrowRight, Loader2, Sparkles, Zap, Flame, Star, TrendingUp, FlaskConical, Globe2, Wrench, FileText, Heart, Download, Clock, GitCompare, X, History, Users, ShieldCheck, Activity, Server, MonitorSmart, Eye, FolderOpen } from "lucide-react";
 import { api, navigate, useAuth, type AppItem, type DeploymentItem, ApiError } from "@/lib/store";
 import { useCompare } from "@/lib/compare-store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -93,6 +93,7 @@ export function MarketplaceView() {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [favVersion, setFavVersion] = useState(0); // bump to re-derive favorites
   const searchRef = useRef<HTMLInputElement>(null);
+  const browseRef = useRef<HTMLElement>(null);
   const user = useAuth((s) => s.user);
   const [userDeploys, setUserDeploys] = useState<DeploymentItem[] | null>(null);
 
@@ -106,6 +107,16 @@ export function MarketplaceView() {
         setApps([]);
       }
     })();
+  }, []);
+
+  // Listen for category filter events from command palette
+  useEffect(() => {
+    function onCatFilter(e: Event) {
+      const cat = (e as CustomEvent).detail as string;
+      if (cat) setActiveCat(cat);
+    }
+    window.addEventListener("oss-filter-category", onCatFilter);
+    return () => window.removeEventListener("oss-filter-category", onCatFilter);
   }, []);
 
   // Fetch user deployments for recommendation filtering
@@ -284,6 +295,17 @@ export function MarketplaceView() {
         </div>
       </section>
 
+      {/* Explore by Category */}
+      {apps && apps.length > 0 && (
+        <CategoryExplorer
+          apps={apps}
+          onSelectCategory={(cat) => {
+            setActiveCat(cat);
+            browseRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+        />
+      )}
+
       {/* Featured apps */}
       {featured.length > 0 && (
         <section className="mx-auto max-w-6xl px-4 pt-10">
@@ -345,7 +367,7 @@ export function MarketplaceView() {
       )}
 
       {/* Catalog */}
-      <section className="mx-auto max-w-6xl px-4 py-10">
+      <section ref={browseRef} className="mx-auto max-w-6xl px-4 py-10">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-xl font-semibold">Browse applications</h2>
@@ -716,6 +738,141 @@ function AppCardSkeleton() {
       </div>
       <div className="h-10 shimmer" />
     </div>
+  );
+}
+
+/* --------------------------- Category Explorer ---------------------------- */
+
+const CATEGORY_THEMES: Record<string, {
+  icon: React.ElementType;
+  gradient: string;
+  darkGradient: string;
+  iconBg: string;
+  iconColor: string;
+  border: string;
+  hoverBorder: string;
+}> = {
+  Demo: {
+    icon: FlaskConical,
+    gradient: "from-emerald-50 via-emerald-100/60 to-green-50",
+    darkGradient: "dark:from-emerald-950/30 dark:via-emerald-900/10 dark:to-green-950/20",
+    iconBg: "bg-emerald-500/15",
+    iconColor: "text-emerald-600 dark:text-emerald-400",
+    border: "border-emerald-200/60 dark:border-emerald-800/30",
+    hoverBorder: "hover:border-emerald-400/60 dark:hover:border-emerald-600/40",
+  },
+  Web: {
+    icon: Globe2,
+    gradient: "from-sky-50 via-sky-100/60 to-blue-50",
+    darkGradient: "dark:from-sky-950/30 dark:via-sky-900/10 dark:to-blue-950/20",
+    iconBg: "bg-sky-500/15",
+    iconColor: "text-sky-600 dark:text-sky-400",
+    border: "border-sky-200/60 dark:border-sky-800/30",
+    hoverBorder: "hover:border-sky-400/60 dark:hover:border-sky-600/40",
+  },
+  DevOps: {
+    icon: Wrench,
+    gradient: "from-orange-50 via-amber-100/60 to-orange-50",
+    darkGradient: "dark:from-orange-950/30 dark:via-amber-900/10 dark:to-orange-950/20",
+    iconBg: "bg-orange-500/15",
+    iconColor: "text-orange-600 dark:text-orange-400",
+    border: "border-orange-200/60 dark:border-orange-800/30",
+    hoverBorder: "hover:border-orange-400/60 dark:hover:border-orange-600/40",
+  },
+  Productivity: {
+    icon: FileText,
+    gradient: "from-violet-50 via-purple-100/60 to-violet-50",
+    darkGradient: "dark:from-violet-950/30 dark:via-purple-900/10 dark:to-violet-950/20",
+    iconBg: "bg-violet-500/15",
+    iconColor: "text-violet-600 dark:text-violet-400",
+    border: "border-violet-200/60 dark:border-violet-800/30",
+    hoverBorder: "hover:border-violet-400/60 dark:hover:border-violet-600/40",
+  },
+  Database: {
+    icon: Database,
+    gradient: "from-rose-50 via-pink-100/60 to-rose-50",
+    darkGradient: "dark:from-rose-950/30 dark:via-pink-900/10 dark:to-rose-950/20",
+    iconBg: "bg-rose-500/15",
+    iconColor: "text-rose-600 dark:text-rose-400",
+    border: "border-rose-200/60 dark:border-rose-800/30",
+    hoverBorder: "hover:border-rose-400/60 dark:hover:border-rose-600/40",
+  },
+  Monitoring: {
+    icon: TrendingUp,
+    gradient: "from-teal-50 via-cyan-100/60 to-teal-50",
+    darkGradient: "dark:from-teal-950/30 dark:via-cyan-900/10 dark:to-teal-950/20",
+    iconBg: "bg-teal-500/15",
+    iconColor: "text-teal-600 dark:text-teal-400",
+    border: "border-teal-200/60 dark:border-teal-800/30",
+    hoverBorder: "hover:border-teal-400/60 dark:hover:border-teal-600/40",
+  },
+};
+
+function CategoryExplorer({ apps, onSelectCategory }: { apps: AppItem[]; onSelectCategory: (cat: string) => void }) {
+  const categoryNames = useMemo(() => {
+    const cats = Array.from(new Set(apps.map((a) => a.category)));
+    // Sort to match our defined theme order
+    const order = ["Demo", "Web", "DevOps", "Productivity", "Database", "Monitoring"];
+    return cats.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  }, [apps]);
+
+  const categoryStats = useMemo(() => {
+    const stats: Record<string, { appCount: number; deployCount: number }> = {};
+    for (const app of apps) {
+      if (!stats[app.category]) stats[app.category] = { appCount: 0, deployCount: 0 };
+      stats[app.category].appCount++;
+      stats[app.category].deployCount += app.deploymentCount;
+    }
+    return stats;
+  }, [apps]);
+
+  return (
+    <section className="mx-auto max-w-6xl px-4 pt-10">
+      <div className="flex items-center gap-2">
+        <FolderOpen className="size-5 text-violet-500" />
+        <h2 className="text-xl font-semibold">Explore by category</h2>
+      </div>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Browse apps organized by their use case — click to filter the catalog.
+      </p>
+      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
+        {categoryNames.map((cat, i) => {
+          const theme = CATEGORY_THEMES[cat];
+          if (!theme) return null;
+          const Icon = theme.icon;
+          const stats = categoryStats[cat] ?? { appCount: 0, deployCount: 0 };
+          return (
+            <button
+              key={cat}
+              onClick={() => onSelectCategory(cat)}
+              className={`group relative flex cursor-pointer flex-col items-center gap-3 rounded-2xl border bg-gradient-to-br ${theme.gradient} ${theme.darkGradient} ${theme.border} ${theme.hoverBorder} p-6 text-center shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg animate-card-entrance`}
+              style={{ animationDelay: `${i * 80}ms` }}
+            >
+              {/* Subtle decorative glow */}
+              <div className="pointer-events-none absolute -right-4 -top-4 size-20 rounded-full bg-current opacity-[0.04] blur-2xl transition-opacity duration-300 group-hover:opacity-[0.08]" />
+              <span className={`relative flex size-14 items-center justify-center rounded-2xl ${theme.iconBg} ${theme.iconColor} transition-transform duration-300 group-hover:animate-bounce`}>
+                <Icon className="size-7" />
+              </span>
+              <div>
+                <h3 className="text-base font-semibold">{cat}</h3>
+                <div className="mt-1 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1">
+                    <Boxes className="size-3" /> {stats.appCount} {stats.appCount === 1 ? "app" : "apps"}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Zap className="size-3" /> {stats.deployCount} deploys
+                  </span>
+                </div>
+              </div>
+              {/* Hover arrow indicator */}
+              <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground/60 transition-all duration-200 group-hover:text-foreground/80 group-hover:translate-x-0.5">
+                Browse <ArrowRight className="size-3" />
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

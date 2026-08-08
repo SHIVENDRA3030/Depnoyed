@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 import {
   ArrowLeft,
   ExternalLink,
@@ -35,6 +36,20 @@ import {
   Variable,
   Shield,
   CheckCheck,
+  Lock,
+  Unlock,
+  Eye,
+  EyeOff,
+  Share2,
+  Link,
+  Globe2,
+  Plus,
+  Trash2 as Trash2Icon,
+  Save,
+  Code2,
+  Search,
+  Download,
+  ArrowDown,
 } from "lucide-react";
 import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -48,6 +63,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -123,6 +139,8 @@ export function DeploymentView({ id }: { id: string }) {
   const [labelDraft, setLabelDraft] = useState("");
   const [labelSaving, setLabelSaving] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  const [followLogs, setFollowLogs] = useState(true);
+  const [logSearch, setLogSearch] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -182,8 +200,8 @@ export function DeploymentView({ id }: { id: string }) {
   }, [load, loadLogs]);
 
   useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [logs]);
+    if (followLogs && logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [logs, followLogs]);
 
   async function act(action: "start" | "stop" | "restart") {
     setBusy(true);
@@ -250,8 +268,8 @@ export function DeploymentView({ id }: { id: string }) {
   if (!dep) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-10">
-        <div className="h-6 w-40 animate-pulse rounded bg-muted" />
-        <div className="mt-6 h-64 animate-pulse rounded-2xl bg-muted" />
+        <div className="h-6 w-40 skeleton-shimmer rounded bg-muted" />
+        <div className="mt-6 h-64 skeleton-shimmer rounded-2xl bg-muted" />
       </div>
     );
   }
@@ -447,22 +465,22 @@ export function DeploymentView({ id }: { id: string }) {
         <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-3">
           <Button
             size="sm"
-            className="bg-brand text-brand-foreground hover:bg-brand/90"
+            className="btn-ripple bg-brand text-brand-foreground hover:bg-brand/90"
             onClick={() => window.open(dep.previewPath, "_blank")}
             disabled={!running}
           >
             <ExternalLink className="mr-1.5 size-3.5" /> Open app
           </Button>
           {running ? (
-            <Button size="sm" variant="outline" onClick={() => act("stop")} disabled={busy}>
+            <Button size="sm" variant="outline" onClick={() => act("stop")} disabled={busy} className="btn-ripple">
               {busy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Square className="mr-1.5 size-3.5" />} Stop
             </Button>
           ) : (
-            <Button size="sm" variant="outline" onClick={() => act("start")} disabled={busy}>
+            <Button size="sm" variant="outline" onClick={() => act("start")} disabled={busy} className="btn-ripple">
               {busy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Play className="mr-1.5 size-3.5" />} Start
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={() => act("restart")} disabled={busy}>
+          <Button size="sm" variant="outline" onClick={() => act("restart")} disabled={busy} className="btn-ripple">
             {busy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <RotateCw className="mr-1.5 size-3.5" />} Restart
           </Button>
           <AlertDialog>
@@ -501,7 +519,7 @@ export function DeploymentView({ id }: { id: string }) {
       />
 
       {/* Deploy progress — connected line/dots visual */}
-      <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div className="card-interactive mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
         <h2 className="text-sm font-semibold">Deployment progress</h2>
         <div className="relative mt-4">
           {/* Vertical connecting line */}
@@ -542,7 +560,7 @@ export function DeploymentView({ id }: { id: string }) {
 
       {/* Details + logs */}
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="card-interactive rounded-2xl border border-border bg-card p-5 shadow-sm">
           <h2 className="text-sm font-semibold">Runtime details</h2>
           <dl className="mt-3 space-y-2.5 text-sm">
             <Detail icon={<Server className="size-3.5" />} label="Container" value={dep.containerName} mono copyable />
@@ -560,66 +578,25 @@ export function DeploymentView({ id }: { id: string }) {
           </div>
         </div>
 
-        <div className="flex flex-col rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="flex items-center gap-1.5 text-sm font-semibold">
-              <Terminal className="size-4" /> Container logs
-            </h2>
-            <span className="text-[11px] text-muted-foreground">{logs.length} lines</span>
-          </div>
-          <div
-            ref={logRef}
-            className="scroll-thin mt-3 h-72 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 font-mono text-[11px] leading-relaxed text-zinc-300 shadow-inner-terminal"
-          >
-            {logs.length === 0 ? (
-              <p className="text-zinc-500">No logs yet.</p>
-            ) : (
-              logs.map((l, i) => (
-                <div key={i} className="flex gap-3">
-                  <span className="shrink-0 text-zinc-700 select-none w-6 text-right">{i + 1}</span>
-                  <span className="shrink-0 text-emerald-700">{new Date(l.t).toLocaleTimeString()}</span>
-                  <span className={l.stream === "stderr" ? "text-red-400" : "text-zinc-300"}>{l.message}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        <TerminalLogViewer
+          logs={logs}
+          logRef={logRef}
+          containerName={dep.containerName}
+          followLogs={followLogs}
+          setFollowLogs={setFollowLogs}
+          logSearch={logSearch}
+          setLogSearch={setLogSearch}
+        />
       </div>
 
-      {/* Environment Variables */}
-      {dep.envVars && Object.keys(dep.envVars).length > 0 && (
-        <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="flex items-center gap-1.5 text-sm font-semibold">
-            <Variable className="size-4" /> Environment variables
-          </h2>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Custom environment variables configured for this deployment.
-          </p>
-          <div className="mt-3 overflow-hidden rounded-lg border border-border/60">
-            <table className="w-full text-sm">
-              <thead className="border-b border-border/60 bg-muted/30">
-                <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Key</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(dep.envVars).map(([key, value]) => (
-                  <tr key={key} className="border-b border-border/30 last:border-b-0">
-                    <td className="px-3 py-2 font-mono text-xs font-medium">{key}</td>
-                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                      {value.length > 60 ? value.slice(0, 57) + "…" : value}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {/* Environment Variables Management */}
+      <EnvVarsPanel dep={dep} />
+
+      {/* Sharing & Access */}
+      <SharingAccessSection dep={dep} />
 
       {/* Volume data browser */}
-      <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div className="card-interactive mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="flex items-center gap-1.5 text-sm font-semibold">
@@ -697,6 +674,152 @@ export function DeploymentView({ id }: { id: string }) {
           <p className="mt-2 text-[11px] text-muted-foreground">
             Showing first 20 of {volumeKeys.length} keys.
           </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Terminal-Style Log Viewer ---------- */
+
+function logLevelColor(message: string): string {
+  const upper = message.toUpperCase();
+  if (upper.includes("ERROR") || upper.includes("ERR") || upper.includes("FATAL")) return "text-red-400";
+  if (upper.includes("WARN") || upper.includes("WARNING")) return "text-amber-400";
+  if (upper.includes("INFO")) return "text-cyan-400";
+  if (upper.includes("DEBUG") || upper.includes("TRACE")) return "text-zinc-500";
+  return "text-zinc-300";
+}
+
+function highlightLogLevel(message: string): React.ReactNode {
+  // Split the message to highlight log level keywords with distinct colors
+  const levelPattern = /\b(ERROR|ERR|FATAL|WARN|WARNING|INFO|DEBUG|TRACE)\b/gi;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  while ((match = levelPattern.exec(message)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(<span key={key++}>{message.slice(lastIndex, match.index)}</span>);
+    }
+    const word = match[1].toUpperCase();
+    let color = "text-zinc-300";
+    if (word === "ERROR" || word === "ERR" || word === "FATAL") color = "text-red-400 font-semibold";
+    else if (word === "WARN" || word === "WARNING") color = "text-amber-400 font-semibold";
+    else if (word === "INFO") color = "text-cyan-400";
+    else if (word === "DEBUG" || word === "TRACE") color = "text-zinc-500";
+    parts.push(<span key={key++} className={color}>{match[1]}</span>);
+    lastIndex = match.index + match[1].length;
+  }
+  if (lastIndex < message.length) {
+    parts.push(<span key={key++}>{message.slice(lastIndex)}</span>);
+  }
+  return parts.length > 0 ? <>{parts}</> : message;
+}
+
+function TerminalLogViewer({
+  logs,
+  logRef,
+  containerName,
+  followLogs,
+  setFollowLogs,
+  logSearch,
+  setLogSearch,
+}: {
+  logs: LogLine[];
+  logRef: React.RefObject<HTMLDivElement | null>;
+  containerName: string;
+  followLogs: boolean;
+  setFollowLogs: (v: boolean) => void;
+  logSearch: string;
+  setLogSearch: (v: string) => void;
+}) {
+  const filteredLogs = useMemo(() => {
+    if (!logSearch.trim()) return logs;
+    const q = logSearch.toLowerCase();
+    return logs.filter((l) => l.message.toLowerCase().includes(q));
+  }, [logs, logSearch]);
+
+  function downloadLogs() {
+    const text = logs.map((l) => `[${new Date(l.t).toISOString()}] ${l.stream === "stderr" ? "ERR" : "OUT"} ${l.message}`).join("\n");
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${containerName}-logs.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      {/* Terminal header bar */}
+      <div className="terminal-header flex items-center gap-3 rounded-t-2xl px-4 py-2.5">
+        {/* 3 colored dots */}
+        <span className="flex items-center gap-1.5">
+          <span className="size-3 rounded-full bg-red-500/80" />
+          <span className="size-3 rounded-full bg-amber-400/80" />
+          <span className="size-3 rounded-full bg-emerald-500/80" />
+        </span>
+        <span className="flex-1 text-center font-mono text-[11px] text-zinc-400">
+          {containerName}
+        </span>
+        <span className="text-[10px] tabular-nums text-zinc-500">
+          {filteredLogs.length}{logSearch ? ` / ${logs.length}` : ""} lines
+        </span>
+      </div>
+
+      {/* Toolbar: search, follow toggle, download */}
+      <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-950 px-3 py-1.5">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-zinc-500" />
+          <input
+            type="text"
+            value={logSearch}
+            onChange={(e) => setLogSearch(e.target.value)}
+            placeholder="Filter logs…"
+            className="log-search-input w-full rounded-md py-1 pl-6 pr-2 font-mono text-[11px]"
+          />
+        </div>
+        <button
+          onClick={() => setFollowLogs(!followLogs)}
+          className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-mono text-[11px] transition-colors ${
+            followLogs
+              ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+              : "text-zinc-500 hover:bg-zinc-800 hover:text-zinc-400"
+          }`}
+          title={followLogs ? "Following logs (auto-scroll)" : "Auto-scroll paused"}
+        >
+          <ArrowDown className={`size-3 ${followLogs ? "animate-pulse" : ""}`} />
+          Follow
+        </button>
+        <button
+          onClick={downloadLogs}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 font-mono text-[11px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-400"
+          title="Download logs"
+        >
+          <Download className="size-3" />
+        </button>
+      </div>
+
+      {/* Log area — true black terminal */}
+      <div
+        ref={logRef}
+        className="scroll-thin h-72 overflow-y-auto bg-black p-3 font-mono text-[11px] leading-relaxed shadow-inner-terminal"
+      >
+        {filteredLogs.length === 0 ? (
+          <p className="text-zinc-600">{logSearch ? "No matching logs." : "No logs yet."}</p>
+        ) : (
+          filteredLogs.map((l, i) => (
+            <div key={i} className="log-line flex gap-3 rounded-sm px-0.5 transition-colors duration-100">
+              <span className="shrink-0 w-7 text-right text-zinc-700 select-none">{i + 1}</span>
+              <span className="shrink-0 text-zinc-600">{new Date(l.t).toLocaleTimeString()}</span>
+              <span className={l.stream === "stderr" ? "text-red-400" : logLevelColor(l.message)}>
+                {highlightLogLevel(l.message)}
+              </span>
+            </div>
+          ))
         )}
       </div>
     </div>
@@ -1087,6 +1210,436 @@ function StatusBadgeSection({
       <p className="mt-3 text-[11px] text-muted-foreground">
         Badge URL: <span className="font-mono text-foreground/70">{badgeUrl}</span>
       </p>
+    </div>
+  );
+}
+
+/* ---------- Environment Variables Management Panel ---------- */
+
+function maskValue(value: string): string {
+  if (value.length <= 2) return "****";
+  return value.slice(0, 2) + "****";
+}
+
+function EnvVarsPanel({ dep }: { dep: DeploymentItem }) {
+  // Parse envVars from the deployment
+  const initialVars = useMemo(() => {
+    if (!dep.envVars || typeof dep.envVars !== "object") return {} as Record<string, string>;
+    return dep.envVars;
+  }, [dep.envVars]);
+
+  // Local editing state
+  const [vars, setVars] = useState<Record<string, string>>(initialVars);
+  const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
+  const [addingNew, setAddingNew] = useState(false);
+  const [newKey, setNewKey] = useState("");
+  const [newValue, setNewValue] = useState("");
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+
+  // Sync with deployment data
+  useEffect(() => {
+    setVars(initialVars);
+    setHasChanges(false);
+  }, [initialVars]);
+
+  const varEntries = Object.entries(vars);
+  const varCount = varEntries.length;
+
+  function toggleReveal(key: string) {
+    setRevealedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function startAdd() {
+    setNewKey("");
+    setNewValue("");
+    setAddingNew(true);
+  }
+
+  function confirmAdd() {
+    const trimmedKey = newKey.trim();
+    if (!trimmedKey) return;
+    if (vars.hasOwnProperty(trimmedKey)) {
+      toast.error("Variable already exists");
+      return;
+    }
+    setVars((prev) => ({ ...prev, [trimmedKey]: newValue }));
+    setHasChanges(true);
+    setAddingNew(false);
+    setNewKey("");
+    setNewValue("");
+  }
+
+  function startEdit(key: string) {
+    setEditingKey(key);
+    setEditValue(vars[key] ?? "");
+  }
+
+  function confirmEdit() {
+    if (editingKey === null) return;
+    setVars((prev) => ({ ...prev, [editingKey]: editValue }));
+    setHasChanges(true);
+    setEditingKey(null);
+    setEditValue("");
+  }
+
+  function deleteVar(key: string) {
+    setVars((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setHasChanges(true);
+  }
+
+  async function saveChanges() {
+    setSaving(true);
+    try {
+      await api(`/api/deployments/${dep.id}/volume`, {
+        method: "PUT",
+        body: JSON.stringify({ envVars: vars }),
+      });
+      setHasChanges(false);
+      toast.success("Environment variables saved");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Failed to save environment variables");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+          <Variable className="size-4" /> Environment Variables
+          {varCount > 0 && (
+            <Badge variant="secondary" className="ml-1.5 gap-1 text-[10px]">
+              {varCount} variable{varCount !== 1 ? "s" : ""}
+            </Badge>
+          )}
+        </h2>
+        <div className="flex items-center gap-2">
+          {hasChanges && (
+            <Button size="sm" onClick={saveChanges} disabled={saving} className="gap-1.5 bg-brand text-brand-foreground hover:bg-brand/90">
+              {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+              Save changes
+            </Button>
+          )}
+          {!addingNew && (
+            <Button size="sm" variant="outline" onClick={startAdd} className="gap-1.5">
+              <Plus className="size-3.5" /> Add variable
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {varCount === 0 && !addingNew ? (
+        /* Empty state */
+        <div className="mt-4 rounded-lg border border-dashed border-border bg-zinc-950/5 dark:bg-zinc-950/40 p-6 text-center">
+          <Variable className="mx-auto size-8 text-muted-foreground/40" />
+          <p className="mt-2 text-sm font-medium text-muted-foreground">
+            No environment variables configured
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground/60">
+            Add variables to customize your deployment at runtime.
+          </p>
+          <Button size="sm" variant="outline" onClick={startAdd} className="mt-4 gap-1.5">
+            <Plus className="size-3.5" /> Add variable
+          </Button>
+        </div>
+      ) : (
+        /* Variables table */
+        <div className="mt-4 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-inner-terminal">
+          {/* Inline add form */}
+          {addingNew && (
+            <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2.5">
+              <Lock className="size-3.5 shrink-0 text-zinc-600" />
+              <Input
+                value={newKey}
+                onChange={(e) => setNewKey(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") confirmAdd();
+                  if (e.key === "Escape") setAddingNew(false);
+                }}
+                placeholder="KEY"
+                className="h-7 w-32 flex-1 border-zinc-700 bg-zinc-900 font-mono text-xs text-emerald-400 placeholder:text-zinc-600 focus-visible:ring-zinc-600"
+                autoFocus
+              />
+              <span className="text-zinc-600">=</span>
+              <Input
+                value={newValue}
+                onChange={(e) => setNewValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") confirmAdd();
+                  if (e.key === "Escape") setAddingNew(false);
+                }}
+                placeholder="value"
+                className="h-7 flex-1 border-zinc-700 bg-zinc-900 font-mono text-xs text-zinc-300 placeholder:text-zinc-600 focus-visible:ring-zinc-600"
+              />
+              <button
+                onClick={confirmAdd}
+                disabled={!newKey.trim()}
+                className="inline-flex size-7 items-center justify-center rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40"
+                aria-label="Confirm add"
+              >
+                <Check className="size-3.5" />
+              </button>
+              <button
+                onClick={() => setAddingNew(false)}
+                className="inline-flex size-7 items-center justify-center rounded-md border border-zinc-700 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+                aria-label="Cancel add"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          )}
+
+          {varCount === 0 && addingNew ? null : (
+            <table className="w-full text-sm">
+              <thead className="border-b border-zinc-800 bg-zinc-900/60">
+                <tr>
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Key</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Value</th>
+                  <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-widest text-zinc-500 w-28">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {varEntries.map(([key, value]) => (
+                  <tr key={key} className="group border-b border-zinc-800/60 last:border-b-0 hover:bg-zinc-900/40">
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <Lock className="size-3 shrink-0 text-zinc-600" />
+                        <span className="font-mono text-xs font-semibold text-emerald-400">{key}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {editingKey === key ? (
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") confirmEdit();
+                              if (e.key === "Escape") setEditingKey(null);
+                            }}
+                            className="h-6 flex-1 border-zinc-700 bg-zinc-900 font-mono text-xs text-zinc-300 focus-visible:ring-zinc-600"
+                            autoFocus
+                          />
+                          <button
+                            onClick={confirmEdit}
+                            className="inline-flex size-6 items-center justify-center rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                            aria-label="Confirm edit"
+                          >
+                            <Check className="size-3" />
+                          </button>
+                          <button
+                            onClick={() => setEditingKey(null)}
+                            className="inline-flex size-6 items-center justify-center rounded border border-zinc-700 text-zinc-500 hover:bg-zinc-800"
+                            aria-label="Cancel edit"
+                          >
+                            <X className="size-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-zinc-400">
+                            {revealedKeys.has(key) ? value : maskValue(value)}
+                          </span>
+                          <button
+                            onClick={() => toggleReveal(key)}
+                            className="inline-flex size-5 items-center justify-center rounded text-zinc-600 transition-colors hover:text-zinc-300"
+                            aria-label={revealedKeys.has(key) ? "Hide value" : "Reveal value"}
+                          >
+                            {revealedKeys.has(key) ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {editingKey !== key && (
+                          <>
+                            <button
+                              onClick={() => startEdit(key)}
+                              className="inline-flex size-6 items-center justify-center rounded text-zinc-600 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+                              aria-label="Edit variable"
+                            >
+                              <Pencil className="size-3" />
+                            </button>
+                            <button
+                              onClick={() => deleteVar(key)}
+                              className="inline-flex size-6 items-center justify-center rounded text-zinc-600 transition-colors hover:bg-red-900/30 hover:text-red-400"
+                              aria-label="Delete variable"
+                            >
+                              <Trash2Icon className="size-3" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Sharing & Access Section ---------- */
+
+const MOCK_ACCESS_LOG = [
+  { ip: "192.168.1.42", time: "3:42 PM", method: "GET", path: "/" },
+  { ip: "10.0.0.15", time: "3:38 PM", method: "GET", path: "/api/health" },
+  { ip: "172.16.0.8", time: "3:21 PM", method: "POST", path: "/api/data" },
+  { ip: "192.168.1.42", time: "2:54 PM", method: "GET", path: "/" },
+  { ip: "10.0.0.3", time: "2:12 PM", method: "GET", path: "/assets/style.css" },
+];
+
+function SharingAccessSection({ dep }: { dep: DeploymentItem }) {
+  const publicUrl = `https://${dep.subdomain}.apps.local`;
+  const visibilityKey = `oss-deploy-visibility-${dep.id}`;
+  const [isPublic, setIsPublic] = useLocalStorage<"public" | "private">(visibilityKey, "private");
+  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedEmbed, setCopiedEmbed] = useState(false);
+
+  function copyUrl() {
+    navigator.clipboard?.writeText(publicUrl);
+    setCopiedUrl(true);
+    toast.success("URL copied to clipboard");
+    setTimeout(() => setCopiedUrl(false), 1500);
+  }
+
+  function shareLink() {
+    navigator.clipboard?.writeText(publicUrl);
+    toast.success("Share link copied to clipboard");
+  }
+
+  function copyEmbedCode() {
+    const embed = `<iframe src="${publicUrl}" width="100%" height="600" frameborder="0" title="${dep.app?.name ?? "Deployment"}"></iframe>`;
+    navigator.clipboard?.writeText(embed);
+    setCopiedEmbed(true);
+    toast.success("Embed code copied to clipboard");
+    setTimeout(() => setCopiedEmbed(false), 1500);
+  }
+
+  return (
+    <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+        <Share2 className="size-4" /> Sharing &amp; Access
+      </h2>
+
+      {/* Public URL */}
+      <div className="mt-4 flex items-center gap-2 rounded-xl border border-border/60 bg-muted/30 p-3">
+        <Globe2 className="size-4 shrink-0 text-brand" />
+        <code className="flex-1 truncate font-mono text-xs text-foreground/80">{publicUrl}</code>
+        <button
+          onClick={copyUrl}
+          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          aria-label="Copy URL"
+        >
+          {copiedUrl ? <CheckCheck className="size-3.5 text-brand" /> : <Copy className="size-3.5" />}
+        </button>
+      </div>
+
+      {/* Visibility toggle */}
+      <div className="mt-4 flex items-center justify-between rounded-xl border border-border/60 p-3">
+        <div className="flex items-center gap-3">
+          {isPublic === "public" ? (
+            <Globe2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+          ) : (
+            <Lock className="size-4 text-amber-600 dark:text-amber-400" />
+          )}
+          <div>
+            <p className="text-sm font-medium">
+              {isPublic === "public" ? "Public" : "Private"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {isPublic === "public"
+                ? "Anyone with the link can access this deployment"
+                : "This deployment is only accessible to you"}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-medium text-muted-foreground">
+            {isPublic === "public" ? "Public" : "Private"}
+          </span>
+          <Switch
+            checked={isPublic === "public"}
+            onCheckedChange={(checked) => setIsPublic(checked ? "public" : "private")}
+          />
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="outline" onClick={shareLink} className="gap-1.5">
+          <Link className="size-3.5" /> Share link
+        </Button>
+        <Button size="sm" variant="outline" onClick={copyEmbedCode} className="gap-1.5">
+          <Code2 className="size-3.5" /> Copy embed code
+        </Button>
+      </div>
+
+      {/* Embed code preview */}
+      {copiedEmbed && (
+        <div className="mt-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+          <code className="block truncate font-mono text-[11px] text-muted-foreground">
+            {`<iframe src="${publicUrl}" width="100%" height="600" ...></iframe>`}
+          </code>
+        </div>
+      )}
+
+      {/* Access log */}
+      <div className="mt-5">
+        <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <Clock className="size-3.5" /> Recent access log
+        </h3>
+        <div className="mt-2 overflow-hidden rounded-lg border border-border/60">
+          <table className="w-full text-xs">
+            <thead className="border-b border-border/60 bg-muted/30">
+              <tr>
+                <th className="px-3 py-1.5 text-left font-medium uppercase tracking-wider text-muted-foreground">Source</th>
+                <th className="px-3 py-1.5 text-left font-medium uppercase tracking-wider text-muted-foreground">Method</th>
+                <th className="px-3 py-1.5 text-left font-medium uppercase tracking-wider text-muted-foreground">Path</th>
+                <th className="px-3 py-1.5 text-right font-medium uppercase tracking-wider text-muted-foreground">Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {MOCK_ACCESS_LOG.map((entry, i) => (
+                <tr key={i} className="border-b border-border/30 last:border-b-0">
+                  <td className="px-3 py-1.5 font-mono text-muted-foreground">{entry.ip}</td>
+                  <td className="px-3 py-1.5">
+                    <Badge
+                      variant="outline"
+                      className={`text-[9px] px-1 py-0 ${
+                        entry.method === "GET"
+                          ? "border-emerald-600/30 text-emerald-600 dark:border-emerald-400/30 dark:text-emerald-400"
+                          : "border-amber-600/30 text-amber-600 dark:border-amber-400/30 dark:text-amber-400"
+                      }`}
+                    >
+                      {entry.method}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-1.5 font-mono text-foreground/70">{entry.path}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">{entry.time}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

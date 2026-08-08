@@ -1,0 +1,1093 @@
+     1→"use client";
+     2→
+     3→import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+     4→import {
+     5→  ArrowLeft,
+     6→  ExternalLink,
+     7→  Play,
+     8→  Square,
+     9→  RotateCw,
+    10→  Trash2,
+    11→  Loader2,
+    12→  CheckCircle2,
+    13→  Circle,
+    14→  Server,
+    15→  Database,
+    16→  Globe,
+    17→  Cpu,
+    18→  MemoryStick,
+    19→  Terminal,
+    20→  Copy,
+    21→  AlertCircle,
+    22→  Timer,
+    23→  Tag,
+    24→  Pencil,
+    25→  Check,
+    26→  X,
+    27→  Activity,
+    28→  Zap,
+    29→  Clock,
+    30→  HeartPulse,
+    31→  Wifi,
+    32→  HardDriveUpload,
+    33→  ArrowUpRight,
+    34→  ArrowDownRight,
+    35→  Variable,
+    36→  Shield,
+    37→  CheckCheck,
+    38→} from "lucide-react";
+    39→import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
+    40→import { AppLogo } from "@/components/marketplace/app-logo";
+    41→import { statusColor, statusDot } from "@/components/marketplace/status";
+    42→import {
+    43→  calculateUptime,
+    44→  getContainerMetrics,
+    45→  lastHealthCheck,
+    46→} from "@/lib/metrics";
+    47→import { Button } from "@/components/ui/button";
+    48→import { Badge } from "@/components/ui/badge";
+    49→import { Input } from "@/components/ui/input";
+    50→import { Progress } from "@/components/ui/progress";
+    51→import {
+    52→  AlertDialog,
+    53→  AlertDialogAction,
+    54→  AlertDialogCancel,
+    55→  AlertDialogContent,
+    56→  AlertDialogDescription,
+    57→  AlertDialogFooter,
+    58→  AlertDialogHeader,
+    59→  AlertDialogTitle,
+    60→  AlertDialogTrigger,
+    61→} from "@/components/ui/alert-dialog";
+    62→import { toast } from "sonner";
+    63→import {
+    64→  Sparkline,
+    65→  sparklineColor,
+    66→  generateTimeSeries,
+    67→  tickTimeSeries,
+    68→} from "@/components/marketplace/sparkline";
+    69→
+    70→interface LogLine {
+    71→  t: string;
+    72→  stream: string;
+    73→  message: string;
+    74→}
+    75→
+    76→function statusBannerStyle(status: string): { bg: string; icon: React.ReactNode; text: string } {
+    77→  switch (status) {
+    78→    case "running":
+    79→      return {
+    80→        bg: "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800",
+    81→        icon: <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400" />,
+    82→        text: "This deployment is running and accessible.",
+    83→      };
+    84→    case "pending":
+    85→    case "creating":
+    86→      return {
+    87→        bg: "bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800",
+    88→        icon: <Loader2 className="size-5 animate-spin text-amber-600 dark:text-amber-400" />,
+    89→        text: "Deployment is being provisioned…",
+    90→      };
+    91→    case "failed":
+    92→    case "dead":
+    93→      return {
+    94→        bg: "bg-red-50 border-red-200 dark:bg-red-950/40 dark:border-red-800",
+    95→        icon: <AlertCircle className="size-5 text-red-600 dark:text-red-400" />,
+    96→        text: "Deployment failed. Try restarting or delete and re-deploy.",
+    97→      };
+    98→    case "stopped":
+    99→    case "exited":
+   100→      return {
+   101→        bg: "bg-zinc-50 border-zinc-200 dark:bg-zinc-900/40 dark:border-zinc-700",
+   102→        icon: <Square className="size-5 text-zinc-500 dark:text-zinc-400" />,
+   103→        text: "Deployment is stopped. Start it to make it accessible.",
+   104→      };
+   105→    default:
+   106→      return {
+   107→        bg: "bg-muted border-border",
+   108→        icon: <Circle className="size-5 text-muted-foreground" />,
+   109→        text: "Unknown status.",
+   110→      };
+   111→  }
+   112→}
+   113→
+   114→export function DeploymentView({ id }: { id: string }) {
+   115→  const [dep, setDep] = useState<DeploymentItem | null>(null);
+   116→  const [logs, setLogs] = useState<LogLine[]>([]);
+   117→  const [busy, setBusy] = useState(false);
+   118→  const [notFound, setNotFound] = useState(false);
+   119→  const [volumeKeys, setVolumeKeys] = useState<string[] | null>(null);
+   120→  const [volumeValues, setVolumeValues] = useState<Record<string, string>>({});
+   121→  const [volumeLoading, setVolumeLoading] = useState(false);
+   122→  const [labelEditing, setLabelEditing] = useState(false);
+   123→  const [labelDraft, setLabelDraft] = useState("");
+   124→  const [labelSaving, setLabelSaving] = useState(false);
+   125→  const logRef = useRef<HTMLDivElement>(null);
+   126→
+   127→  const load = useCallback(async () => {
+   128→    try {
+   129→      const { deployment } = await api<{ deployment: DeploymentItem }>(`/api/deployments/${id}`);
+   130→      setDep(deployment);
+   131→    } catch (e) {
+   132→      if (e instanceof ApiError && (e.status === 404 || e.code === "NOT_FOUND")) setNotFound(true);
+   133→    }
+   134→  }, [id]);
+   135→
+   136→  const loadLogs = useCallback(async () => {
+   137→    try {
+   138→      const { logs } = await api<{ logs: LogLine[] }>(`/api/deployments/${id}/logs?tail=200`);
+   139→      setLogs(logs);
+   140→    } catch {
+   141→      /* ignore */
+   142→    }
+   143→  }, [id]);
+   144→
+   145→  const loadVolume = useCallback(async () => {
+   146→    if (!dep) return;
+   147→    setVolumeLoading(true);
+   148→    try {
+   149→      const res = await api<{ result: { ok: boolean; keys?: string[] } }>(`/api/deployments/${id}/volume`);
+   150→      const keys = res.result.keys ?? [];
+   151→      setVolumeKeys(keys);
+   152→      // Fetch values for each key (limit to first 20 keys to avoid overload).
+   153→      const limited = keys.slice(0, 20);
+   154→      const entries = await Promise.all(
+   155→        limited.map(async (k) => {
+   156→          try {
+   157→            const r = await api<{ result: { ok: boolean; value?: string | null } }>(
+   158→              `/api/deployments/${id}/volume?op=get&key=${encodeURIComponent(k)}`
+   159→            );
+   160→            return [k, r.result.value ?? ""] as const;
+   161→          } catch {
+   162→            return [k, ""] as const;
+   163→          }
+   164→        })
+   165→      );
+   166→      setVolumeValues(Object.fromEntries(entries));
+   167→    } catch {
+   168→      setVolumeKeys([]);
+   169→    } finally {
+   170→      setVolumeLoading(false);
+   171→    }
+   172→  }, [id, dep]);
+   173→
+   174→  useEffect(() => {
+   175→    load();
+   176→    loadLogs();
+   177→    const t = setInterval(() => {
+   178→      load();
+   179→      loadLogs();
+   180→    }, 3000);
+   181→    return () => clearInterval(t);
+   182→  }, [load, loadLogs]);
+   183→
+   184→  useEffect(() => {
+   185→    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+   186→  }, [logs]);
+   187→
+   188→  async function act(action: "start" | "stop" | "restart") {
+   189→    setBusy(true);
+   190→    try {
+   191→      const { deployment } = await api<{ deployment: DeploymentItem }>(`/api/deployments/${id}/${action}`, {
+   192→        method: "POST",
+   193→      });
+   194→      setDep(deployment);
+   195→      toast.success(`Deployment ${action === 'stop' ? 'stopped' : action + 'ed'}`);
+   196→      setTimeout(loadLogs, 400);
+   197→    } catch (e) {
+   198→      toast.error(e instanceof ApiError ? e.message : `Failed to ${action}`);
+   199→    } finally {
+   200→      setBusy(false);
+   201→    }
+   202→  }
+   203→
+   204→  async function remove() {
+   205→    setBusy(true);
+   206→    try {
+   207→      await api(`/api/deployments/${id}`, { method: "DELETE" });
+   208→      toast.success("Deployment deleted");
+   209→      navigate({ name: "dashboard" });
+   210→    } catch (e) {
+   211→      toast.error(e instanceof ApiError ? e.message : "Failed to delete");
+   212→      setBusy(false);
+   213→    }
+   214→  }
+   215→
+   216→  function startEditLabel() {
+   217→    setLabelDraft(dep?.label ?? "");
+   218→    setLabelEditing(true);
+   219→  }
+   220→
+   221→  async function saveLabel() {
+   222→    setLabelSaving(true);
+   223→    try {
+   224→      const { deployment } = await api<{ deployment: DeploymentItem }>(`/api/deployments/${id}`, {
+   225→        method: "PATCH",
+   226→        body: JSON.stringify({ label: labelDraft }),
+   227→      });
+   228→      setDep(deployment);
+   229→      setLabelEditing(false);
+   230→      toast.success("Label updated");
+   231→    } catch (e) {
+   232→      toast.error(e instanceof ApiError ? e.message : "Failed to update label");
+   233→    } finally {
+   234→      setLabelSaving(false);
+   235→    }
+   236→  }
+   237→
+   238→  if (notFound) {
+   239→    return (
+   240→      <div className="mx-auto max-w-2xl px-4 py-20 text-center">
+   241→        <h1 className="text-2xl font-semibold">Deployment not found</h1>
+   242→        <p className="mt-2 text-sm text-muted-foreground">It may have been deleted or belongs to another account.</p>
+   243→        <Button className="mt-6" variant="outline" onClick={() => navigate({ name: "dashboard" })}>
+   244→          <ArrowLeft className="mr-2 size-4" /> Back to dashboard
+   245→        </Button>
+   246→      </div>
+   247→    );
+   248→  }
+   249→
+   250→  if (!dep) {
+   251→    return (
+   252→      <div className="mx-auto max-w-4xl px-4 py-10">
+   253→        <div className="h-6 w-40 animate-pulse rounded bg-muted" />
+   254→        <div className="mt-6 h-64 animate-pulse rounded-2xl bg-muted" />
+   255→      </div>
+   256→    );
+   257→  }
+   258→
+   259→  const running = dep.status === "running";
+   260→  const steps = computeSteps(dep.status);
+   261→  const banner = statusBannerStyle(dep.status);
+   262→  const containerId = dep.containerId ?? dep.id;
+   263→  const metrics = getContainerMetrics(containerId);
+   264→  const uptime = calculateUptime(dep.createdAt, dep.status);
+   265→  const healthCheckTime = lastHealthCheck(containerId);
+   266→
+   267→  return (
+   268→    <div className="mx-auto max-w-4xl px-4 py-8">
+   269→      <button
+   270→        onClick={() => navigate({ name: "dashboard" })}
+   271→        className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+   272→      >
+   273→        <ArrowLeft className="size-4" /> Dashboard
+   274→      </button>
+   275→
+   276→      {/* Status banner */}
+   277→      <div className={`mb-6 flex items-center gap-3 rounded-xl border p-4 ${banner.bg}`}>
+   278→        {banner.icon}
+   279→        <div>
+   280→          <p className="text-sm font-medium">{dep.status.charAt(0).toUpperCase() + dep.status.slice(1)}</p>
+   281→          <p className="text-xs text-muted-foreground">{banner.text}</p>
+   282→        </div>
+   283→      </div>
+   284→
+   285→      {/* Health metrics section */}
+   286→      <div className="mb-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+   287→        <h2 className="flex items-center gap-2 text-sm font-semibold">
+   288→          <HeartPulse className="size-4 text-rose-500" /> Health
+   289→        </h2>
+   290→        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+   291→          {/* Uptime */}
+   292→          <MetricCard
+   293→            icon={<Activity className="size-3.5" />}
+   294→            label="Uptime"
+   295→            value={running ? `${uptime}%` : "0%"}
+   296→          >
+   297→            {running && (
+   298→              <Progress
+   299→                value={uptime}
+   300→                className="mt-2 h-1.5"
+   301→              />
+   302→            )}
+   303→          </MetricCard>
+   304→
+   305→          {/* Memory usage */}
+   306→          <MetricCard
+   307→            icon={<MemoryStick className="size-3.5" />}
+   308→            label="Memory"
+   309→            value={`${metrics.memoryUsagePercent}%`}
+   310→          >
+   311→            <Progress
+   312→              value={metrics.memoryUsagePercent}
+   313→              className="mt-2 h-1.5"
+   314→            />
+   315→          </MetricCard>
+   316→
+   317→          {/* CPU usage */}
+   318→          <MetricCard
+   319→            icon={<Cpu className="size-3.5" />}
+   320→            label="CPU"
+   321→            value={`${metrics.cpuUsagePercent}%`}
+   322→          >
+   323→            <Progress
+   324→              value={metrics.cpuUsagePercent}
+   325→              className="mt-2 h-1.5"
+   326→            />
+   327→          </MetricCard>
+   328→
+   329→          {/* Response latency */}
+   330→          <MetricCard
+   331→            icon={<Zap className="size-3.5" />}
+   332→            label="Latency"
+   333→            value={`${metrics.responseLatencyMs}ms`}
+   334→          >
+   335→            <div className="mt-2 flex items-center gap-1.5">
+   336→              <div
+   337→                className={`h-1.5 rounded-full ${
+   338→                  metrics.responseLatencyMs < 50
+   339→                    ? "bg-emerald-500"
+   340→                    : metrics.responseLatencyMs < 100
+   341→                    ? "bg-amber-500"
+   342→                    : "bg-red-500"
+   343→                }`}
+   344→                style={{ width: `${Math.min((metrics.responseLatencyMs / 150) * 100, 100)}%` }}
+   345→              />
+   346→              <div className="h-1.5 flex-1 rounded-full bg-muted" />
+   347→            </div>
+   348→          </MetricCard>
+   349→
+   350→          {/* Last health check */}
+   351→          <MetricCard
+   352→            icon={<Clock className="size-3.5" />}
+   353→            label="Last check"
+   354→            value={formatHealthCheckTime(healthCheckTime)}
+   355→          >
+   356→            <p className="mt-1 text-[10px] text-muted-foreground">
+   357→              {healthCheckTime.toLocaleTimeString()}
+   358→            </p>
+   359→          </MetricCard>
+   360→        </div>
+   361→      </div>
+   362→
+   363→      {/* Performance sparkline section */}
+   364→      <DeploymentPerformanceSparklines
+   365→        containerId={containerId}
+   366→        status={dep.status}
+   367→        metrics={metrics}
+   368→      />
+   369→
+   370→      {/* Header */}
+   371→      <div className="gradient-border-animated flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+   372→        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   373→          <div className="flex items-center gap-3">
+   374→            <AppLogo logo={dep.app?.logo ?? null} simulator={dep.app?.simulator ?? "static"} name={dep.app?.name ?? "App"} size="lg" />
+   375→            <div className="min-w-0">
+   376→              <div className="flex flex-wrap items-center gap-2">
+   377→                <h1 className="text-xl font-bold tracking-tight">{dep.app?.name ?? "Deployment"}</h1>
+   378→                <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusColor(dep.status)}`}>
+   379→                  <span className={`size-1.5 rounded-full ${statusDot(dep.status)}`} />
+   380→                  {dep.status}
+   381→                </span>
+   382→                <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+   383→                  <Timer className="size-3" />
+   384→                  {running ? `Uptime: ${uptimeSince(dep.createdAt)}` : `Downtime: ${timeAgo(dep.updatedAt)}`}
+   385→                </span>
+   386→              </div>
+   387→              <a
+   388→                href={dep.previewPath}
+   389→                target="_blank"
+   390→                rel="noreferrer"
+   391→                className="mt-1 inline-flex max-w-full items-center gap-1 font-mono text-xs text-brand hover:underline"
+   392→              >
+   393→                <Globe className="size-3 shrink-0" /> <span className="truncate">{dep.subdomain}.apps.local</span>
+   394→              </a>
+   395→              {/* Label row */}
+   396→              <div className="mt-2 flex items-center gap-2">
+   397→                {labelEditing ? (
+   398→                  <div className="flex items-center gap-1.5">
+   399→                    <Tag className="size-3.5 text-muted-foreground" />
+   400→                    <Input
+   401→                      value={labelDraft}
+   402→                      onChange={(e) => setLabelDraft(e.target.value)}
+   403→                      onKeyDown={(e) => {
+   404→                        if (e.key === "Enter") saveLabel();
+   405→                        if (e.key === "Escape") setLabelEditing(false);
+   406→                      }}
+   407→                      placeholder="Add a label (e.g. 'prod', 'staging', 'client-A')"
+   408→                      className="h-7 w-64 text-xs"
+   409→                      autoFocus
+   410→                      disabled={labelSaving}
+   411→                    />
+   412→                    <button
+   413→                      onClick={saveLabel}
+   414→                      disabled={labelSaving}
+   415→                      className="inline-flex size-7 items-center justify-center rounded-md bg-brand text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
+   416→                      aria-label="Save label"
+   417→                    >
+   418→                      {labelSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+   419→                    </button>
+   420→                    <button
+   421→                      onClick={() => setLabelEditing(false)}
+   422→                      className="inline-flex size-7 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
+   423→                      aria-label="Cancel"
+   424→                    >
+   425→                      <X className="size-3.5" />
+   426→                    </button>
+   427→                  </div>
+   428→                ) : (
+   429→                  <button
+   430→                    onClick={startEditLabel}
+   431→                    className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-brand/40 hover:text-foreground"
+   432→                  >
+   433→                    <Tag className="size-3" />
+   434→                    {dep.label ? (
+   435→                      <span className="text-foreground">{dep.label}</span>
+   436→                    ) : (
+   437→                      <span>Add label</span>
+   438→                    )}
+   439→                    <Pencil className="size-2.5 opacity-60" />
+   440→                  </button>
+   441→                )}
+   442→              </div>
+   443→            </div>
+   444→          </div>
+   445→        </div>
+   446→
+   447→        <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-3">
+   448→          <Button
+   449→            size="sm"
+   450→            className="bg-brand text-brand-foreground hover:bg-brand/90"
+   451→            onClick={() => window.open(dep.previewPath, "_blank")}
+   452→            disabled={!running}
+   453→          >
+   454→            <ExternalLink className="mr-1.5 size-3.5" /> Open app
+   455→          </Button>
+   456→          {running ? (
+   457→            <Button size="sm" variant="outline" onClick={() => act("stop")} disabled={busy}>
+   458→              {busy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Square className="mr-1.5 size-3.5" />} Stop
+   459→            </Button>
+   460→          ) : (
+   461→            <Button size="sm" variant="outline" onClick={() => act("start")} disabled={busy}>
+   462→              {busy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Play className="mr-1.5 size-3.5" />} Start
+   463→            </Button>
+   464→          )}
+   465→          <Button size="sm" variant="outline" onClick={() => act("restart")} disabled={busy}>
+   466→            {busy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <RotateCw className="mr-1.5 size-3.5" />} Restart
+   467→          </Button>
+   468→          <AlertDialog>
+   469→            <AlertDialogTrigger asChild>
+   470→              <Button size="sm" variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy}>
+   471→                <Trash2 className="mr-1.5 size-3.5" /> Delete
+   472→              </Button>
+   473→            </AlertDialogTrigger>
+   474→            <AlertDialogContent>
+   475→              <AlertDialogHeader>
+   476→                <AlertDialogTitle>Delete this deployment?</AlertDialogTitle>
+   477→                <AlertDialogDescription>
+   478→                  This permanently removes container <span className="font-mono">{dep.containerName}</span> and volume{" "}
+   479→                  <span className="font-mono">{dep.volumeName}</span>. All data will be lost.
+   480→                </AlertDialogDescription>
+   481→              </AlertDialogHeader>
+   482→              <AlertDialogFooter>
+   483→                <AlertDialogCancel>Cancel</AlertDialogCancel>
+   484→                <AlertDialogAction
+   485→                  onClick={remove}
+   486→                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+   487→                >
+   488→                  Delete
+   489→                </AlertDialogAction>
+   490→              </AlertDialogFooter>
+   491→            </AlertDialogContent>
+   492→          </AlertDialog>
+   493→        </div>
+   494→      </div>
+   495→
+   496→      {/* Status Badge section */}
+   497→      <StatusBadgeSection
+   498→        appName={dep.app?.name ?? "app"}
+   499→        status={dep.status}
+   500→        subdomain={dep.subdomain}
+   501→      />
+   502→
+   503→      {/* Deploy progress — connected line/dots visual */}
+   504→      <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+   505→        <h2 className="text-sm font-semibold">Deployment progress</h2>
+   506→        <div className="relative mt-4">
+   507→          {/* Vertical connecting line */}
+   508→          <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-border" />
+   509→          <ol className="relative space-y-4">
+   510→            {steps.map((s, i) => (
+   511→              <li key={s.label} className="flex items-start gap-4">
+   512→                <div className="relative z-10 flex size-6 shrink-0 items-center justify-center">
+   513→                  {s.state === "done" ? (
+   514→                    <span className="flex size-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/50">
+   515→                      <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+   516→                    </span>
+   517→                  ) : s.state === "active" ? (
+   518→                    <span className="flex size-6 items-center justify-center rounded-full bg-brand-soft">
+   519→                      <Loader2 className="size-4 animate-spin text-brand" />
+   520→                    </span>
+   521→                  ) : (
+   522→                    <span className="flex size-6 items-center justify-center rounded-full border border-border bg-background">
+   523→                      <Circle className="size-3 text-muted-foreground/40" />
+   524→                    </span>
+   525→                  )}
+   526→                </div>
+   527→                <span
+   528→                  className={`pt-1 text-sm ${
+   529→                    s.state === "done" ? "text-foreground" : s.state === "active" ? "font-medium text-foreground" : "text-muted-foreground"
+   530→                  }`}
+   531→                >
+   532→                  {s.label}
+   533→                  {s.state === "done" && i === steps.length - 1 && (
+   534→                    <span className="ml-2 text-xs text-emerald-600 dark:text-emerald-400">✓</span>
+   535→                  )}
+   536→                </span>
+   537→              </li>
+   538→            ))}
+   539→          </ol>
+   540→        </div>
+   541→      </div>
+   542→
+   543→      {/* Details + logs */}
+   544→      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+   545→        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+   546→          <h2 className="text-sm font-semibold">Runtime details</h2>
+   547→          <dl className="mt-3 space-y-2.5 text-sm">
+   548→            <Detail icon={<Server className="size-3.5" />} label="Container" value={dep.containerName} mono copyable />
+   549→            <Detail icon={<Database className="size-3.5" />} label="Volume" value={dep.volumeName} mono copyable />
+   550→            <Detail icon={<Server className="size-3.5" />} label="Container ID" value={dep.containerId ?? "—"} mono />
+   551→            <Detail icon={<Globe className="size-3.5" />} label="Subdomain" value={`${dep.subdomain}.apps.local`} mono copyable />
+   552→            <Detail icon={<Cpu className="size-3.5" />} label="CPU limit" value="0.5 core" />
+   553→            <Detail icon={<MemoryStick className="size-3.5" />} label="Memory limit" value="512 MB" />
+   554→          </dl>
+   555→          <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-4">
+   556→            <Badge variant="secondary" className="gap-1">
+   557→              <Server className="size-3" /> {dep.app?.dockerImage ?? "unknown"}
+   558→            </Badge>
+   559→            <Badge variant="outline">port {dep.port ?? "—"}</Badge>
+   560→          </div>
+   561→        </div>
+   562→
+   563→        <div className="flex flex-col rounded-2xl border border-border bg-card p-5 shadow-sm">
+   564→          <div className="flex items-center justify-between">
+   565→            <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+   566→              <Terminal className="size-4" /> Container logs
+   567→            </h2>
+   568→            <span className="text-[11px] text-muted-foreground">{logs.length} lines</span>
+   569→          </div>
+   570→          <div
+   571→            ref={logRef}
+   572→            className="scroll-thin mt-3 h-72 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 font-mono text-[11px] leading-relaxed text-zinc-300 shadow-inner-terminal"
+   573→          >
+   574→            {logs.length === 0 ? (
+   575→              <p className="text-zinc-500">No logs yet.</p>
+   576→            ) : (
+   577→              logs.map((l, i) => (
+   578→                <div key={i} className="flex gap-3">
+   579→                  <span className="shrink-0 text-zinc-700 select-none w-6 text-right">{i + 1}</span>
+   580→                  <span className="shrink-0 text-emerald-700">{new Date(l.t).toLocaleTimeString()}</span>
+   581→                  <span className={l.stream === "stderr" ? "text-red-400" : "text-zinc-300"}>{l.message}</span>
+   582→                </div>
+   583→              ))
+   584→            )}
+   585→          </div>
+   586→        </div>
+   587→      </div>
+   588→
+   589→      {/* Environment Variables */}
+   590→      {dep.envVars && Object.keys(dep.envVars).length > 0 && (
+   591→        <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+   592→          <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+   593→            <Variable className="size-4" /> Environment variables
+   594→          </h2>
+   595→          <p className="mt-0.5 text-[11px] text-muted-foreground">
+   596→            Custom environment variables configured for this deployment.
+   597→          </p>
+   598→          <div className="mt-3 overflow-hidden rounded-lg border border-border/60">
+   599→            <table className="w-full text-sm">
+   600→              <thead className="border-b border-border/60 bg-muted/30">
+   601→                <tr>
+   602→                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Key</th>
+   603→                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Value</th>
+   604→                </tr>
+   605→              </thead>
+   606→              <tbody>
+   607→                {Object.entries(dep.envVars).map(([key, value]) => (
+   608→                  <tr key={key} className="border-b border-border/30 last:border-b-0">
+   609→                    <td className="px-3 py-2 font-mono text-xs font-medium">{key}</td>
+   610→                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+   611→                      {value.length > 60 ? value.slice(0, 57) + "…" : value}
+   612→                    </td>
+   613→                  </tr>
+   614→                ))}
+   615→              </tbody>
+   616→            </table>
+   617→          </div>
+   618→        </div>
+   619→      )}
+   620→
+   621→      {/* Volume data browser */}
+   622→      <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+   623→        <div className="flex flex-wrap items-center justify-between gap-2">
+   624→          <div>
+   625→            <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+   626→              <Database className="size-4" /> Persistent volume data
+   627→            </h2>
+   628→            <p className="mt-0.5 text-[11px] text-muted-foreground">
+   629→              The keys stored in <span className="font-mono">{dep.volumeName}</span>. Survives stop / restart.
+   630→            </p>
+   631→          </div>
+   632→          <Button
+   633→            variant="outline"
+   634→            size="sm"
+   635→            onClick={loadVolume}
+   636→            disabled={volumeLoading}
+   637→            className="gap-1.5"
+   638→          >
+   639→            {volumeLoading ? (
+   640→              <Loader2 className="size-3.5 animate-spin" />
+   641→            ) : (
+   642→              <RotateCw className="size-3.5" />
+   643→            )}
+   644→            Refresh
+   645→          </Button>
+   646→        </div>
+   647→
+   648→        {volumeKeys === null ? (
+   649→          <div className="mt-4 rounded-lg border border-dashed border-border p-6 text-center">
+   650→            <Database className="mx-auto size-6 text-muted-foreground/40" />
+   651→            <p className="mt-2 text-xs text-muted-foreground">
+   652→              Click "Refresh" to inspect the volume contents.
+   653→            </p>
+   654→          </div>
+   655→        ) : volumeKeys.length === 0 ? (
+   656→          <div className="mt-4 rounded-lg border border-dashed border-border p-6 text-center">
+   657→            <Database className="mx-auto size-6 text-muted-foreground/40" />
+   658→            <p className="mt-2 text-xs text-muted-foreground">
+   659→              Volume is empty. Use the deployed app to write some data, then refresh.
+   660→            </p>
+   661→          </div>
+   662→        ) : (
+   663→          <div className="mt-4 max-h-72 overflow-y-auto scroll-thin rounded-lg border border-border/60">
+   664→            <table className="w-full text-xs">
+   665→              <thead className="sticky top-0 bg-muted/60 backdrop-blur">
+   666→                <tr>
+   667→                  <th className="px-3 py-2 text-left font-medium uppercase tracking-wider text-muted-foreground">
+   668→                    Key
+   669→                  </th>
+   670→                  <th className="px-3 py-2 text-left font-medium uppercase tracking-wider text-muted-foreground">
+   671→                    Value
+   672→                  </th>
+   673→                  <th className="px-3 py-2 text-right font-medium uppercase tracking-wider text-muted-foreground">
+   674→                    Size
+   675→                  </th>
+   676→                </tr>
+   677→              </thead>
+   678→              <tbody>
+   679→                {volumeKeys.map((k) => {
+   680→                  const v = volumeValues[k] ?? "";
+   681→                  const display = v.length > 80 ? v.slice(0, 80) + "…" : v;
+   682→                  return (
+   683→                    <tr key={k} className="border-t border-border/40 hover:bg-muted/30">
+   684→                      <td className="px-3 py-2 font-mono text-brand">{k}</td>
+   685→                      <td className="px-3 py-2 font-mono text-foreground/80 break-all">{display || <span className="text-muted-foreground/40">—</span>}</td>
+   686→                      <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+   687→                        {new Blob([v]).size} B
+   688→                      </td>
+   689→                    </tr>
+   690→                  );
+   691→                })}
+   692→              </tbody>
+   693→            </table>
+   694→          </div>
+   695→        )}
+   696→        {volumeKeys && volumeKeys.length > 20 && (
+   697→          <p className="mt-2 text-[11px] text-muted-foreground">
+   698→            Showing first 20 of {volumeKeys.length} keys.
+   699→          </p>
+   700→        )}
+   701→      </div>
+   702→    </div>
+   703→  );
+   704→}
+   705→
+   706→/* ---------- Health metric card ---------- */
+   707→
+   708→function MetricCard({
+   709→  icon,
+   710→  label,
+   711→  value,
+   712→  children,
+   713→}: {
+   714→  icon: React.ReactNode;
+   715→  label: string;
+   716→  value: string;
+   717→  children?: React.ReactNode;
+   718→}) {
+   719→  return (
+   720→    <div className="flex flex-col rounded-xl border border-border bg-muted/30 p-3">
+   721→      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+   722→        {icon} {label}
+   723→      </div>
+   724→      <p className="mt-1 text-base font-bold tabular-nums">{value}</p>
+   725→      {children}
+   726→    </div>
+   727→  );
+   728→}
+   729→
+   730→function formatHealthCheckTime(date: Date): string {
+   731→  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+   732→  if (diffSec < 5) return "just now";
+   733→  if (diffSec < 60) return `${diffSec}s ago`;
+   734→  const mins = Math.floor(diffSec / 60);
+   735→  return `${mins}m ago`;
+   736→}
+   737→
+   738→/* ---------- Detail row ---------- */
+   739→
+   740→function Detail({
+   741→  icon,
+   742→  label,
+   743→  value,
+   744→  mono,
+   745→  copyable,
+   746→}: {
+   747→  icon: React.ReactNode;
+   748→  label: string;
+   749→  value: string;
+   750→  mono?: boolean;
+   751→  copyable?: boolean;
+   752→}) {
+   753→  return (
+   754→    <div className="flex items-center justify-between gap-3">
+   755→      <dt className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+   756→        {icon} {label}
+   757→      </dt>
+   758→      <dd className="flex items-center gap-1.5">
+   759→        <span className={`truncate text-xs ${mono ? "font-mono" : ""}`}>{value}</span>
+   760→        {copyable && value !== "—" && (
+   761→          <button
+   762→            onClick={() => {
+   763→              navigator.clipboard?.writeText(value);
+   764→              toast.success("Copied");
+   765→            }}
+   766→            className="text-muted-foreground transition-colors hover:text-foreground"
+   767→            aria-label="Copy"
+   768→          >
+   769→            <Copy className="size-3" />
+   770→          </button>
+   771→        )}
+   772→      </dd>
+   773→    </div>
+   774→  );
+   775→}
+   776→
+   777→function computeSteps(status: string): { label: string; state: "done" | "active" | "pending" }[] {
+   778→  const labels = [
+   779→    "Creating deployment",
+   780→    "Creating volume",
+   781→    "Creating container",
+   782→    "Starting application",
+   783→    "Deployment ready",
+   784→  ];
+   785→  const order: Record<string, number> = {
+   786→    pending: 0,
+   787→    creating: 1,
+   788→    created: 2,
+   789→    running: 5,
+   790→    stopped: 5,
+   791→    exited: 5,
+   792→    failed: 5,
+   793→    dead: 5,
+   794→  };
+   795→  const progress = order[status] ?? 0;
+   796→  return labels.map((label, i) => {
+   797→    if (progress >= 5) return { label, state: "done" as const };
+   798→    if (i < progress) return { label, state: "done" as const };
+   799→    if (i === progress) return { label, state: "active" as const };
+   800→    return { label, state: "pending" as const };
+   801→  });
+   802→}
+   803→
+   804→function timeAgo(iso: string): string {
+   805→  const diff = Date.now() - new Date(iso).getTime();
+   806→  const mins = Math.floor(diff / 60000);
+   807→  if (mins < 1) return "just now";
+   808→  if (mins < 60) return `${mins}m ago`;
+   809→  const hrs = Math.floor(mins / 60);
+   810→  if (hrs < 24) return `${hrs}h ago`;
+   811→  const days = Math.floor(hrs / 24);
+   812→  return `${days}d ago`;
+   813→}
+   814→
+   815→function uptimeSince(iso: string): string {
+   816→  const diff = Date.now() - new Date(iso).getTime();
+   817→  const mins = Math.floor(diff / 60000);
+   818→  if (mins < 1) return "<1m";
+   819→  if (mins < 60) return `${mins}m`;
+   820→  const hrs = Math.floor(mins / 60);
+   821→  const remainMins = mins % 60;
+   822→  if (hrs < 24) return remainMins > 0 ? `${hrs}h ${remainMins}m` : `${hrs}h`;
+   823→  const days = Math.floor(hrs / 24);
+   824→  return `${days}d`;
+   825→}
+   826→
+   827→/* ---------- Performance Sparkline Section ---------- */
+   828→
+   829→const DEPLOY_SPARKLINE_POINTS = 30;
+   830→
+   831→function DeploymentPerformanceSparklines({
+   832→  containerId,
+   833→  status,
+   834→  metrics,
+   835→}: {
+   836→  containerId: string;
+   837→  status: string;
+   838→  metrics: { cpuUsagePercent: number; memoryUsagePercent: number; responseLatencyMs: number; healthScore: number };
+   839→}) {
+   840→  const running = status === "running";
+   841→  const color = sparklineColor(status);
+   842→
+   843→  // Base metrics from getContainerMetrics
+   844→  const baseCpu = metrics.cpuUsagePercent;
+   845→  const baseMemory = metrics.memoryUsagePercent;
+   846→  const baseNetwork = metrics.responseLatencyMs / 150 * 40 + 10; // ~10-50
+   847→  const baseDisk = metrics.healthScore * 0.3 + 5; // ~5-35
+   848→
+   849→  // Tick counter drives series evolution (only ticks for running deployments)
+   850→  const [tick, setTick] = useState(0);
+   851→
+   852→  // Auto-refresh every 5 seconds for running deployments
+   853→  useEffect(() => {
+   854→    if (!running) return;
+   855→    const t = setInterval(() => setTick((n) => n + 1), 5000);
+   856→    return () => clearInterval(t);
+   857→  }, [running]);
+   858→
+   859→  // Compute full series from containerId + tick (fully derived)
+   860→  const series = useMemo(() => {
+   861→    const cpu = generateTimeSeries(baseCpu, DEPLOY_SPARKLINE_POINTS, 4, `dep-${containerId}:cpu`);
+   862→    const memory = generateTimeSeries(baseMemory, DEPLOY_SPARKLINE_POINTS, 3, `dep-${containerId}:mem`);
+   863→    const network = generateTimeSeries(baseNetwork, DEPLOY_SPARKLINE_POINTS, 5, `dep-${containerId}:net`);
+   864→    const disk = generateTimeSeries(baseDisk, DEPLOY_SPARKLINE_POINTS, 3, `dep-${containerId}:disk`);
+   865→    // Apply tick-based evolution
+   866→    let c = cpu, m = memory, n = network, d = disk;
+   867→    for (let i = 0; i < tick; i++) {
+   868→      c = tickTimeSeries(c, baseCpu, 4, i + 1);
+   869→      m = tickTimeSeries(m, baseMemory, 3, i + 1);
+   870→      n = tickTimeSeries(n, baseNetwork, 5, i + 1);
+   871→      d = tickTimeSeries(d, baseDisk, 3, i + 1);
+   872→    }
+   873→    return { cpu: c, memory: m, network: n, disk: d };
+   874→  }, [containerId, baseCpu, baseMemory, baseNetwork, baseDisk, tick]);
+   875→
+   876→  const charts: {
+   877→    key: string;
+   878→    label: string;
+   879→    icon: React.ReactNode;
+   880→    data: number[];
+   881→    unit: string;
+   882→    decimals?: number;
+   883→  }[] = [
+   884→    {
+   885→      key: "cpu",
+   886→      label: "CPU Usage",
+   887→      icon: <Cpu className="size-4" />,
+   888→      data: series.cpu,
+   889→      unit: "%",
+   890→    },
+   891→    {
+   892→      key: "memory",
+   893→      label: "Memory Usage",
+   894→      icon: <MemoryStick className="size-4" />,
+   895→      data: series.memory,
+   896→      unit: "%",
+   897→    },
+   898→    {
+   899→      key: "network",
+   900→      label: "Network I/O",
+   901→      icon: <Wifi className="size-4" />,
+   902→      data: series.network,
+   903→      unit: " MB/s",
+   904→      decimals: 1,
+   905→    },
+   906→    {
+   907→      key: "disk",
+   908→      label: "Disk I/O",
+   909→      icon: <HardDriveUpload className="size-4" />,
+   910→      data: series.disk,
+   911→      unit: " MB/s",
+   912→      decimals: 1,
+   913→    },
+   914→  ];
+   915→
+   916→  return (
+   917→    <div className="mb-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+   918→      <h2 className="flex items-center gap-2 text-sm font-semibold">
+   919→        <Activity className="size-4 text-brand" /> Performance
+   920→      </h2>
+   921→      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+   922→        {charts.map((c) => {
+   923→          const current = c.data[c.data.length - 1] ?? 0;
+   924→          const prev = c.data[c.data.length - 2] ?? current;
+   925→          const trendUp = current >= prev;
+   926→          const min = Math.min(...c.data);
+   927→          const max = Math.max(...c.data);
+   928→          const displayVal = c.decimals ? current.toFixed(c.decimals) : Math.round(current);
+   929→          const displayMin = c.decimals ? min.toFixed(c.decimals) : Math.round(min);
+   930→          const displayMax = c.decimals ? max.toFixed(c.decimals) : Math.round(max);
+   931→          return (
+   932→            <div
+   933→              key={c.key}
+   934→              className="flex flex-col rounded-xl border border-border bg-muted/30 p-3"
+   935→            >
+   936→              <div className="flex items-center justify-between">
+   937→                <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+   938→                  {c.icon} {c.label}
+   939→                </span>
+   940→                <span className={`flex items-center gap-0.5 text-[10px] tabular-nums ${trendUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
+   941→                  {trendUp ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+   942→                  {Math.abs(Math.round(current - prev))}
+   943→                </span>
+   944→              </div>
+   945→              <p className="mt-1 text-xl font-bold tabular-nums">
+   946→                {displayVal}<span className="text-sm font-normal text-muted-foreground">{c.unit}</span>
+   947→              </p>
+   948→              <Sparkline
+   949→                data={c.data}
+   950→                color={color}
+   951→                width={140}
+   952→                height={32}
+   953→                strokeWidth={1.8}
+   954→                showArea
+   955→                id={`dep-${c.key}`}
+   956→                className="mt-2 w-full"
+   957→              />
+   958→              <p className="mt-1.5 text-[10px] tabular-nums text-muted-foreground">
+   959→                Min {displayMin}{c.unit} · Max {displayMax}{c.unit}
+   960→              </p>
+   961→            </div>
+   962→          );
+   963→        })}
+   964→      </div>
+   965→    </div>
+   966→  );
+   967→}
+   968→
+   969→/* ---------- Status Badge Section ---------- */
+   970→
+   971→function badgeColorForStatus(status: string): string {
+   972→  switch (status) {
+   973→    case "running":
+   974→      return "brightgreen";
+   975→    case "pending":
+   976→    case "creating":
+   977→      return "yellow";
+   978→    case "failed":
+   979→    case "dead":
+   980→      return "red";
+   981→    case "stopped":
+   982→    case "exited":
+   983→      return "gray";
+   984→    default:
+   985→      return "lightgray";
+   986→  }
+   987→}
+   988→
+   989→function badgeLabelForStatus(status: string): string {
+   990→  switch (status) {
+   991→    case "running":
+   992→      return "running";
+   993→    case "pending":
+   994→      return "pending";
+   995→    case "creating":
+   996→      return "creating";
+   997→    case "failed":
+   998→      return "failed";
+   999→    case "dead":
+  1000→      return "dead";
+  1001→    case "stopped":
+  1002→      return "stopped";
+  1003→    case "exited":
+  1004→      return "exited";
+  1005→    default:
+  1006→      return status;
+  1007→  }
+  1008→}
+  1009→
+  1010→function StatusBadgeSection({
+  1011→  appName,
+  1012→  status,
+  1013→  subdomain,
+  1014→}: {
+  1015→  appName: string;
+  1016→  status: string;
+  1017→  subdomain: string;
+  1018→}) {
+  1019→  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  1020→
+  1021→  const color = badgeColorForStatus(status);
+  1022→  const label = badgeLabelForStatus(status);
+  1023→  const slug = appName.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
+  1024→  const badgeUrl = `https://img.shields.io/badge/${slug}-${label}-${color}`;
+  1025→
+  1026→  const snippets = [
+  1027→    { format: "Markdown", code: `![${appName} status](${badgeUrl})` },
+  1028→    { format: "HTML", code: `<img src="${badgeUrl}" alt="${appName} status" />` },
+  1029→    { format: "URL", code: badgeUrl },
+  1030→  ];
+  1031→
+  1032→  function copySnippet(idx: number) {
+  1033→    navigator.clipboard?.writeText(snippets[idx].code);
+  1034→    setCopiedIdx(idx);
+  1035→    toast.success("Copied to clipboard");
+  1036→    setTimeout(() => setCopiedIdx(null), 1500);
+  1037→  }
+  1038→
+  1039→  return (
+  1040→    <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+  1041→      <h2 className="flex items-center gap-2 text-sm font-semibold">
+  1042→        <Shield className="size-4 text-brand" /> Status Badge
+  1043→      </h2>
+  1044→      <p className="mt-0.5 text-[11px] text-muted-foreground">
+  1045→        Embed a live status badge in your README, docs, or dashboard.
+  1046→      </p>
+  1047→
+  1048→      {/* Badge preview */}
+  1049→      <div className="mt-4 flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-4">
+  1050→        <img
+  1051→          src={badgeUrl}
+  1052→          alt={`${appName} ${status}`}
+  1053→          className="h-5"
+  1054→          loading="lazy"
+  1055→        />
+  1056→        <span className="text-xs text-muted-foreground">
+  1057→          Preview — auto-updates with deployment status
+  1058→        </span>
+  1059→      </div>
+  1060→
+  1061→      {/* Copyable snippets */}
+  1062→      <div className="mt-3 space-y-2">
+  1063→        {snippets.map((s, i) => (
+  1064→          <div key={s.format} className="flex items-center gap-2">
+  1065→            <span className="w-16 shrink-0 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+  1066→              {s.format}
+  1067→            </span>
+  1068→            <code className="flex-1 truncate rounded-md border border-border/60 bg-muted/40 px-2.5 py-1.5 font-mono text-xs text-foreground/80">
+  1069→              {s.code}
+  1070→            </code>
+  1071→            <button
+  1072→              type="button"
+  1073→              onClick={() => copySnippet(i)}
+  1074→              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+  1075→              aria-label={`Copy ${s.format}`}
+  1076→            >
+  1077→              {copiedIdx === i ? (
+  1078→                <CheckCheck className="size-3.5 text-brand" />
+  1079→              ) : (
+  1080→                <Copy className="size-3.5" />
+  1081→              )}
+  1082→            </button>
+  1083→          </div>
+  1084→        ))}
+  1085→      </div>
+  1086→
+  1087→      <p className="mt-3 text-[11px] text-muted-foreground">
+  1088→        Badge URL: <span className="font-mono text-foreground/70">{badgeUrl}</span>
+  1089→      </p>
+  1090→    </div>
+  1091→  );
+  1092→}
+  1093→
