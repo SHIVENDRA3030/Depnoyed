@@ -107,7 +107,7 @@ export async function getSessionUser() {
     if (!session) return null;
     const user = await db.user.findUnique({
       where: { id: session.uid },
-      select: { id: true, email: true, name: true, createdAt: true },
+      select: { id: true, email: true, name: true, createdAt: true, isAdmin: true },
     });
     return user;
   } catch {

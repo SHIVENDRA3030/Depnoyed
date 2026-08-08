@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Rocket, Search, Boxes, Container, Database, Globe, ArrowRight, Loader2, Sparkles, Zap, Flame, Star, TrendingUp, FlaskConical, Globe2, Wrench, FileText, Heart, Download, Clock } from "lucide-react";
+import { Rocket, Search, Boxes, Container, Database, Globe, ArrowRight, Loader2, Sparkles, Zap, Flame, Star, TrendingUp, FlaskConical, Globe2, Wrench, FileText, Heart, Download, Clock, GitCompare } from "lucide-react";
 import { api, navigate, useAuth, type AppItem, type DeploymentItem, ApiError } from "@/lib/store";
+import { useCompare } from "@/lib/compare-store";
 import { AppLogo } from "@/components/marketplace/app-logo";
 import { DeployModal } from "@/components/marketplace/deploy-modal";
 import { Button } from "@/components/ui/button";
@@ -69,7 +70,7 @@ export function MarketplaceView() {
     <div>
       {/* Hero */}
       <section className="relative isolate overflow-hidden border-b border-border/80">
-        <div className="absolute inset-0 -z-20 hero-gradient" />
+        <div className="absolute inset-0 -z-20 hero-gradient mesh-gradient" />
         <div className="absolute inset-0 -z-10 bg-grid opacity-30 [mask-image:radial-gradient(ellipse_at_top,black,transparent_75%)]" />
         <div className="mx-auto max-w-6xl px-4 py-14 sm:py-20">
           <div className="mx-auto max-w-2xl text-center">
@@ -271,6 +272,9 @@ function FeaturedAppCard({ app, rank }: { app: AppItem; rank: number }) {
 function AppCard({ app }: { app: AppItem }) {
   const user = useAuth((s) => s.user);
   const [modalOpen, setModalOpen] = useState(false);
+  const inCompare = useCompare((s) => s.has(app.slug));
+  const toggleCompare = useCompare((s) => s.toggle);
+  const compareCount = useCompare((s) => s.slugs.length);
   const [fav, setFav] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -335,6 +339,14 @@ function AppCard({ app }: { app: AppItem }) {
             aria-label={fav ? "Remove from favorites" : "Add to favorites"}
           >
             <Heart className={`size-3.5 transition-colors ${fav ? "fill-rose-500 text-rose-500" : ""}`} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleCompare(app.slug); if (!inCompare && compareCount >= 3) toast.info("Compare tray full (max 3)"); }}
+            className={`inline-flex items-center justify-center rounded-md p-1 transition-colors ${inCompare ? "text-brand bg-brand-soft" : "text-muted-foreground/60 hover:bg-muted hover:text-brand"}`}
+            aria-label={inCompare ? "Remove from compare" : "Add to compare"}
+            title={inCompare ? "Remove from compare" : "Add to compare"}
+          >
+            <GitCompare className="size-3.5" />
           </button>
           <button
             onClick={handleDeploy}

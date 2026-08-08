@@ -4,6 +4,14 @@ import { create } from "zustand";
 
 /* ------------------------------- API types -------------------------------- */
 
+export interface UserItem {
+  id: string;
+  email: string;
+  name: string | null;
+  isAdmin: boolean;
+  createdAt: string;
+}
+
 export interface AppItem {
   id: string;
   name: string;
@@ -14,7 +22,12 @@ export interface AppItem {
   logo: string | null;
   category: string;
   simulator: string;
+  readme: string | null;
+  repository: string | null;
+  website: string | null;
+  version: string | null;
   createdAt: string;
+  updatedAt: string;
   deploymentCount: number;
 }
 
@@ -122,7 +135,8 @@ export type Route =
   | { name: "app"; slug: string }
   | { name: "dashboard" }
   | { name: "deployment"; id: string }
-  | { name: "settings" };
+  | { name: "settings" }
+  | { name: "admin" };
 
 export function parseHash(): Route {
   const hash = window.location.hash.replace(/^#\/?/, "");
@@ -131,6 +145,7 @@ export function parseHash(): Route {
   if (parts[0] === "login") return { name: "login" };
   if (parts[0] === "dashboard") return { name: "dashboard" };
   if (parts[0] === "settings") return { name: "settings" };
+  if (parts[0] === "admin") return { name: "admin" };
   if (parts[0] === "apps" && parts[1]) return { name: "app", slug: decodeURIComponent(parts[1]) };
   if (parts[0] === "deployments" && parts[1]) return { name: "deployment", id: decodeURIComponent(parts[1]) };
   return { name: "marketplace" };
@@ -146,6 +161,8 @@ export function routeToHash(route: Route): string {
       return "#/dashboard";
     case "settings":
       return "#/settings";
+    case "admin":
+      return "#/admin";
     case "app":
       return `#/apps/${encodeURIComponent(route.slug)}`;
     case "deployment":

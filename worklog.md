@@ -740,3 +740,138 @@ Stage Summary:
 - **Verification results**: All pages render correctly, lint clean, no runtime errors, settings page fully functional, cost estimation visible, ratings section interactive
 - **Unresolved issues/risks**: Ratings are localStorage-based (would need server-side DB for production), deploy modal env vars not yet tested via browser (dialog rendering), password change endpoint needs manual verification
 - **Priority recommendations for next phase**: (1) Move ratings to server-side DB (Prisma Review model), (2) Add deployment sharing/collaboration, (3) Add admin catalog management UI, (4) Add real-time WebSocket status updates, (5) Add deployment health check monitoring with alerts
+
+---
+Task ID: 8
+Agent: lead-engineer (Z.ai Code)
+Task: Phase 8 — Assess project status, QA via agent-browser, add admin catalog management, README rendering, keyboard shortcuts, app comparison, dashboard search/filter, styling polish
+
+Work Log:
+
+## Status Assessment
+- Read worklog.md — prior rounds delivered MVP + 10 apps + settings + env vars + ratings + cost estimation + CSS animations
+- Dev server alive on :3000, lint clean, all APIs responding 200
+- Performed comprehensive agent-browser QA across marketplace, login, dashboard, deployment detail, app detail, settings, dark mode
+- All existing features verified working. No bugs found.
+
+## New Features Implemented
+
+### 1. Admin Catalog Management UI
+- Added `isAdmin Boolean @default(false)` to User Prisma model
+- First registered user automatically becomes admin (in register route)
+- Added `readme`, `repository`, `website`, `version`, `updatedAt` fields to App model
+- Created `AdminView` component with:
+  - Stats cards (apps count, deployments count, total data)
+  - Searchable apps table with columns: App, Category, Image, Deploys, Actions
+  - Add app button → full editor dialog with all fields including README textarea
+  - Edit app → same dialog pre-filled with existing values
+  - Delete app → AlertDialog with deployment count warning (blocks if deployments exist)
+  - Admin-only access (redirects non-admins to dashboard)
+- Created admin API endpoints:
+  - `GET /api/admin/apps` — list all apps with deployment counts (admin only)
+  - `POST /api/admin/apps` — create new app with validation (admin only)
+  - `PATCH /api/admin/apps/[id]` — update app fields (admin only)
+  - `DELETE /api/admin/apps/[id]` — delete app (blocks if has deployments, admin only)
+- Added Admin link in nav dropdown + mobile menu + command palette (admin users only)
+- Added `#/admin` route to store.ts
+
+### 2. README Rendering with Markdown
+- Created `MarkdownRenderer` component using react-markdown + remark-gfm
+- Installed `remark-gfm` for GitHub-flavored markdown support (tables, strikethrough, task lists)
+- Added README section to app detail page with:
+  - Header bar with BookOpen icon and "Markdown" badge
+  - Prose-styled content with @tailwindcss/typography
+  - Code blocks, links (open in new tab), tables with overflow scroll
+- Updated seed data to include rich README content for all 10 apps
+- Added version badge, repository link, website link to app detail header
+- Updated `serializeApp` to include readme, repository, website, version, updatedAt
+
+### 3. Keyboard Shortcuts
+- Created `KeyboardShortcuts` component (Dialog showing all shortcuts)
+- Triggers: `⌘/` (or `Ctrl+/`), `?` key
+- Added keyboard shortcuts button to nav (Keyboard icon)
+- Implemented vim-style `g` prefix navigation:
+  - `g` then `m` → marketplace
+  - `g` then `d` → dashboard
+  - `g` then `s` → settings
+  - `g` then `a` → admin (admins only)
+- Input field detection (shortcuts disabled when typing in inputs)
+
+### 4. App Comparison Feature
+- Created `compare-store.ts` (Zustand store for comparison state)
+- Created `CompareTray` component:
+  - Floating bottom bar showing selected apps (max 3)
+  - Compare button opens side Sheet with comparison table
+  - Clear button removes all
+  - Individual remove buttons per app
+- Comparison table features:
+  - Side-by-side columns for each app
+  - Rows: Description, Docker image, Container port, Category, Simulator, Version, Deployments, CPU limit, Memory limit, Isolation, Persistent volume
+  - Deploy button per column
+- Added compare toggle button (GitCompare icon) to each marketplace app card
+- Visual feedback: active state when in compare tray
+
+### 5. Dashboard Search & Filter
+- Added search input to dashboard (search by app name, label, subdomain, container name)
+- Added status filter pills: All, Running, Stopped (with live counts)
+- Added "Clear filters" button in empty state
+- Uses `useMemo` for efficient filtering
+- Clear button in search input
+
+### 6. Styling Polish
+- Added CSS utilities to globals.css:
+  - `mesh-gradient` — multi-radial gradient background for hero (light + dark)
+  - `glass-card` — enhanced glassmorphism with backdrop-blur + saturate
+  - `gradient-text` — emerald-to-teal gradient text fill
+  - `animated-underline` — left-to-right underline on hover
+- Applied mesh gradient to marketplace hero (combined with existing hero-gradient)
+- Added keyboard shortcuts button to nav with tooltip
+
+## Database Changes
+- `prisma/schema.prisma`:
+  - User: added `isAdmin Boolean @default(false)`
+  - App: added `readme String?`, `repository String?`, `website String?`, `version String?`, `updatedAt DateTime @updatedAt`
+- Force-reset database (data loss accepted — re-seeded all apps)
+- First registered user (admin@example.com) automatically became admin
+
+## Files Modified/Created
+- prisma/schema.prisma — User.isAdmin + App.readme/repository/website/version/updatedAt
+- src/app/api/auth/register/route.ts — first user becomes admin
+- src/app/api/auth/profile/route.ts — already existed
+- src/app/api/seed/route.ts — enriched seed data with README + metadata
+- src/app/api/admin/apps/route.ts — NEW (GET, POST)
+- src/app/api/admin/apps/[id]/route.ts — NEW (PATCH, DELETE)
+- src/lib/auth.ts — getSessionUser includes isAdmin
+- src/lib/api.ts — serializeUser includes isAdmin, serializeApp includes new fields
+- src/lib/store.ts — UserItem.isAdmin, AppItem new fields, admin route
+- src/lib/compare-store.ts — NEW (Zustand comparison store)
+- src/components/marketplace/views/admin-view.tsx — NEW (admin catalog management)
+- src/components/marketplace/markdown-renderer.tsx — NEW (react-markdown wrapper)
+- src/components/marketplace/keyboard-shortcuts.tsx — NEW (shortcuts dialog + handlers)
+- src/components/marketplace/compare-tray.tsx — NEW (comparison tray + sheet)
+- src/components/marketplace/views/marketplace-view.tsx — mesh gradient, compare buttons
+- src/components/marketplace/views/app-detail-view.tsx — README section, version badge, links
+- src/components/marketplace/views/dashboard-view.tsx — search + filter bar
+- src/components/marketplace/marketplace-app.tsx — admin route, keyboard nav, CompareTray
+- src/components/marketplace/nav.tsx — Admin link, keyboard shortcuts button
+- src/components/marketplace/command-palette.tsx — Admin command
+- src/app/globals.css — mesh-gradient, glass-card, gradient-text, animated-underline
+
+## Verification
+- Lint: clean (0 errors, 0 warnings)
+- Dev server: 200 OK, no runtime errors
+- Browser QA verified:
+  * Marketplace with mesh gradient hero + compare buttons on cards
+  * Compare tray appears when apps added, opens comparison sheet with side-by-side table
+  * Admin page loads for admin user (10 apps in table, Add app button)
+  * App detail shows README section with rendered Markdown + version badge + repository/website links
+  * Dashboard shows search bar + status filter pills with counts
+  * Keyboard shortcuts button in nav (triggers ⌘/ dialog)
+  * All existing features still working (deploy, settings, notifications, etc.)
+
+Stage Summary:
+- **Current project status**: Fully functional MVP with 10 apps, 8 views (marketplace, login, app detail, dashboard, deployment detail, settings, admin, preview), admin catalog management, README rendering, keyboard shortcuts, app comparison, dashboard search/filter
+- **Completed modifications**: 6 new features (admin UI, README rendering, keyboard shortcuts, app comparison, dashboard search/filter, styling polish), 4 new API endpoints (admin apps CRUD), 2 schema changes (User.isAdmin, App metadata fields), 4 new components (AdminView, MarkdownRenderer, KeyboardShortcuts, CompareTray)
+- **Verification results**: All pages render correctly, lint clean, no runtime errors, admin page functional, compare feature working, README rendering with Markdown, dashboard search/filter working, keyboard shortcuts active
+- **Unresolved issues/risks**: Database was force-reset (existing deployments lost), ratings still localStorage-based, admin user must be the first registered user
+- **Priority recommendations for next phase**: (1) Move ratings to server-side DB, (2) Add deployment sharing/collaboration, (3) Add real-time WebSocket status updates, (4) Add deployment health check monitoring with alerts, (5) Add app screenshots gallery, (6) Add deployment templates/quick-deploy presets

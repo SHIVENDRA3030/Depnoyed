@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Rocket, LayoutDashboard, LogOut, Store, Menu, Command, Settings } from "lucide-react";
+import { Rocket, LayoutDashboard, LogOut, Store, Menu, Command, Settings, Shield, Keyboard } from "lucide-react";
 import { useAuth, navigate } from "@/lib/store";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationCenter } from "@/components/marketplace/notification-center";
@@ -101,9 +101,23 @@ export function Nav() {
             onClick={() => {
               document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
             }}
+            title="Command palette (⌘K)"
           >
             <Command className="size-3.5" />
             <span className="text-xs">K</span>
+          </Button>
+
+          {/* Keyboard shortcuts help */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden text-muted-foreground sm:flex"
+            onClick={() => {
+              document.dispatchEvent(new KeyboardEvent("keydown", { key: "/", metaKey: true }));
+            }}
+            title="Keyboard shortcuts (⌘/)"
+          >
+            <Keyboard className="size-3.5" />
           </Button>
 
           {hydrated && user ? (
@@ -132,6 +146,11 @@ export function Nav() {
                 <DropdownMenuItem onClick={() => navigate({ name: "settings" })}>
                   <Settings className="mr-2 size-4" /> Settings
                 </DropdownMenuItem>
+                {user.isAdmin && (
+                  <DropdownMenuItem onClick={() => navigate({ name: "admin" })}>
+                    <Shield className="mr-2 size-4" /> Admin
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
@@ -193,6 +212,15 @@ export function Nav() {
                     onClick={() => { navigate({ name: "settings" }); setMobileOpen(false); }}
                   >
                     <Settings className="size-4" /> Settings
+                  </Button>
+                )}
+                {user?.isAdmin && (
+                  <Button
+                    variant="ghost"
+                    className="justify-start gap-2"
+                    onClick={() => { navigate({ name: "admin" }); setMobileOpen(false); }}
+                  >
+                    <Shield className="size-4" /> Admin
                   </Button>
                 )}
                 <div className="my-2 border-t border-border" />

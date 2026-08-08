@@ -8,6 +8,7 @@ import {
   Box,
   CommandIcon,
   Settings,
+  Shield,
 } from "lucide-react";
 import { api, navigate, useAuth, type AppItem, type DeploymentItem } from "@/lib/store";
 import {
@@ -122,6 +123,18 @@ export function CommandPalette() {
               <Settings className="size-4" />
               Settings
               <CommandShortcut>S</CommandShortcut>
+            </CommandItem>
+          )}
+          {user?.isAdmin && (
+            <CommandItem
+              onSelect={() => {
+                setOpen(false);
+                navigate({ name: "admin" });
+              }}
+            >
+              <Shield className="size-4" />
+              Admin
+              <CommandShortcut>A</CommandShortcut>
             </CommandItem>
           )}
         </CommandGroup>

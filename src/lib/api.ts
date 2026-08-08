@@ -59,7 +59,12 @@ export function serializeApp(app: AppWithCounts) {
     logo: app.logo,
     category: app.category,
     simulator: app.simulator,
+    readme: app.readme ?? null,
+    repository: app.repository ?? null,
+    website: app.website ?? null,
+    version: app.version ?? null,
     createdAt: app.createdAt.toISOString(),
+    updatedAt: app.updatedAt.toISOString(),
     deploymentCount: app._count?.deployments ?? 0,
   };
 }
@@ -97,11 +102,12 @@ export function serializeDeployment(
   };
 }
 
-export function serializeUser(user: Pick<User, "id" | "email" | "name" | "createdAt">) {
+export function serializeUser(user: Pick<User, "id" | "email" | "name" | "createdAt" | "isAdmin">) {
   return {
     id: user.id,
     email: user.email,
     name: user.name,
+    isAdmin: user.isAdmin,
     createdAt: user.createdAt.toISOString(),
   };
 }

@@ -10,9 +10,12 @@ import { AppDetailView } from "@/components/marketplace/views/app-detail-view";
 import { DashboardView } from "@/components/marketplace/views/dashboard-view";
 import { DeploymentView } from "@/components/marketplace/views/deployment-view";
 import { SettingsView } from "@/components/marketplace/views/settings-view";
+import { AdminView } from "@/components/marketplace/views/admin-view";
 import { Loader2 } from "lucide-react";
 import { CommandPalette } from "@/components/marketplace/command-palette";
 import { OnboardingBanner } from "@/components/marketplace/onboarding-banner";
+import { KeyboardShortcuts } from "@/components/marketplace/keyboard-shortcuts";
+import { CompareTray } from "@/components/marketplace/compare-tray";
 
 export function MarketplaceApp() {
   const [route, setRoute] = useState<Route>(() =>
@@ -38,7 +41,7 @@ export function MarketplaceApp() {
   // Auth-gate protected routes. Public: marketplace, app detail, login.
   useEffect(() => {
     if (hydrating) return;
-    const protectedRoute = route.name === "dashboard" || route.name === "deployment" || route.name === "settings";
+    const protectedRoute = route.name === "dashboard" || route.name === "deployment" || route.name === "settings" || route.name === "admin";
     if (protectedRoute && !user) {
       navigate({ name: "login" });
     }
@@ -50,6 +53,36 @@ export function MarketplaceApp() {
       navigate({ name: "dashboard" });
     }
   }, [user, route, hydrating]);
+
+  // G + key navigation (vim-style)
+  useEffect(() => {
+    let prefixPressed = false;
+    let timeout: ReturnType<typeof setTimeout>;
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+      if (isInput) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.key === "g" && !prefixPressed) {
+        prefixPressed = true;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => { prefixPressed = false; }, 1000);
+        return;
+      }
+      if (prefixPressed && user) {
+        prefixPressed = false;
+        clearTimeout(timeout);
+        const key = e.key.toLowerCase();
+        if (key === "m") { e.preventDefault(); navigate({ name: "marketplace" }); }
+        else if (key === "d") { e.preventDefault(); navigate({ name: "dashboard" }); }
+        else if (key === "s") { e.preventDefault(); navigate({ name: "settings" }); }
+        else if (key === "a" && user.isAdmin) { e.preventDefault(); navigate({ name: "admin" }); }
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("keydown", onKey); clearTimeout(timeout); };
+  }, [user]);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -66,6 +99,8 @@ export function MarketplaceApp() {
       </main>
       <Footer />
       <CommandPalette />
+      <KeyboardShortcuts />
+      <CompareTray />
     </div>
   );
 }
@@ -98,6 +133,8 @@ function InnerRouteView({ route }: { route: Route }) {
       return <DashboardView />;
     case "settings":
       return <SettingsView />;
+    case "admin":
+      return <AdminView />;
     case "deployment":
       return <DeploymentView id={route.id} />;
     default:

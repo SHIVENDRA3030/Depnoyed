@@ -303,6 +303,52 @@
   .animate-success-ring {
     animation: success-ring 0.6s ease-out;
   }
+
+  /* Mesh gradient background for hero */
+  .mesh-gradient {
+    background-image:
+      radial-gradient(at 20% 20%, oklch(0.96 0.05 162.48 / 0.5) 0px, transparent 50%),
+      radial-gradient(at 80% 10%, oklch(0.96 0.04 180 / 0.4) 0px, transparent 50%),
+      radial-gradient(at 50% 80%, oklch(0.96 0.03 170 / 0.3) 0px, transparent 50%),
+      radial-gradient(at 90% 70%, oklch(0.95 0.05 162.48 / 0.35) 0px, transparent 50%);
+  }
+  .dark .mesh-gradient {
+    background-image:
+      radial-gradient(at 20% 20%, oklch(0.18 0.05 162.48 / 0.4) 0px, transparent 50%),
+      radial-gradient(at 80% 10%, oklch(0.16 0.06 180 / 0.35) 0px, transparent 50%),
+      radial-gradient(at 50% 80%, oklch(0.18 0.04 170 / 0.3) 0px, transparent 50%),
+      radial-gradient(at 90% 70%, oklch(0.17 0.05 162.48 / 0.3) 0px, transparent 50%);
+  }
+
+  /* Enhanced glass effect */
+  .glass-card {
+    background: oklch(1 0 0 / 0.7);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+  }
+  .dark .glass-card {
+    background: oklch(0.205 0 0 / 0.7);
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    background: linear-gradient(135deg, oklch(0.696 0.17 162.48) 0%, oklch(0.628 0.19 200) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* Animated underline */
+  .animated-underline {
+    background-image: linear-gradient(var(--brand), var(--brand));
+    background-size: 0% 1px;
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+    transition: background-size 0.3s ease;
+  }
+  .animated-underline:hover {
+    background-size: 100% 1px;
+  }
 }
 
 /* Keyframes */

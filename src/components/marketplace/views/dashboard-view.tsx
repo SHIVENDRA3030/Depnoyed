@@ -29,6 +29,7 @@ import {
   Wifi,
   HardDriveUpload,
   DollarSign,
+  Search,
 } from "lucide-react";
 import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -42,6 +43,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -103,6 +105,8 @@ export function DashboardView() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchBusy, setBatchBusy] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const load = useCallback(async () => {
     try {
@@ -119,6 +123,25 @@ export function DashboardView() {
     const t = setInterval(load, 5000);
     return () => clearInterval(t);
   }, [load]);
+
+  const filteredDeployments = useMemo(() => {
+    if (!deployments) return [];
+    const q = searchQuery.trim().toLowerCase();
+    return deployments.filter((d) => {
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "running" && d.status === "running") ||
+        (statusFilter === "stopped" && (d.status === "stopped" || d.status === "exited"));
+      if (!matchesStatus) return false;
+      if (!q) return true;
+      return (
+        (d.app?.name?.toLowerCase().includes(q) ?? false) ||
+        (d.label?.toLowerCase().includes(q) ?? false) ||
+        d.subdomain.toLowerCase().includes(q) ||
+        d.containerName.toLowerCase().includes(q)
+      );
+    });
+  }, [deployments, searchQuery, statusFilter]);
 
   async function refresh() {
     setRefreshing(true);
@@ -321,6 +344,54 @@ export function DashboardView() {
         </div>
       )}
 
+      {/* Search & filter bar */}
+      {deployments && deployments.length > 0 && (
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by app name, label, or subdomain…"
+              className="pl-9"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {["all", "running", "stopped"].map((f) => (
+              <button
+                key={f}
+                onClick={() => setStatusFilter(f)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
+                  statusFilter === f
+                    ? "border-brand/40 bg-brand/10 text-brand"
+                    : "border-border bg-background text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {f === "all" && <Boxes className="size-3" />}
+                {f === "running" && <Activity className="size-3" />}
+                {f === "stopped" && <Square className="size-3" />}
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+                <span className="ml-0.5 text-[10px] text-muted-foreground/70">
+                  {f === "all"
+                    ? deployments.length
+                    : f === "running"
+                    ? deployments.filter((d) => d.status === "running").length
+                    : deployments.filter((d) => d.status === "stopped" || d.status === "exited").length}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-6">
         {deployments === null ? (
           <div className="space-y-3">
@@ -330,9 +401,17 @@ export function DashboardView() {
           </div>
         ) : deployments.length === 0 ? (
           <EmptyState />
+        ) : filteredDeployments.length === 0 ? (
+          <div className="flex flex-col items-center rounded-2xl border border-dashed border-border py-12 text-center">
+            <Search className="size-8 text-muted-foreground/40" />
+            <p className="mt-2 text-sm text-muted-foreground">No deployments match your search.</p>
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => { setSearchQuery(""); setStatusFilter("all"); }}>
+              Clear filters
+            </Button>
+          </div>
         ) : (
           <div className="space-y-3">
-            {deployments.map((d) => (
+            {filteredDeployments.map((d) => (
               <DeploymentRow
                 key={d.id}
                 d={d}

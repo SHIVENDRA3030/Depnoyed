@@ -22,6 +22,10 @@ import {
   MessageSquare,
   ThumbsUp,
   Send,
+  GitBranch,
+  Code,
+  FileText,
+  BookOpen,
 } from "lucide-react";
 import { api, navigate, useAuth, type AppItem, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -32,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { MarkdownRenderer } from "@/components/marketplace/markdown-renderer";
 
 export function AppDetailView({ slug }: { slug: string }) {
   const [app, setApp] = useState<AppItem | null>(null);
@@ -101,6 +106,11 @@ export function AppDetailView({ slug }: { slug: string }) {
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold tracking-tight">{app.name}</h1>
                 <Badge variant="secondary">{app.category}</Badge>
+                {app.version && (
+                  <Badge variant="outline" className="gap-1 font-mono">
+                    <GitBranch className="size-3" /> v{app.version}
+                  </Badge>
+                )}
                 {app.deploymentCount > 0 && (
                   <Badge variant="outline" className="gap-1 border-brand/30 bg-brand-soft/50 text-brand">
                     <Zap className="size-3" /> {app.deploymentCount} {app.deploymentCount === 1 ? "deployment" : "deployments"}
@@ -115,6 +125,26 @@ export function AppDetailView({ slug }: { slug: string }) {
                 <span className="inline-flex items-center gap-1 font-mono">
                   <Layers className="size-3" /> {app.dockerImage}
                 </span>
+                {app.repository && (
+                  <a
+                    href={app.repository}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-brand hover:underline"
+                  >
+                    <Code className="size-3" /> Repository <ExternalLink className="size-2.5" />
+                  </a>
+                )}
+                {app.website && (
+                  <a
+                    href={app.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-brand hover:underline"
+                  >
+                    <Globe className="size-3" /> Website <ExternalLink className="size-2.5" />
+                  </a>
+                )}
               </div>
             </div>
           </div>
@@ -174,6 +204,22 @@ export function AppDetailView({ slug }: { slug: string }) {
           <Spec icon={<ShieldCheck className="size-3.5" />} label="Isolation" value="Per-tenant volume + container" />
         </dl>
       </div>
+
+      {/* README */}
+      {app.readme && (
+        <div className="mt-6 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+          <div className="flex items-center gap-2 border-b border-border/40 bg-muted/20 px-5 py-3">
+            <BookOpen className="size-4 text-brand" />
+            <h2 className="text-sm font-semibold">README</h2>
+            <span className="text-[11px] text-muted-foreground">· Markdown</span>
+          </div>
+          <div className="px-5 py-4">
+            <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:scroll-mt-20 prose-headings:font-semibold prose-a:text-brand prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-zinc-950 prose-pre:text-zinc-100">
+              <MarkdownRenderer content={app.readme} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Ratings & Reviews */}
       <AppRatingsSection appSlug={app.slug} appName={app.name} />

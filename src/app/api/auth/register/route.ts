@@ -20,9 +20,13 @@ export const POST = withErrors(async (req: Request) => {
     return errorResponse("An account with this email already exists", 409, "EMAIL_TAKEN");
   }
 
+  // First registered user becomes admin automatically
+  const userCount = await db.user.count();
+  const isAdmin = userCount === 0;
+
   const user = await db.user.create({
-    data: { email, name, passwordHash: hashPassword(password) },
-    select: { id: true, email: true, name: true, createdAt: true },
+    data: { email, name, passwordHash: hashPassword(password), isAdmin },
+    select: { id: true, email: true, name: true, createdAt: true, isAdmin: true },
   });
 
   await setSessionCookie(user.id, user.email);

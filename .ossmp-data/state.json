@@ -423,6 +423,49 @@
         }
       ],
       "startedAt": "2026-08-08T13:12:27.261Z"
+    },
+    "ossmp-demo-counter-d58qdj-amdl": {
+      "id": "cnt_6eac8300c9e2",
+      "name": "ossmp-demo-counter-d58qdj-amdl",
+      "status": "running",
+      "image": "ossmp/demo-counter:1.0",
+      "port": 80,
+      "volumeName": "ossmp-vol-demo-counter-d58qdj-x0xf",
+      "simulator": "counter",
+      "cpuLimit": 0.5,
+      "memoryLimitMb": 512,
+      "env": {
+        "DEPLOYMENT_ID": "cmskgw722000cq6s9pkufxvgm",
+        "APP_SLUG": "demo-counter"
+      },
+      "logs": [
+        {
+          "t": "2026-08-08T14:26:55.055Z",
+          "stream": "stdout",
+          "message": "Creating container from image ossmp/demo-counter:1.0"
+        },
+        {
+          "t": "2026-08-08T14:26:55.055Z",
+          "stream": "stdout",
+          "message": "Mounting volume ossmp-vol-demo-counter-d58qdj-x0xf at /data"
+        },
+        {
+          "t": "2026-08-08T14:26:55.055Z",
+          "stream": "stdout",
+          "message": "Resource limits: cpu=0.5 memory=512MB"
+        },
+        {
+          "t": "2026-08-08T14:26:55.233Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=counter) on port 80"
+        },
+        {
+          "t": "2026-08-08T14:26:55.233Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:80"
+        }
+      ],
+      "startedAt": "2026-08-08T14:26:55.233Z"
     }
   },
   "volumes": {
@@ -457,6 +500,10 @@
     "ossmp-vol-demo-counter-kdmf7x-ne7d": {
       "name": "ossmp-vol-demo-counter-kdmf7x-ne7d",
       "createdAt": "2026-08-08T13:10:49.743Z"
+    },
+    "ossmp-vol-demo-counter-d58qdj-x0xf": {
+      "name": "ossmp-vol-demo-counter-d58qdj-x0xf",
+      "createdAt": "2026-08-08T14:26:55.048Z"
     }
   }
 }
