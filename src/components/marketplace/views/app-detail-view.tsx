@@ -18,12 +18,19 @@ import {
   Hash,
   Server,
   Layers,
+  Star,
+  MessageSquare,
+  ThumbsUp,
+  Send,
 } from "lucide-react";
 import { api, navigate, useAuth, type AppItem, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
 import { DeployModal } from "@/components/marketplace/deploy-modal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
 export function AppDetailView({ slug }: { slug: string }) {
@@ -168,6 +175,9 @@ export function AppDetailView({ slug }: { slug: string }) {
         </dl>
       </div>
 
+      {/* Ratings & Reviews */}
+      <AppRatingsSection appSlug={app.slug} appName={app.name} />
+
       {!user && (
         <div className="mt-6 flex flex-col items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand-soft p-5 sm:flex-row">
           <div>
@@ -217,4 +227,215 @@ function Spec({ icon, label, value, mono }: { icon: React.ReactNode; label: stri
       <dd className={`mt-1 text-xs ${mono ? "font-mono" : ""} text-foreground/80`}>{value}</dd>
     </div>
   );
+}
+
+/* -------------------------- Ratings & Reviews -------------------------- */
+
+interface Review {
+  id: string;
+  user: string;
+  rating: number;
+  text: string;
+  date: string;
+  helpful: number;
+}
+
+function getReviews(slug: string): Review[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const all = JSON.parse(localStorage.getItem("oss-reviews") || "{}");
+    return all[slug] || [];
+  } catch { return []; }
+}
+
+function saveReview(slug: string, review: Review) {
+  const all = JSON.parse(localStorage.getItem("oss-reviews") || "{}");
+  if (!all[slug]) all[slug] = [];
+  all[slug].unshift(review);
+  localStorage.setItem("oss-reviews", JSON.stringify(all));
+}
+
+function toggleHelpful(slug: string, reviewId: string): boolean {
+  const key = `oss-review-helpful-${reviewId}`;
+  if (localStorage.getItem(key)) return false;
+  localStorage.setItem(key, "1");
+  const all = JSON.parse(localStorage.getItem("oss-reviews") || "{}");
+  const reviews: Review[] = all[slug] || [];
+  const r = reviews.find((rev) => rev.id === reviewId);
+  if (r) { r.helpful = (r.helpful || 0) + 1; all[slug] = reviews; localStorage.setItem("oss-reviews", JSON.stringify(all)); }
+  return true;
+}
+
+function AppRatingsSection({ appSlug, appName }: { appSlug: string; appName: string }) {
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [userRating, setUserRating] = useState(0);
+  const [reviewText, setReviewText] = useState("");
+  const [hoverRating, setHoverRating] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const user = useAuth((s) => s.user);
+
+  useEffect(() => {
+    setReviews(getReviews(appSlug));
+  }, [appSlug]);
+
+  const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
+
+  async function submitReview() {
+    if (!user) { toast.info("Sign in to leave a review"); navigate({ name: "login" }); return; }
+    if (userRating === 0) { toast.error("Please select a rating"); return; }
+    setSubmitting(true);
+    // Simulate brief delay
+    await new Promise((r) => setTimeout(r, 300));
+    const review: Review = {
+      id: `rev-${Date.now()}`,
+      user: user.name || user.email.split("@")[0],
+      rating: userRating,
+      text: reviewText.trim(),
+      date: new Date().toISOString(),
+      helpful: 0,
+    };
+    saveReview(appSlug, review);
+    setReviews(getReviews(appSlug));
+    setUserRating(0);
+    setReviewText("");
+    setSubmitting(false);
+    toast.success("Review submitted!");
+  }
+
+  return (
+    <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+          <Star className="size-4" /> Ratings & Reviews
+        </h2>
+        {reviews.length > 0 && (
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-0.5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Star
+                  key={i}
+                  className={`size-4 ${i < Math.round(avgRating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"}`}
+                />
+              ))}
+            </div>
+            <span className="text-sm font-semibold">{avgRating.toFixed(1)}</span>
+            <span className="text-xs text-muted-foreground">({reviews.length})</span>
+          </div>
+        )}
+      </div>
+
+      {/* Rating distribution */}
+      {reviews.length > 0 && (
+        <div className="mt-3 space-y-1">
+          {[5, 4, 3, 2, 1].map((stars) => {
+            const count = reviews.filter((r) => r.rating === stars).length;
+            const pct = reviews.length > 0 ? (count / reviews.length) * 100 : 0;
+            return (
+              <div key={stars} className="flex items-center gap-2 text-xs">
+                <span className="w-3 text-right text-muted-foreground">{stars}</span>
+                <Star className="size-3 fill-amber-400 text-amber-400" />
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${pct}%` }} />
+                </div>
+                <span className="w-6 text-right text-muted-foreground">{count}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <Separator className="my-4" />
+
+      {/* Write a review */}
+      <div className="space-y-3">
+        <p className="text-sm font-medium">Write a review</p>
+        <div className="flex items-center gap-1">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setUserRating(i + 1)}
+              onMouseEnter={() => setHoverRating(i + 1)}
+              onMouseLeave={() => setHoverRating(0)}
+              className="transition-transform hover:scale-110"
+            >
+              <Star
+                className={`size-5 ${(i + 1) <= (hoverRating || userRating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"}`}
+              />
+            </button>
+          ))}
+          {userRating > 0 && (
+            <span className="ml-2 text-xs text-muted-foreground">{userRating} star{userRating !== 1 ? "s" : ""}</span>
+          )}
+        </div>
+        <Textarea
+          value={reviewText}
+          onChange={(e) => setReviewText(e.target.value)}
+          placeholder="Share your experience with this app… (optional)"
+          className="min-h-[80px] text-sm"
+          maxLength={500}
+        />
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">{reviewText.length}/500</span>
+          <Button size="sm" onClick={submitReview} disabled={submitting || userRating === 0}>
+            {submitting ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Send className="mr-1.5 size-3.5" />}
+            Submit review
+          </Button>
+        </div>
+      </div>
+
+      {/* Review list */}
+      {reviews.length > 0 && (
+        <div className="mt-5 space-y-4">
+          <Separator />
+          {reviews.slice(0, 10).map((review) => (
+            <div key={review.id} className="space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex size-7 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/20 to-teal-500/20 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                    {review.user.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium">{review.user}</span>
+                    <div className="flex items-center gap-0.5">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star key={i} className={`size-3 ${i < review.rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <span className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(review.date)}</span>
+              </div>
+              {review.text && <p className="text-sm text-muted-foreground">{review.text}</p>}
+              <button
+                onClick={() => { if (toggleHelpful(appSlug, review.id)) { setReviews(getReviews(appSlug)); } }}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-brand"
+              >
+                <ThumbsUp className="size-3" /> Helpful {review.helpful > 0 && `(${review.helpful})`}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {reviews.length === 0 && (
+        <div className="mt-3 flex flex-col items-center py-6 text-center">
+          <MessageSquare className="size-8 text-muted-foreground/40" />
+          <p className="mt-2 text-sm text-muted-foreground">No reviews yet. Be the first to share your experience!</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
 }

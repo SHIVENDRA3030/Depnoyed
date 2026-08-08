@@ -7,6 +7,7 @@ import {
   Rocket,
   Box,
   CommandIcon,
+  Settings,
 } from "lucide-react";
 import { api, navigate, useAuth, type AppItem, type DeploymentItem } from "@/lib/store";
 import {
@@ -109,6 +110,18 @@ export function CommandPalette() {
               <LayoutDashboard className="size-4" />
               Dashboard
               <CommandShortcut>D</CommandShortcut>
+            </CommandItem>
+          )}
+          {user && (
+            <CommandItem
+              onSelect={() => {
+                setOpen(false);
+                navigate({ name: "settings" });
+              }}
+            >
+              <Settings className="size-4" />
+              Settings
+              <CommandShortcut>S</CommandShortcut>
             </CommandItem>
           )}
         </CommandGroup>

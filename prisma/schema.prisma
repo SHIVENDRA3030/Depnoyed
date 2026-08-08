@@ -46,6 +46,7 @@ model Deployment {
   subdomain     String   @unique
   port          Int?
   label         String?
+  envVars       String?   // JSON-encoded key-value pairs
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

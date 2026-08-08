@@ -1,6 +1,6 @@
 "use client";
 
-import { Rocket, ShieldCheck, Container, Database } from "lucide-react";
+import { Rocket, ShieldCheck, Container, Database, Globe, Lock, Zap, Cpu } from "lucide-react";
 
 export function Footer() {
   return (
@@ -44,6 +44,9 @@ export function Footer() {
               <li className="flex items-center gap-2 text-muted-foreground">
                 <ShieldCheck className="size-3.5 text-brand" /> Tenant isolation
               </li>
+              <li className="flex items-center gap-2 text-muted-foreground">
+                <Globe className="size-3.5 text-brand" /> Unique public URLs
+              </li>
             </ul>
           </div>
 
@@ -55,13 +58,22 @@ export function Footer() {
               <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-brand/60" /> API · REST</li>
               <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-brand/60" /> Runtime · pluggable Docker adapter</li>
               <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-brand/60" /> DB · Prisma + SQLite</li>
+              <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-brand/60" /> Auth · scrypt + signed cookie</li>
             </ul>
           </div>
         </div>
 
         <div className="mt-8 flex flex-col items-center justify-between gap-2 border-t border-border/80 pt-6 text-xs text-muted-foreground sm:flex-row">
           <p>© {new Date().getFullYear()} OSS Deploy · MVP prototype</p>
-          <p>Built with Next.js, Tailwind &amp; shadcn/ui</p>
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1">
+              <Lock className="size-3" /> scrypt auth
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Cpu className="size-3" /> 0.5 core / 512 MB
+            </span>
+            <span>Built with Next.js, Tailwind &amp; shadcn/ui</span>
+          </div>
         </div>
       </div>
     </footer>

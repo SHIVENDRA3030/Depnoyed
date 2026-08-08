@@ -23,6 +23,7 @@ import {
 export interface DeployInput {
   appId: string;
   userId: string;
+  envVars?: Record<string, string>;
 }
 
 export interface DeployResult {
@@ -64,6 +65,7 @@ export async function createDeployment(input: DeployInput): Promise<DeployResult
   const port = pickPort();
 
   // 1. Persist the deployment record as `pending`.
+  const envVarsJson = input.envVars && Object.keys(input.envVars).length > 0 ? JSON.stringify(input.envVars) : null;
   const deployment = await db.deployment.create({
     data: {
       userId: input.userId,
@@ -73,6 +75,7 @@ export async function createDeployment(input: DeployInput): Promise<DeployResult
       subdomain,
       port,
       status: "pending",
+      envVars: envVarsJson,
     },
   });
 
@@ -84,6 +87,10 @@ export async function createDeployment(input: DeployInput): Promise<DeployResult
     const env = parseEnv(app.defaultEnv);
     env["DEPLOYMENT_ID"] = deployment.id;
     env["APP_SLUG"] = app.slug;
+    // Merge user-provided env vars (they override app defaults)
+    if (input.envVars) {
+      Object.assign(env, input.envVars);
+    }
 
     const info = await adapter.createContainer({
       containerName,

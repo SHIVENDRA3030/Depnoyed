@@ -28,6 +28,7 @@ import {
   ArrowDownRight,
   Wifi,
   HardDriveUpload,
+  DollarSign,
 } from "lucide-react";
 import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -271,6 +272,52 @@ export function DashboardView() {
             )}
             tone="brand"
           />
+        </div>
+      )}
+
+      {/* Cost estimation */}
+      {deployments && deployments.length > 0 && (
+        <div className="mt-4 rounded-2xl border border-border bg-gradient-to-br from-card via-card to-emerald-50/30 p-5 shadow-sm dark:to-emerald-950/10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="flex size-8 items-center justify-center rounded-lg bg-brand-soft text-brand">
+                <DollarSign className="size-4" />
+              </span>
+              <div>
+                <h3 className="text-sm font-semibold">Estimated usage cost</h3>
+                <p className="text-[11px] text-muted-foreground">Based on running deployments × resource usage</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold">
+                ${estimateCost(deployments).monthly.toFixed(2)}
+                <span className="ml-1 text-xs font-normal text-muted-foreground">/mo</span>
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                ${estimateCost(deployments).daily.toFixed(3)}/day
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-xs">
+              <Cpu className="size-3 text-brand" />
+              <span className="text-muted-foreground">CPU:</span>
+              <span className="font-medium">${(0.5 * deployments.filter((d) => d.status === "running").length * 5).toFixed(2)}/mo</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-xs">
+              <MemoryStick className="size-3 text-brand" />
+              <span className="text-muted-foreground">Memory:</span>
+              <span className="font-medium">${(0.5 * deployments.filter((d) => d.status === "running").length * 3).toFixed(2)}/mo</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-xs">
+              <HardDrive className="size-3 text-brand" />
+              <span className="text-muted-foreground">Storage:</span>
+              <span className="font-medium">${(Math.max(1, deployments.reduce((a, d) => a + (d.volumeDataSize ?? 0), 0) / 1024 / 1024) * 0.10).toFixed(2)}/mo</span>
+            </div>
+          </div>
+          <p className="mt-3 text-[10px] text-muted-foreground/70">
+            Estimation only — actual costs may vary based on provider pricing and usage patterns.
+          </p>
         </div>
       )}
 
@@ -675,6 +722,18 @@ function formatDataSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function estimateCost(deployments: DeploymentItem[]) {
+  const running = deployments.filter((d) => d.status === "running").length;
+  const cpuCost = 0.5 * running * 5;  // $5/core/month
+  const memCost = 0.5 * running * 3;   // $3/512MB/month
+  const totalStorage = deployments.reduce((a, d) => a + (d.volumeDataSize ?? 0), 0);
+  const storageGB = Math.max(1, totalStorage / 1024 / 1024);
+  const storageCost = storageGB * 0.10; // $0.10/GB/month
+  const monthly = cpuCost + memCost + storageCost;
+  const daily = monthly / 30;
+  return { monthly, daily };
 }
 
 export { Badge };

@@ -22,12 +22,24 @@ export const PATCH = withErrors(async (req: Request, { params }: { params: Promi
   await getOwnedDeployment(id, user.id);
 
   const body = await req.json().catch(() => null);
-  const data: { label?: string | null } = {};
+  const data: { label?: string | null; envVars?: string | null } = {};
   if (body && typeof body.label === "string") {
     const trimmed = body.label.trim().slice(0, 60);
     data.label = trimmed.length > 0 ? trimmed : null;
   } else if (body && body.label === null) {
     data.label = null;
+  }
+  // Support updating env vars
+  if (body && typeof body.envVars === "object" && body.envVars !== null) {
+    const ev: Record<string, string> = {};
+    for (const [k, v] of Object.entries(body.envVars as Record<string, unknown>)) {
+      if (typeof k === "string" && typeof v === "string" && k.length <= 64 && v.length <= 256) {
+        ev[k] = v;
+      }
+    }
+    data.envVars = Object.keys(ev).length > 0 ? JSON.stringify(ev) : null;
+  } else if (body && body.envVars === null) {
+    data.envVars = null;
   }
 
   if (Object.keys(data).length === 0) {

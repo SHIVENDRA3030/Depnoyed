@@ -32,6 +32,7 @@ import {
   HardDriveUpload,
   ArrowUpRight,
   ArrowDownRight,
+  Variable,
 } from "lucide-react";
 import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
@@ -575,6 +576,38 @@ export function DeploymentView({ id }: { id: string }) {
           </div>
         </div>
       </div>
+
+      {/* Environment Variables */}
+      {dep.envVars && Object.keys(dep.envVars).length > 0 && (
+        <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+            <Variable className="size-4" /> Environment variables
+          </h2>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            Custom environment variables configured for this deployment.
+          </p>
+          <div className="mt-3 overflow-hidden rounded-lg border border-border/60">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border/60 bg-muted/30">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Key</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(dep.envVars).map(([key, value]) => (
+                  <tr key={key} className="border-b border-border/30 last:border-b-0">
+                    <td className="px-3 py-2 font-mono text-xs font-medium">{key}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                      {value.length > 60 ? value.slice(0, 57) + "…" : value}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Volume data browser */}
       <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Rocket, LayoutDashboard, LogOut, Store, Menu, Command } from "lucide-react";
+import { Rocket, LayoutDashboard, LogOut, Store, Menu, Command, Settings } from "lucide-react";
 import { useAuth, navigate } from "@/lib/store";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationCenter } from "@/components/marketplace/notification-center";
@@ -129,6 +129,9 @@ export function Nav() {
                 <DropdownMenuItem onClick={() => navigate({ name: "marketplace" })}>
                   <Store className="mr-2 size-4" /> Browse apps
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate({ name: "settings" })}>
+                  <Settings className="mr-2 size-4" /> Settings
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
@@ -181,6 +184,15 @@ export function Nav() {
                     onClick={() => { navigate({ name: "dashboard" }); setMobileOpen(false); }}
                   >
                     <LayoutDashboard className="size-4" /> Dashboard
+                  </Button>
+                )}
+                {user && (
+                  <Button
+                    variant="ghost"
+                    className="justify-start gap-2"
+                    onClick={() => { navigate({ name: "settings" }); setMobileOpen(false); }}
+                  >
+                    <Settings className="size-4" /> Settings
                   </Button>
                 )}
                 <div className="my-2 border-t border-border" />

@@ -9,6 +9,7 @@ import { MarketplaceView } from "@/components/marketplace/views/marketplace-view
 import { AppDetailView } from "@/components/marketplace/views/app-detail-view";
 import { DashboardView } from "@/components/marketplace/views/dashboard-view";
 import { DeploymentView } from "@/components/marketplace/views/deployment-view";
+import { SettingsView } from "@/components/marketplace/views/settings-view";
 import { Loader2 } from "lucide-react";
 import { CommandPalette } from "@/components/marketplace/command-palette";
 import { OnboardingBanner } from "@/components/marketplace/onboarding-banner";
@@ -37,7 +38,7 @@ export function MarketplaceApp() {
   // Auth-gate protected routes. Public: marketplace, app detail, login.
   useEffect(() => {
     if (hydrating) return;
-    const protectedRoute = route.name === "dashboard" || route.name === "deployment";
+    const protectedRoute = route.name === "dashboard" || route.name === "deployment" || route.name === "settings";
     if (protectedRoute && !user) {
       navigate({ name: "login" });
     }
@@ -95,6 +96,8 @@ function InnerRouteView({ route }: { route: Route }) {
       return <AppDetailView slug={route.slug} />;
     case "dashboard":
       return <DashboardView />;
+    case "settings":
+      return <SettingsView />;
     case "deployment":
       return <DeploymentView id={route.id} />;
     default:

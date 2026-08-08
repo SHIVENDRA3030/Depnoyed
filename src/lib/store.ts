@@ -39,6 +39,7 @@ export interface DeploymentItem {
   volumeName: string;
   port: number | null;
   label: string | null;
+  envVars: Record<string, string> | null;
   createdAt: string;
   updatedAt: string;
   volumeDataSize?: number;
@@ -120,7 +121,8 @@ export type Route =
   | { name: "login" }
   | { name: "app"; slug: string }
   | { name: "dashboard" }
-  | { name: "deployment"; id: string };
+  | { name: "deployment"; id: string }
+  | { name: "settings" };
 
 export function parseHash(): Route {
   const hash = window.location.hash.replace(/^#\/?/, "");
@@ -128,6 +130,7 @@ export function parseHash(): Route {
   if (parts.length === 0) return { name: "marketplace" };
   if (parts[0] === "login") return { name: "login" };
   if (parts[0] === "dashboard") return { name: "dashboard" };
+  if (parts[0] === "settings") return { name: "settings" };
   if (parts[0] === "apps" && parts[1]) return { name: "app", slug: decodeURIComponent(parts[1]) };
   if (parts[0] === "deployments" && parts[1]) return { name: "deployment", id: decodeURIComponent(parts[1]) };
   return { name: "marketplace" };
@@ -141,6 +144,8 @@ export function routeToHash(route: Route): string {
       return "#/login";
     case "dashboard":
       return "#/dashboard";
+    case "settings":
+      return "#/settings";
     case "app":
       return `#/apps/${encodeURIComponent(route.slug)}`;
     case "deployment":

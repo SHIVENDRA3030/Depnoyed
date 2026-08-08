@@ -80,6 +80,7 @@ export function serializeDeployment(
     volumeName: dep.volumeName,
     port: dep.port,
     label: dep.label ?? null,
+    envVars: dep.envVars ? JSON.parse(dep.envVars) as Record<string, string> : null,
     createdAt: dep.createdAt.toISOString(),
     updatedAt: dep.updatedAt.toISOString(),
     app: dep.app
