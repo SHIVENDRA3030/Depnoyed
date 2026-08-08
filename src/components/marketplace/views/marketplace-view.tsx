@@ -122,16 +122,22 @@ export function MarketplaceView() {
         <div className="absolute inset-0 -z-20 hero-gradient mesh-gradient" />
         <div className="absolute inset-0 -z-10 bg-grid opacity-30 [mask-image:radial-gradient(ellipse_at_top,black,transparent_75%)]" />
 
-        {/* Floating orbs */}
+        {/* Floating orbs — enhanced with more orbs and varied positions */}
         <div className="pointer-events-none absolute inset-0 -z-5 overflow-hidden">
           <div className="hero-orb-1 absolute -left-20 top-10 size-64 rounded-full bg-emerald-400/8 blur-3xl dark:bg-emerald-500/5" />
           <div className="hero-orb-2 absolute right-10 top-20 size-48 rounded-full bg-teal-400/10 blur-3xl dark:bg-teal-500/6" />
           <div className="hero-orb-3 absolute left-1/3 -bottom-10 size-56 rounded-full bg-emerald-300/8 blur-3xl dark:bg-emerald-600/4" />
+          {/* Additional orbs for richer atmosphere */}
+          <div className="hero-orb-2 absolute right-1/4 top-[60%] size-40 rounded-full bg-cyan-400/6 blur-3xl dark:bg-cyan-500/4" />
+          <div className="hero-orb-1 absolute left-[60%] -top-4 size-36 rounded-full bg-teal-300/7 blur-3xl dark:bg-teal-500/4" />
+          <div className="hero-orb-3 absolute -right-8 bottom-1/4 size-44 rounded-full bg-emerald-400/7 blur-3xl dark:bg-emerald-600/3" />
           {/* Small decorative particles */}
           <div className="animate-particle-drift absolute left-[15%] top-[60%] size-1 rounded-full bg-emerald-500/30 [animation-delay:0s]" />
           <div className="animate-particle-drift absolute left-[45%] top-[70%] size-1.5 rounded-full bg-teal-500/20 [animation-delay:1.5s]" />
           <div className="animate-particle-drift absolute left-[75%] top-[55%] size-1 rounded-full bg-emerald-400/25 [animation-delay:3s]" />
           <div className="animate-particle-drift absolute left-[30%] top-[80%] size-0.5 rounded-full bg-teal-400/30 [animation-delay:2s]" />
+          <div className="animate-particle-drift absolute left-[85%] top-[40%] size-1 rounded-full bg-cyan-400/20 [animation-delay:0.8s]" />
+          <div className="animate-particle-drift absolute left-[55%] top-[25%] size-0.5 rounded-full bg-emerald-300/30 [animation-delay:2.5s]" />
         </div>
 
         <div className="mx-auto max-w-6xl px-4 py-14 sm:py-20">
@@ -270,7 +276,7 @@ export function MarketplaceView() {
             <button
               key={cat}
               onClick={() => setActiveCat(cat)}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+              className={`category-pill-lift inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
                 activeCat === cat
                   ? cat === "Favorites"
                     ? "border-rose-500/40 bg-rose-500/10 text-rose-700 shadow-sm dark:text-rose-300"
@@ -368,7 +374,7 @@ function FeaturedAppCard({ app, rank }: { app: AppItem; rank: number }) {
   return (
     <div
       onClick={() => navigate({ name: "app", slug: app.slug })}
-      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-50/60 via-card to-card p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-500/40 hover:shadow-xl dark:from-emerald-950/20 ${rankGlow} card-glow-hover`}
+      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-50/60 via-card to-card p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:scale-[1.01] hover:border-emerald-500/40 hover:shadow-xl dark:from-emerald-950/20 ${rankGlow} card-glow-hover`}
     >
       {/* Decorative glow */}
       <div className="pointer-events-none absolute -right-8 -top-8 size-24 rounded-full bg-emerald-500/5 blur-2xl transition-opacity duration-300 group-hover:opacity-100" />
@@ -397,7 +403,7 @@ function FeaturedAppCard({ app, rank }: { app: AppItem; rank: number }) {
         <span className="font-mono text-[11px] text-muted-foreground/80">{app.dockerImage}</span>
         <button
           onClick={handleDeploy}
-          className="relative z-20 inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:shadow-md hover:brightness-110"
+          className="deploy-glow-btn relative z-20 inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:shadow-md hover:brightness-110"
         >
           <Rocket className="size-3" />
           Deploy
@@ -510,7 +516,7 @@ function AppCard({ app, onFavToggle }: { app: AppItem; onFavToggle?: () => void 
           </button>
           <button
             onClick={handleDeploy}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-all duration-200 hover:bg-emerald-500/20 hover:shadow-sm dark:text-emerald-400"
+            className="deploy-glow-btn inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-all duration-200 hover:bg-emerald-500/20 hover:shadow-sm dark:text-emerald-400"
           >
             <Rocket className="size-3" /> Deploy
           </button>

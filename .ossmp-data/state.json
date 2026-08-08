@@ -509,6 +509,92 @@
         }
       ],
       "startedAt": "2026-08-08T14:31:07.703Z"
+    },
+    "ossmp-demo-counter-58ekmk-jfp1": {
+      "id": "cnt_fd5e7226981c",
+      "name": "ossmp-demo-counter-58ekmk-jfp1",
+      "status": "running",
+      "image": "ossmp/demo-counter:1.0",
+      "port": 80,
+      "volumeName": "ossmp-vol-demo-counter-58ekmk-p0tv",
+      "simulator": "counter",
+      "cpuLimit": 0.5,
+      "memoryLimitMb": 512,
+      "env": {
+        "DEPLOYMENT_ID": "cmski25on000jq6s9slugv741",
+        "APP_SLUG": "demo-counter"
+      },
+      "logs": [
+        {
+          "t": "2026-08-08T14:59:32.811Z",
+          "stream": "stdout",
+          "message": "Creating container from image ossmp/demo-counter:1.0"
+        },
+        {
+          "t": "2026-08-08T14:59:32.811Z",
+          "stream": "stdout",
+          "message": "Mounting volume ossmp-vol-demo-counter-58ekmk-p0tv at /data"
+        },
+        {
+          "t": "2026-08-08T14:59:32.811Z",
+          "stream": "stdout",
+          "message": "Resource limits: cpu=0.5 memory=512MB"
+        },
+        {
+          "t": "2026-08-08T14:59:32.961Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=counter) on port 80"
+        },
+        {
+          "t": "2026-08-08T14:59:32.961Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:80"
+        }
+      ],
+      "startedAt": "2026-08-08T14:59:32.961Z"
+    },
+    "ossmp-gitea-lite-58ekmk-8vj5": {
+      "id": "cnt_0248c6390367",
+      "name": "ossmp-gitea-lite-58ekmk-8vj5",
+      "status": "running",
+      "image": "gitea/gitea:1.21",
+      "port": 3000,
+      "volumeName": "ossmp-vol-gitea-lite-58ekmk-czs1",
+      "simulator": "notes",
+      "cpuLimit": 0.5,
+      "memoryLimitMb": 512,
+      "env": {
+        "DEPLOYMENT_ID": "cmski2c6b000lq6s9odmp1g5r",
+        "APP_SLUG": "gitea-lite"
+      },
+      "logs": [
+        {
+          "t": "2026-08-08T14:59:41.224Z",
+          "stream": "stdout",
+          "message": "Creating container from image gitea/gitea:1.21"
+        },
+        {
+          "t": "2026-08-08T14:59:41.224Z",
+          "stream": "stdout",
+          "message": "Mounting volume ossmp-vol-gitea-lite-58ekmk-czs1 at /data"
+        },
+        {
+          "t": "2026-08-08T14:59:41.224Z",
+          "stream": "stdout",
+          "message": "Resource limits: cpu=0.5 memory=512MB"
+        },
+        {
+          "t": "2026-08-08T14:59:41.375Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=notes) on port 3000"
+        },
+        {
+          "t": "2026-08-08T14:59:41.375Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:3000"
+        }
+      ],
+      "startedAt": "2026-08-08T14:59:41.375Z"
     }
   },
   "volumes": {
@@ -551,6 +637,14 @@
     "ossmp-vol-demo-counter-e41v58-xime": {
       "name": "ossmp-vol-demo-counter-e41v58-xime",
       "createdAt": "2026-08-08T14:31:07.403Z"
+    },
+    "ossmp-vol-demo-counter-58ekmk-p0tv": {
+      "name": "ossmp-vol-demo-counter-58ekmk-p0tv",
+      "createdAt": "2026-08-08T14:59:32.808Z"
+    },
+    "ossmp-vol-gitea-lite-58ekmk-czs1": {
+      "name": "ossmp-vol-gitea-lite-58ekmk-czs1",
+      "createdAt": "2026-08-08T14:59:41.220Z"
     }
   }
 }

@@ -1,0 +1,1047 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import { useCallback, useEffect, useMemo, useState } from "react";
+     4→     4→import {
+     5→     5→  Plus,
+     6→     6→  ExternalLink,
+     7→     7→  Play,
+     8→     8→  Square,
+     9→     9→  RotateCw,
+    10→    10→  Trash2,
+    11→    11→  Loader2,
+    12→    12→  Container,
+    13→    13→  Clock,
+    14→    14→  ArrowRight,
+    15→    15→  RefreshCw,
+    16→    16→  Timer,
+    17→    17→  Database,
+    18→    18→  Activity,
+    19→    19→  Boxes,
+    20→    20→  HardDrive,
+    21→    21→  TrendingUp,
+    22→    22→  Tag,
+    23→    23→  X,
+    24→    24→  CheckSquare,
+    25→    25→  Cpu,
+    26→    26→  MemoryStick,
+    27→    27→  ArrowUpRight,
+    28→    28→  ArrowDownRight,
+    29→    29→  Wifi,
+    30→    30→  HardDriveUpload,
+    31→    31→  DollarSign,
+    32→    32→  Search,
+    33→    33→  Rocket,
+    34→    34→} from "lucide-react";
+    35→    35→import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
+    36→    36→import { AppLogo } from "@/components/marketplace/app-logo";
+    37→    37→import { statusColor } from "@/components/marketplace/status";
+    38→    38→import {
+    39→    39→  calculateUptime,
+    40→    40→  getContainerMetrics,
+    41→    41→  healthDotColor,
+    42→    42→} from "@/lib/metrics";
+    43→    43→import { Button } from "@/components/ui/button";
+    44→    44→import { Badge } from "@/components/ui/badge";
+    45→    45→import { Checkbox } from "@/components/ui/checkbox";
+    46→    46→import { Progress } from "@/components/ui/progress";
+    47→    47→import { Input } from "@/components/ui/input";
+    48→    48→import {
+    49→    49→  AlertDialog,
+    50→    50→  AlertDialogAction,
+    51→    51→  AlertDialogCancel,
+    52→    52→  AlertDialogContent,
+    53→    53→  AlertDialogDescription,
+    54→    54→  AlertDialogFooter,
+    55→    55→  AlertDialogHeader,
+    56→    56→  AlertDialogTitle,
+    57→    57→  AlertDialogTrigger,
+    58→    58→} from "@/components/ui/alert-dialog";
+    59→    59→import { toast } from "sonner";
+    60→    60→import {
+    61→    61→  Sparkline,
+    62→    62→  sparklineColor,
+    63→    63→  generateTimeSeries,
+    64→    64→  tickTimeSeries,
+    65→    65→} from "@/components/marketplace/sparkline";
+    66→    66→
+    67→    67→function statusAccentBorder(status: string): string {
+    68→    68→  switch (status) {
+    69→    69→    case "running":
+    70→    70→      return "border-l-emerald-500";
+    71→    71→    case "pending":
+    72→    72→    case "creating":
+    73→    73→      return "border-l-amber-500";
+    74→    74→    case "failed":
+    75→    75→    case "dead":
+    76→    76→      return "border-l-red-500";
+    77→    77→    case "stopped":
+    78→    78→    case "exited":
+    79→    79→      return "border-l-zinc-400 dark:border-l-zinc-500";
+    80→    80→    default:
+    81→    81→      return "border-l-muted-foreground";
+    82→    82→  }
+    83→    83→}
+    84→    84→
+    85→    85→function statusDotClass(status: string): string {
+    86→    86→  switch (status) {
+    87→    87→    case "running":
+    88→    88→      return "bg-emerald-500";
+    89→    89→    case "stopped":
+    90→    90→    case "exited":
+    91→    91→      return "bg-zinc-400";
+    92→    92→    case "pending":
+    93→    93→    case "creating":
+    94→    94→      return "bg-amber-500";
+    95→    95→    case "failed":
+    96→    96→    case "dead":
+    97→    97→      return "bg-red-500";
+    98→    98→    default:
+    99→    99→      return "bg-muted-foreground";
+   100→   100→  }
+   101→   101→}
+   102→   102→
+   103→   103→export function DashboardView() {
+   104→   104→  const [deployments, setDeployments] = useState<DeploymentItem[] | null>(null);
+   105→   105→  const [busyId, setBusyId] = useState<string | null>(null);
+   106→   106→  const [refreshing, setRefreshing] = useState(false);
+   107→   107→  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+   108→   108→  const [batchBusy, setBatchBusy] = useState(false);
+   109→   109→  const [searchQuery, setSearchQuery] = useState("");
+   110→   110→  const [statusFilter, setStatusFilter] = useState<string>("all");
+   111→   111→
+   112→   112→  const load = useCallback(async () => {
+   113→   113→    try {
+   114→   114→      const { deployments } = await api<{ deployments: DeploymentItem[] }>("/api/deployments");
+   115→   115→      setDeployments(deployments);
+   116→   116→    } catch {
+   117→   117→      toast.error("Failed to load deployments");
+   118→   118→      setDeployments([]);
+   119→   119→    }
+   120→   120→  }, []);
+   121→   121→
+   122→   122→  useEffect(() => {
+   123→   123→    load();
+   124→   124→    const t = setInterval(load, 5000);
+   125→   125→    return () => clearInterval(t);
+   126→   126→  }, [load]);
+   127→   127→
+   128→   128→  const filteredDeployments = useMemo(() => {
+   129→   129→    if (!deployments) return [];
+   130→   130→    const q = searchQuery.trim().toLowerCase();
+   131→   131→    return deployments.filter((d) => {
+   132→   132→      const matchesStatus =
+   133→   133→        statusFilter === "all" ||
+   134→   134→        (statusFilter === "running" && d.status === "running") ||
+   135→   135→        (statusFilter === "stopped" && (d.status === "stopped" || d.status === "exited"));
+   136→   136→      if (!matchesStatus) return false;
+   137→   137→      if (!q) return true;
+   138→   138→      return (
+   139→   139→        (d.app?.name?.toLowerCase().includes(q) ?? false) ||
+   140→   140→        (d.label?.toLowerCase().includes(q) ?? false) ||
+   141→   141→        d.subdomain.toLowerCase().includes(q) ||
+   142→   142→        d.containerName.toLowerCase().includes(q)
+   143→   143→      );
+   144→   144→    });
+   145→   145→  }, [deployments, searchQuery, statusFilter]);
+   146→   146→
+   147→   147→  async function refresh() {
+   148→   148→    setRefreshing(true);
+   149→   149→    await load();
+   150→   150→    setRefreshing(false);
+   151→   151→  }
+   152→   152→
+   153→   153→  async function act(id: string, action: "start" | "stop" | "restart") {
+   154→   154→    setBusyId(id);
+   155→   155→    try {
+   156→   156→      const { deployment } = await api<{ deployment: DeploymentItem }>(`/api/deployments/${id}/${action}`, {
+   157→   157→        method: "POST",
+   158→   158→      });
+   159→   159→      setDeployments((d) => (d ?? []).map((x) => (x.id === id ? deployment : x)));
+   160→   160→      toast.success(`Deployment ${action === 'stop' ? 'stopped' : action + 'ed'}`);
+   161→   161→    } catch (e) {
+   162→   162→      toast.error(e instanceof ApiError ? e.message : `Failed to ${action}`);
+   163→   163→    } finally {
+   164→   164→      setBusyId(null);
+   165→   165→    }
+   166→   166→  }
+   167→   167→
+   168→   168→  async function remove(id: string) {
+   169→   169→    setBusyId(id);
+   170→   170→    try {
+   171→   171→      await api(`/api/deployments/${id}`, { method: "DELETE" });
+   172→   172→      setDeployments((d) => (d ?? []).filter((x) => x.id !== id));
+   173→   173→      toast.success("Deployment deleted");
+   174→   174→    } catch (e) {
+   175→   175→      toast.error(e instanceof ApiError ? e.message : "Failed to delete");
+   176→   176→    } finally {
+   177→   177→      setBusyId(null);
+   178→   178→    }
+   179→   179→  }
+   180→   180→
+   181→   181→  // Batch operations
+   182→   182→  function toggleSelect(id: string) {
+   183→   183→    setSelectedIds((prev) => {
+   184→   184→      const next = new Set(prev);
+   185→   185→      if (next.has(id)) next.delete(id);
+   186→   186→      else next.add(id);
+   187→   187→      return next;
+   188→   188→    });
+   189→   189→  }
+   190→   190→
+   191→   191→  function toggleSelectAll() {
+   192→   192→    if (!deployments) return;
+   193→   193→    if (selectedIds.size === deployments.length) {
+   194→   194→      setSelectedIds(new Set());
+   195→   195→    } else {
+   196→   196→      setSelectedIds(new Set(deployments.map((d) => d.id)));
+   197→   197→    }
+   198→   198→  }
+   199→   199→
+   200→   200→  function deselectAll() {
+   201→   201→    setSelectedIds(new Set());
+   202→   202→  }
+   203→   203→
+   204→   204→  const batchInfo = useMemo(() => {
+   205→   205→    if (!deployments) return { hasStopped: false, hasRunning: false, count: 0 };
+   206→   206→    const selected = deployments.filter((d) => selectedIds.has(d.id));
+   207→   207→    return {
+   208→   208→      hasStopped: selected.some((d) => d.status === "stopped" || d.status === "exited"),
+   209→   209→      hasRunning: selected.some((d) => d.status === "running"),
+   210→   210→      count: selected.length,
+   211→   211→    };
+   212→   212→  }, [deployments, selectedIds]);
+   213→   213→
+   214→   214→  async function batchAction(action: "start" | "stop" | "restart") {
+   215→   215→    setBatchBusy(true);
+   216→   216→    let successCount = 0;
+   217→   217→    let failCount = 0;
+   218→   218→    for (const id of selectedIds) {
+   219→   219→      try {
+   220→   220→        await api<{ deployment: DeploymentItem }>(`/api/deployments/${id}/${action}`, { method: "POST" });
+   221→   221→        successCount++;
+   222→   222→      } catch {
+   223→   223→        failCount++;
+   224→   224→      }
+   225→   225→    }
+   226→   226→    await load();
+   227→   227→    setBatchBusy(false);
+   228→   228→    deselectAll();
+   229→   229→    if (failCount === 0) toast.success(`${successCount} deployment(s) ${action === 'stop' ? 'stopped' : action + 'ed'}`);
+   230→   230→    else toast.error(`${failCount} failed, ${successCount} succeeded`);
+   231→   231→  }
+   232→   232→
+   233→   233→  async function batchDelete() {
+   234→   234→    setBatchBusy(true);
+   235→   235→    let successCount = 0;
+   236→   236→    let failCount = 0;
+   237→   237→    for (const id of selectedIds) {
+   238→   238→      try {
+   239→   239→        await api(`/api/deployments/${id}`, { method: "DELETE" });
+   240→   240→        successCount++;
+   241→   241→      } catch {
+   242→   242→        failCount++;
+   243→   243→      }
+   244→   244→    }
+   245→   245→    await load();
+   246→   246→    setBatchBusy(false);
+   247→   247→    deselectAll();
+   248→   248→    if (failCount === 0) toast.success(`${successCount} deployment(s) deleted`);
+   249→   249→    else toast.error(`${failCount} failed, ${successCount} succeeded`);
+   250→   250→  }
+   251→   251→
+   252→   252→  return (
+   253→   253→    <div className="mx-auto max-w-6xl px-4 py-8">
+   254→   254→      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   255→   255→        <div>
+   256→   256→          <h1 className="text-2xl font-bold tracking-tight">My deployments</h1>
+   257→   257→          <p className="text-sm text-muted-foreground">Manage your isolated application instances.</p>
+   258→   258→        </div>
+   259→   259→        <div className="flex items-center gap-2">
+   260→   260→          <Button variant="outline" size="sm" onClick={refresh} disabled={refreshing}>
+   261→   261→            {refreshing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
+   262→   262→            Refresh
+   263→   263→          </Button>
+   264→   264→          <Button size="sm" className="bg-brand text-brand-foreground hover:bg-brand/90" onClick={() => navigate({ name: "marketplace" })}>
+   265→   265→            <Plus className="mr-2 size-4" /> Deploy new
+   266→   266→          </Button>
+   267→   267→        </div>
+   268→   268→      </div>
+   269→   269→
+   270→   270→      {/* Stats cards */}
+   271→   271→      {deployments && deployments.length > 0 && (
+   272→   272→        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+   273→   273→          <StatCard
+   274→   274→            icon={<Boxes className="size-4" />}
+   275→   275→            label="Total"
+   276→   276→            value={String(deployments.length)}
+   277→   277→            tone="default"
+   278→   278→          />
+   279→   279→          <StatCard
+   280→   280→            icon={<Activity className="size-4" />}
+   281→   281→            label="Running"
+   282→   282→            value={String(deployments.filter((d) => d.status === "running").length)}
+   283→   283→            tone="emerald"
+   284→   284→          />
+   285→   285→          <StatCard
+   286→   286→            icon={<Square className="size-4" />}
+   287→   287→            label="Stopped"
+   288→   288→            value={String(deployments.filter((d) => d.status === "stopped" || d.status === "exited").length)}
+   289→   289→            tone="zinc"
+   290→   290→          />
+   291→   291→          <StatCard
+   292→   292→            icon={<HardDrive className="size-4" />}
+   293→   293→            label="Data stored"
+   294→   294→            value={formatDataSize(
+   295→   295→              deployments.reduce((acc, d) => acc + (d.volumeDataSize ?? 0), 0)
+   296→   296→            )}
+   297→   297→            tone="brand"
+   298→   298→          />
+   299→   299→        </div>
+   300→   300→      )}
+   301→   301→
+   302→   302→      {/* Cost estimation */}
+   303→   303→      {deployments && deployments.length > 0 && (
+   304→   304→        <div className="mt-4 rounded-2xl border border-border bg-gradient-to-br from-card via-card to-emerald-50/30 p-5 shadow-sm dark:to-emerald-950/10">
+   305→   305→          <div className="flex items-center justify-between">
+   306→   306→            <div className="flex items-center gap-2">
+   307→   307→              <span className="flex size-8 items-center justify-center rounded-lg bg-brand-soft text-brand">
+   308→   308→                <DollarSign className="size-4" />
+   309→   309→              </span>
+   310→   310→              <div>
+   311→   311→                <h3 className="text-sm font-semibold">Estimated usage cost</h3>
+   312→   312→                <p className="text-[11px] text-muted-foreground">Based on running deployments × resource usage</p>
+   313→   313→              </div>
+   314→   314→            </div>
+   315→   315→            <div className="text-right">
+   316→   316→              <p className="text-lg font-bold">
+   317→   317→                ${estimateCost(deployments).monthly.toFixed(2)}
+   318→   318→                <span className="ml-1 text-xs font-normal text-muted-foreground">/mo</span>
+   319→   319→              </p>
+   320→   320→              <p className="text-[11px] text-muted-foreground">
+   321→   321→                ${estimateCost(deployments).daily.toFixed(3)}/day
+   322→   322→              </p>
+   323→   323→            </div>
+   324→   324→          </div>
+   325→   325→          <div className="mt-3 flex flex-wrap gap-3">
+   326→   326→            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-xs">
+   327→   327→              <Cpu className="size-3 text-brand" />
+   328→   328→              <span className="text-muted-foreground">CPU:</span>
+   329→   329→              <span className="font-medium">${(0.5 * deployments.filter((d) => d.status === "running").length * 5).toFixed(2)}/mo</span>
+   330→   330→            </div>
+   331→   331→            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-xs">
+   332→   332→              <MemoryStick className="size-3 text-brand" />
+   333→   333→              <span className="text-muted-foreground">Memory:</span>
+   334→   334→              <span className="font-medium">${(0.5 * deployments.filter((d) => d.status === "running").length * 3).toFixed(2)}/mo</span>
+   335→   335→            </div>
+   336→   336→            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-xs">
+   337→   337→              <HardDrive className="size-3 text-brand" />
+   338→   338→              <span className="text-muted-foreground">Storage:</span>
+   339→   339→              <span className="font-medium">${(Math.max(1, deployments.reduce((a, d) => a + (d.volumeDataSize ?? 0), 0) / 1024 / 1024) * 0.10).toFixed(2)}/mo</span>
+   340→   340→            </div>
+   341→   341→          </div>
+   342→   342→          <p className="mt-3 text-[10px] text-muted-foreground/70">
+   343→   343→            Estimation only — actual costs may vary based on provider pricing and usage patterns.
+   344→   344→          </p>
+   345→   345→        </div>
+   346→   346→      )}
+   347→   347→
+   348→   348→      {/* Search & filter bar */}
+   349→   349→      {deployments && deployments.length > 0 && (
+   350→   350→        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+   351→   351→          <div className="relative flex-1">
+   352→   352→            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+   353→   353→            <Input
+   354→   354→              value={searchQuery}
+   355→   355→              onChange={(e) => setSearchQuery(e.target.value)}
+   356→   356→              placeholder="Search by app name, label, or subdomain…"
+   357→   357→              className="pl-9"
+   358→   358→            />
+   359→   359→            {searchQuery && (
+   360→   360→              <button
+   361→   361→                onClick={() => setSearchQuery("")}
+   362→   362→                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+   363→   363→              >
+   364→   364→                <X className="size-3.5" />
+   365→   365→              </button>
+   366→   366→            )}
+   367→   367→          </div>
+   368→   368→          <div className="flex items-center gap-1.5">
+   369→   369→            {["all", "running", "stopped"].map((f) => (
+   370→   370→              <button
+   371→   371→                key={f}
+   372→   372→                onClick={() => setStatusFilter(f)}
+   373→   373→                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
+   374→   374→                  statusFilter === f
+   375→   375→                    ? "border-brand/40 bg-brand/10 text-brand"
+   376→   376→                    : "border-border bg-background text-muted-foreground hover:bg-muted"
+   377→   377→                }`}
+   378→   378→              >
+   379→   379→                {f === "all" && <Boxes className="size-3" />}
+   380→   380→                {f === "running" && <Activity className="size-3" />}
+   381→   381→                {f === "stopped" && <Square className="size-3" />}
+   382→   382→                {f.charAt(0).toUpperCase() + f.slice(1)}
+   383→   383→                <span className="ml-0.5 text-[10px] text-muted-foreground/70">
+   384→   384→                  {f === "all"
+   385→   385→                    ? deployments.length
+   386→   386→                    : f === "running"
+   387→   387→                    ? deployments.filter((d) => d.status === "running").length
+   388→   388→                    : deployments.filter((d) => d.status === "stopped" || d.status === "exited").length}
+   389→   389→                </span>
+   390→   390→              </button>
+   391→   391→            ))}
+   392→   392→          </div>
+   393→   393→        </div>
+   394→   394→      )}
+   395→   395→
+   396→   396→      <div className="mt-6">
+   397→   397→        {deployments === null ? (
+   398→   398→          <div className="space-y-3">
+   399→   399→            {Array.from({ length: 2 }).map((_, i) => (
+   400→   400→              <div key={i} className="h-28 rounded-2xl shimmer" />
+   401→   401→            ))}
+   402→   402→          </div>
+   403→   403→        ) : deployments.length === 0 ? (
+   404→   404→          <EmptyState />
+   405→   405→        ) : filteredDeployments.length === 0 ? (
+   406→   406→          <div className="flex flex-col items-center rounded-2xl border border-dashed border-border py-12 text-center">
+   407→   407→            <Search className="size-8 text-muted-foreground/40" />
+   408→   408→            <p className="mt-2 text-sm text-muted-foreground">No deployments match your search.</p>
+   409→   409→            <Button variant="outline" size="sm" className="mt-3" onClick={() => { setSearchQuery(""); setStatusFilter("all"); }}>
+   410→   410→              Clear filters
+   411→   411→            </Button>
+   412→   412→          </div>
+   413→   413→        ) : (
+   414→   414→          <div className="space-y-3">
+   415→   415→            {filteredDeployments.map((d) => (
+   416→   416→              <DeploymentRow
+   417→   417→                key={d.id}
+   418→   418→                d={d}
+   419→   419→                busy={busyId === d.id}
+   420→   420→                selected={selectedIds.has(d.id)}
+   421→   421→                onSelect={() => toggleSelect(d.id)}
+   422→   422→                onStart={() => act(d.id, "start")}
+   423→   423→                onStop={() => act(d.id, "stop")}
+   424→   424→                onRestart={() => act(d.id, "restart")}
+   425→   425→                onDelete={() => remove(d.id)}
+   426→   426→              />
+   427→   427→            ))}
+   428→   428→          </div>
+   429→   429→        )}
+   430→   430→      </div>
+   431→   431→
+   432→   432→      {/* Resource Usage sparkline section */}
+   433→   433→      {deployments && deployments.length > 0 && (
+   434→   434→        <ResourceUsageSparklines deployments={deployments} />
+   435→   435→      )}
+   436→   436→
+   437→   437→      {/* Activity timeline - Enhanced */}
+   438→   438→      {deployments && deployments.length > 0 && (
+   439→   439→        <div className="mt-8">
+   440→   440→          <div className="flex items-center justify-between">
+   441→   441→            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+   442→   442→              <TrendingUp className="size-4" /> Recent activity
+   443→   443→            </h2>
+   444→   444→            <span className="text-[11px] text-muted-foreground/60">Live · auto-refresh</span>
+   445→   445→          </div>
+   446→   446→          <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+   447→   447→            <ol className="relative divide-y divide-border/40">
+   448→   448→              {/* Animated timeline spine */}
+   449→   449→              {[...deployments]
+   450→   450→                .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+   451→   451→                .slice(0, 6)
+   452→   452→                .map((d, i) => {
+   453→   453→                  const isActive = d.status === "running";
+   454→   454→                  const isFailed = d.status === "failed" || d.status === "dead";
+   455→   455→                  const statusIcon = isActive ? "🟢" : isFailed ? "🔴" : "⚪";
+   456→   456→                  const statusLabel = isActive ? "Running" : d.status === "stopped" || d.status === "exited" ? "Stopped" : isFailed ? "Failed" : d.status;
+   457→   457→                  return (
+   458→   458→                    <li key={d.id} className="animate-slide-in-right" style={{ animationDelay: `${i * 60}ms` }}>
+   459→   459→                      <button
+   460→   460→                        className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/30"
+   461→   461→                        onClick={() => navigate({ name: "deployment", id: d.id })}
+   462→   462→                      >
+   463→   463→                        {/* Status indicator with health ring */}
+   464→   464→                        <span className="relative flex size-8 shrink-0 items-center justify-center">
+   465→   465→                          {isActive && (
+   466→   466→                            <span className="absolute inset-0 rounded-full bg-emerald-500/20 animate-health-ring" />
+   467→   467→                          )}
+   468→   468→                          <span className={`relative flex size-3 rounded-full ${
+   469→   469→                            isActive ? "bg-emerald-500" : isFailed ? "bg-red-500" : "bg-zinc-400 dark:bg-zinc-500"
+   470→   470→                          }`}>
+   471→   471→                            {isActive && (
+   472→   472→                              <span className="absolute inset-0 rounded-full bg-emerald-500 animate-status-pulse" />
+   473→   473→                            )}
+   474→   474→                          </span>
+   475→   475→                        </span>
+   476→   476→                        {/* App info */}
+   477→   477→                        <div className="min-w-0 flex-1">
+   478→   478→                          <div className="flex items-center gap-2">
+   479→   479→                            <span className="truncate text-sm font-medium group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+   480→   480→                              {d.app?.name ?? "Unknown app"}
+   481→   481→                            </span>
+   482→   482→                            <Badge
+   483→   483→                              variant="secondary"
+   484→   484→                              className={`shrink-0 gap-1 text-[10px] font-normal ${
+   485→   485→                                isActive
+   486→   486→                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+   487→   487→                                  : isFailed
+   488→   488→                                  ? "bg-red-500/10 text-red-600 dark:text-red-400"
+   489→   489→                                  : ""
+   490→   490→                              }`}
+   491→   491→                            >
+   492→   492→                              {statusLabel}
+   493→   493→                            </Badge>
+   494→   494→                            {d.label && (
+   495→   495→                              <Badge variant="outline" className="shrink-0 text-[10px] font-normal">
+   496→   496→                                <Tag className="mr-0.5 size-2.5" /> {d.label}
+   497→   497→                              </Badge>
+   498→   498→                            )}
+   499→   499→                          </div>
+   500→   500→                          <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground/70">
+   501→   501→                            <span className="font-mono">{d.subdomain}</span>
+   502→   502→                            {d.volumeDataSize != null && d.volumeDataSize > 0 && (
+   503→   503→                              <span>· {formatDataSize(d.volumeDataSize)} stored</span>
+   504→   504→                            )}
+   505→   505→                          </div>
+   506→   506→                        </div>
+   507→   507→                        {/* Timestamp */}
+   508→   508→                        <div className="shrink-0 text-right">
+   509→   509→                          <span className="block text-xs text-muted-foreground">{timeAgo(d.updatedAt)}</span>
+   510→   510→                          <span className="block text-[10px] text-muted-foreground/50">
+   511→   511→                            {new Date(d.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+   512→   512→                          </span>
+   513→   513→                        </div>
+   514→   514→                      </button>
+   515→   515→                    </li>
+   516→   516→                  );
+   517→   517→                })}
+   518→   518→            </ol>
+   519→   519→            {deployments.length > 6 && (
+   520→   520→              <div className="border-t border-border/40 px-4 py-2.5 text-center">
+   521→   521→                <button
+   522→   522→                  onClick={() => navigate({ name: "dashboard" })}
+   523→   523→                  className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+   524→   524→                >
+   525→   525→                  View all {deployments.length} deployments
+   526→   526→                </button>
+   527→   527→              </div>
+   528→   528→            )}
+   529→   529→          </div>
+   530→   530→        </div>
+   531→   531→      )}
+   532→   532→
+   533→   533→      {/* Batch action bar - fixed at bottom */}
+   534→   534→      {batchInfo.count > 0 && (
+   535→   535→        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 shadow-lg backdrop-blur-sm animate-in slide-in-from-bottom-4 duration-200">
+   536→   536→          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+   537→   537→            <div className="flex items-center gap-3">
+   538→   538→              <Checkbox
+   539→   539→                checked={deployments ? selectedIds.size === deployments.length : false}
+   540→   540→                onCheckedChange={toggleSelectAll}
+   541→   541→                aria-label="Select all"
+   542→   542→              />
+   543→   543→              <span className="text-sm font-medium">
+   544→   544→                {batchInfo.count} selected
+   545→   545→              </span>
+   546→   546→            </div>
+   547→   547→            <div className="flex items-center gap-2">
+   548→   548→              <Button
+   549→   549→                size="sm"
+   550→   550→                variant="outline"
+   551→   551→                className="gap-1.5"
+   552→   552→                onClick={() => batchAction("start")}
+   553→   553→                disabled={batchBusy || !batchInfo.hasStopped}
+   554→   554→              >
+   555→   555→                {batchBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+   556→   556→                Start all
+   557→   557→              </Button>
+   558→   558→              <Button
+   559→   559→                size="sm"
+   560→   560→                variant="outline"
+   561→   561→                className="gap-1.5"
+   562→   562→                onClick={() => batchAction("stop")}
+   563→   563→                disabled={batchBusy || !batchInfo.hasRunning}
+   564→   564→              >
+   565→   565→                {batchBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5" />}
+   566→   566→                Stop all
+   567→   567→              </Button>
+   568→   568→              <Button
+   569→   569→                size="sm"
+   570→   570→                variant="outline"
+   571→   571→                className="gap-1.5"
+   572→   572→                onClick={() => batchAction("restart")}
+   573→   573→                disabled={batchBusy}
+   574→   574→              >
+   575→   575→                {batchBusy ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCw className="size-3.5" />}
+   576→   576→                Restart all
+   577→   577→              </Button>
+   578→   578→              <AlertDialog>
+   579→   579→                <AlertDialogTrigger asChild>
+   580→   580→                  <Button
+   581→   581→                    size="sm"
+   582→   582→                    variant="outline"
+   583→   583→                    className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+   584→   584→                    disabled={batchBusy}
+   585→   585→                  >
+   586→   586→                    <Trash2 className="size-3.5" /> Delete all
+   587→   587→                  </Button>
+   588→   588→                </AlertDialogTrigger>
+   589→   589→                <AlertDialogContent>
+   590→   590→                  <AlertDialogHeader>
+   591→   591→                    <AlertDialogTitle>Delete {batchInfo.count} deployment(s)?</AlertDialogTitle>
+   592→   592→                    <AlertDialogDescription>
+   593→   593→                      This permanently removes {batchInfo.count} container(s) and their volumes. All persisted data will be lost.
+   594→   594→                    </AlertDialogDescription>
+   595→   595→                  </AlertDialogHeader>
+   596→   596→                  <AlertDialogFooter>
+   597→   597→                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+   598→   598→                    <AlertDialogAction
+   599→   599→                      onClick={batchDelete}
+   600→   600→                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+   601→   601→                    >
+   602→   602→                      Delete all
+   603→   603→                    </AlertDialogAction>
+   604→   604→                  </AlertDialogFooter>
+   605→   605→                </AlertDialogContent>
+   606→   606→              </AlertDialog>
+   607→   607→              <Button
+   608→   608→                size="sm"
+   609→   609→                variant="ghost"
+   610→   610→                className="gap-1.5"
+   611→   611→                onClick={deselectAll}
+   612→   612→              >
+   613→   613→                <X className="size-3.5" /> Cancel
+   614→   614→              </Button>
+   615→   615→            </div>
+   616→   616→          </div>
+   617→   617→        </div>
+   618→   618→      )}
+   619→   619→    </div>
+   620→   620→  );
+   621→   621→}
+   622→   622→
+   623→   623→function StatCard({
+   624→   624→  icon,
+   625→   625→  label,
+   626→   626→  value,
+   627→   627→  tone,
+   628→   628→}: {
+   629→   629→  icon: React.ReactNode;
+   630→   630→  label: string;
+   631→   631→  value: string;
+   632→   632→  tone: "default" | "emerald" | "zinc" | "brand";
+   633→   633→}) {
+   634→   634→  const toneClasses = {
+   635→   635→    default: "bg-muted/60 text-foreground",
+   636→   636→    emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+   637→   637→    zinc: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
+   638→   638→    brand: "bg-brand-soft text-brand",
+   639→   639→  }[tone];
+   640→   640→  return (
+   641→   641→    <div className="group flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm transition-all duration-200 hover:border-brand/30 hover:shadow-md">
+   642→   642→      <span className={`flex size-9 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-110 ${toneClasses}`}>
+   643→   643→        {icon}
+   644→   644→      </span>
+   645→   645→      <div className="min-w-0">
+   646→   646→        <p className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+   647→   647→          {label}
+   648→   648→        </p>
+   649→   649→        <p className="truncate text-lg font-bold tabular-nums">{value}</p>
+   650→   650→      </div>
+   651→   651→    </div>
+   652→   652→  );
+   653→   653→}
+   654→   654→
+   655→   655→function DeploymentRow({
+   656→   656→  d,
+   657→   657→  busy,
+   658→   658→  selected,
+   659→   659→  onSelect,
+   660→   660→  onStart,
+   661→   661→  onStop,
+   662→   662→  onRestart,
+   663→   663→  onDelete,
+   664→   664→}: {
+   665→   665→  d: DeploymentItem;
+   666→   666→  busy: boolean;
+   667→   667→  selected: boolean;
+   668→   668→  onSelect: () => void;
+   669→   669→  onStart: () => void;
+   670→   670→  onStop: () => void;
+   671→   671→  onRestart: () => void;
+   672→   672→  onDelete: () => void;
+   673→   673→}) {
+   674→   674→  const running = d.status === "running";
+   675→   675→  const containerId = d.containerId ?? d.id;
+   676→   676→  const metrics = getContainerMetrics(containerId);
+   677→   677→  const uptime = calculateUptime(d.createdAt, d.status);
+   678→   678→
+   679→   679→  return (
+   680→   680→    <div className={`group flex flex-col gap-4 rounded-2xl border border-border border-l-4 ${statusAccentBorder(d.status)} bg-card p-4 shadow-sm transition-colors hover:border-brand/40 sm:flex-row sm:items-center sm:justify-between`}>
+   681→   681→      <div className="flex min-w-0 flex-1 items-center gap-3">
+   682→   682→        {/* Checkbox */}
+   683→   683→        <Checkbox
+   684→   684→          checked={selected}
+   685→   685→          onCheckedChange={onSelect}
+   686→   686→          aria-label={`Select ${d.app?.name ?? "deployment"}`}
+   687→   687→          onClick={(e) => e.stopPropagation()}
+   688→   688→        />
+   689→   689→
+   690→   690→        <button
+   691→   691→          className="flex min-w-0 flex-1 items-center gap-4 text-left"
+   692→   692→          onClick={() => navigate({ name: "deployment", id: d.id })}
+   693→   693→        >
+   694→   694→          <AppLogo logo={d.app?.logo ?? null} simulator={d.app?.simulator ?? "static"} name={d.app?.name ?? "App"} />
+   695→   695→          <div className="min-w-0 flex-1">
+   696→   696→            <div className="flex items-center gap-2">
+   697→   697→              <h3 className="truncate font-semibold">{d.app?.name ?? "Unknown app"}</h3>
+   698→   698→              {d.label && (
+   699→   699→                <Badge variant="outline" className="shrink-0 gap-1 border-brand/30 bg-brand-soft/50 px-1.5 py-0 text-[10px] font-medium text-brand">
+   700→   700→                  <Tag className="size-2.5" /> {d.label}
+   701→   701→                </Badge>
+   702→   702→              )}
+   703→   703→              <span className={`inline-flex shrink-0 items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusColor(d.status)}`}>
+   704→   704→                <span className="relative flex size-1.5">
+   705→   705→                  <span className={`absolute inline-flex size-full rounded-full ${statusDotClass(d.status)} opacity-75`} />
+   706→   706→                  {d.status === "running" && (
+   707→   707→                    <span className={`inline-flex size-full rounded-full ${statusDotClass(d.status)} animate-status-pulse`} />
+   708→   708→                  )}
+   709→   709→                </span>
+   710→   710→                {d.status}
+   711→   711→              </span>
+   712→   712→              {/* Health dot */}
+   713→   713→              <span className="relative flex size-2" title={`Health: ${d.status}`}>
+   714→   714→                <span className={`size-full rounded-full ${healthDotColor(d.status)}`} />
+   715→   715→              </span>
+   716→   716→            </div>
+   717→   717→            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+   718→   718→              <a
+   719→   719→                href={d.previewPath}
+   720→   720→                target="_blank"
+   721→   721→                rel="noreferrer"
+   722→   722→                className="inline-flex max-w-[180px] items-center gap-1 font-mono text-brand hover:underline sm:max-w-[220px]"
+   723→   723→                onClick={(e) => e.stopPropagation()}
+   724→   724→              >
+   725→   725→                <ExternalLink className="size-3 shrink-0" /> <span className="truncate">{d.subdomain}.apps.local</span>
+   726→   726→              </a>
+   727→   727→              <span className="inline-flex items-center gap-1 font-mono">
+   728→   728→                <Container className="size-3" /> <span className="truncate max-w-[150px]">{d.containerName}</span>
+   729→   729→              </span>
+   730→   730→              <span className="inline-flex items-center gap-1">
+   731→   731→                <Timer className="size-3" /> {running ? `Running for ${uptimeSince(d.createdAt)}` : `Stopped · ${timeAgo(d.updatedAt)}`}
+   732→   732→              </span>
+   733→   733→              {d.volumeDataSize != null && (
+   734→   734→                <span className="inline-flex items-center gap-1">
+   735→   735→                  <Database className="size-3" /> {formatDataSize(d.volumeDataSize)}
+   736→   736→                </span>
+   737→   737→              )}
+   738→   738→              {/* Uptime indicator */}
+   739→   739→              <span className="inline-flex items-center gap-1 tabular-nums">
+   740→   740→                <Activity className="size-3" />
+   741→   741→                {running ? `${uptime}% uptime` : "Stopped"}
+   742→   742→              </span>
+   743→   743→              {/* Memory usage bar */}
+   744→   744→              <span className="inline-flex items-center gap-1.5">
+   745→   745→                <span className="text-[10px] tabular-nums">{metrics.memoryUsagePercent}%</span>
+   746→   746→                <Progress value={metrics.memoryUsagePercent} className="h-1.5 w-16" />
+   747→   747→              </span>
+   748→   748→            </div>
+   749→   749→          </div>
+   750→   750→        </button>
+   751→   751→      </div>
+   752→   752→
+   753→   753→      <div className="flex items-center gap-1.5">
+   754→   754→        <Button
+   755→   755→          size="sm"
+   756→   756→          variant="outline"
+   757→   757→          className="gap-1.5"
+   758→   758→          onClick={() => window.open(d.previewPath, "_blank")}
+   759→   759→          disabled={!running}
+   760→   760→        >
+   761→   761→          <ExternalLink className="size-3.5" /> Open
+   762→   762→        </Button>
+   763→   763→        {running ? (
+   764→   764→          <Button size="sm" variant="outline" className="gap-1.5" onClick={onStop} disabled={busy}>
+   765→   765→            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5" />} Stop
+   766→   766→          </Button>
+   767→   767→        ) : (
+   768→   768→          <Button size="sm" variant="outline" className="gap-1.5" onClick={onStart} disabled={busy}>
+   769→   769→            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />} Start
+   770→   770→          </Button>
+   771→   771→        )}
+   772→   772→        <Button size="sm" variant="outline" className="gap-1.5" onClick={onRestart} disabled={busy}>
+   773→   773→          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCw className="size-3.5" />} Restart
+   774→   774→        </Button>
+   775→   775→        <AlertDialog>
+   776→   776→          <AlertDialogTrigger asChild>
+   777→   777→            <Button size="sm" variant="outline" className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy}>
+   778→   778→              <Trash2 className="size-3.5" /> Delete
+   779→   779→            </Button>
+   780→   780→          </AlertDialogTrigger>
+   781→   781→          <AlertDialogContent>
+   782→   782→            <AlertDialogHeader>
+   783→   783→              <AlertDialogTitle>Delete this deployment?</AlertDialogTitle>
+   784→   784→              <AlertDialogDescription>
+   785→   785→                This permanently removes the container <span className="font-mono">{d.containerName}</span> and its
+   786→   786→                volume <span className="font-mono">{d.volumeName}</span>. All persisted data will be lost.
+   787→   787→              </AlertDialogDescription>
+   788→   788→            </AlertDialogHeader>
+   789→   789→            <AlertDialogFooter>
+   790→   790→              <AlertDialogCancel>Cancel</AlertDialogCancel>
+   791→   791→              <AlertDialogAction
+   792→   792→                onClick={onDelete}
+   793→   793→                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+   794→   794→              >
+   795→   795→                Delete
+   796→   796→              </AlertDialogAction>
+   797→   797→            </AlertDialogFooter>
+   798→   798→          </AlertDialogContent>
+   799→   799→        </AlertDialog>
+   800→   800→      </div>
+   801→   801→    </div>
+   802→   802→  );
+   803→   803→}
+   804→   804→
+   805→   805→function EmptyState() {
+   806→   806→  return (
+   807→   807→    <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border py-20 text-center">
+   808→   808→      {/* Background decorative elements */}
+   809→   809→      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+   810→   810→        <div className="absolute -left-12 top-1/4 size-32 rounded-full bg-emerald-500/5 blur-2xl" />
+   811→   811→        <div className="absolute -right-8 bottom-1/4 size-24 rounded-full bg-teal-500/5 blur-2xl" />
+   812→   812→      </div>
+   813→   813→      <div className="relative">
+   814→   814→        <div className="flex size-20 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 text-brand shadow-sm dark:from-emerald-950/30 dark:to-teal-950/30">
+   815→   815→          <Container className="size-9" />
+   816→   816→        </div>
+   817→   817→        <div className="absolute -right-2 -top-2 flex size-6 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
+   818→   818→          <Plus className="size-3" />
+   819→   819→        </div>
+   820→   820→        {/* Decorative dots */}
+   821→   821→        <div className="absolute -left-4 bottom-0 size-2 rounded-full bg-emerald-500/20" />
+   822→   822→        <div className="absolute -right-6 bottom-2 size-1.5 rounded-full bg-teal-500/20" />
+   823→   823→      </div>
+   824→   824→      <h3 className="mt-6 text-lg font-semibold">No deployments yet</h3>
+   825→   825→      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+   826→   826→        Browse the marketplace and deploy your first open-source application in one click.
+   827→   827→      </p>
+   828→   828→      <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row">
+   829→   829→        <Button className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-sm hover:shadow-md hover:brightness-110" onClick={() => navigate({ name: "marketplace" })}>
+   830→   830→          <Rocket className="mr-2 size-4" /> Browse marketplace
+   831→   831→        </Button>
+   832→   832→      </div>
+   833→   833→      {/* Quick suggestions */}
+   834→   834→      <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+   835→   835→        <span className="text-xs text-muted-foreground/60">Try:</span>
+   836→   836→        {["Demo Counter", "Static Welcome", "Markdown Wiki"].map((name) => (
+   837→   837→          <button
+   838→   838→            key={name}
+   839→   839→            onClick={() => navigate({ name: "marketplace" })}
+   840→   840→            className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-all hover:border-emerald-500/30 hover:text-emerald-600 dark:hover:text-emerald-400"
+   841→   841→          >
+   842→   842→            <Rocket className="size-2.5" /> {name}
+   843→   843→          </button>
+   844→   844→        ))}
+   845→   845→      </div>
+   846→   846→    </div>
+   847→   847→  );
+   848→   848→}
+   849→   849→
+   850→   850→function timeAgo(iso: string): string {
+   851→   851→  const diff = Date.now() - new Date(iso).getTime();
+   852→   852→  const mins = Math.floor(diff / 60000);
+   853→   853→  if (mins < 1) return "just now";
+   854→   854→  if (mins < 60) return `${mins}m ago`;
+   855→   855→  const hrs = Math.floor(mins / 60);
+   856→   856→  if (hrs < 24) return `${hrs}h ago`;
+   857→   857→  const days = Math.floor(hrs / 24);
+   858→   858→  return `${days}d ago`;
+   859→   859→}
+   860→   860→
+   861→   861→function uptimeSince(iso: string): string {
+   862→   862→  const diff = Date.now() - new Date(iso).getTime();
+   863→   863→  const mins = Math.floor(diff / 60000);
+   864→   864→  if (mins < 1) return "<1m";
+   865→   865→  if (mins < 60) return `${mins}m`;
+   866→   866→  const hrs = Math.floor(mins / 60);
+   867→   867→  const remainMins = mins % 60;
+   868→   868→  if (hrs < 24) return remainMins > 0 ? `${hrs}h ${remainMins}m` : `${hrs}h`;
+   869→   869→  const days = Math.floor(hrs / 24);
+   870→   870→  return `${days}d`;
+   871→   871→}
+   872→   872→
+   873→   873→function formatDataSize(bytes: number): string {
+   874→   874→  if (bytes < 1024) return `${bytes} B`;
+   875→   875→  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+   876→   876→  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+   877→   877→}
+   878→   878→
+   879→   879→function estimateCost(deployments: DeploymentItem[]) {
+   880→   880→  const running = deployments.filter((d) => d.status === "running").length;
+   881→   881→  const cpuCost = 0.5 * running * 5;  // $5/core/month
+   882→   882→  const memCost = 0.5 * running * 3;   // $3/512MB/month
+   883→   883→  const totalStorage = deployments.reduce((a, d) => a + (d.volumeDataSize ?? 0), 0);
+   884→   884→  const storageGB = Math.max(1, totalStorage / 1024 / 1024);
+   885→   885→  const storageCost = storageGB * 0.10; // $0.10/GB/month
+   886→   886→  const monthly = cpuCost + memCost + storageCost;
+   887→   887→  const daily = monthly / 30;
+   888→   888→  return { monthly, daily };
+   889→   889→}
+   890→   890→
+   891→   891→export { Badge };
+   892→   892→
+   893→   893→/* ---------- Resource Usage Sparklines ---------- */
+   894→   894→
+   895→   895→const SPARKLINE_POINTS = 20;
+   896→   896→
+   897→   897→function ResourceUsageSparklines({ deployments }: { deployments: DeploymentItem[] }) {
+   898→   898→  const runningDeployments = deployments.filter((d) => d.status === "running");
+   899→   899→  const hasRunning = runningDeployments.length > 0;
+   900→   900→
+   901→   901→  // Compute aggregate base metrics across all running deployments
+   902→   902→  const aggMetrics = useMemo(() => {
+   903→   903→    if (runningDeployments.length === 0) {
+   904→   904→      return { cpu: 0, memory: 0, network: 0, disk: 0 };
+   905→   905→    }
+   906→   906→    let cpu = 0;
+   907→   907→    let memory = 0;
+   908→   908→    let network = 0;
+   909→   909→    let disk = 0;
+   910→   910→    for (const d of runningDeployments) {
+   911→   911→      const containerId = d.containerId ?? d.id;
+   912→   912→      const m = getContainerMetrics(containerId);
+   913→   913→      cpu += m.cpuUsagePercent;
+   914→   914→      memory += m.memoryUsagePercent;
+   915→   915→      // Derive network/disk from other metrics for realism
+   916→   916→      network += m.responseLatencyMs / 150 * 40 + 10; // ~10-50 range
+   917→   917→      disk += m.healthScore * 0.3 + 5; // ~5-35 range
+   918→   918→    }
+   919→   919→    const n = runningDeployments.length;
+   920→   920→    return {
+   921→   921→      cpu: cpu / n,
+   922→   922→      memory: memory / n,
+   923→   923→      network: network / n,
+   924→   924→      disk: disk / n,
+   925→   925→    };
+   926→   926→  }, [runningDeployments]);
+   927→   927→
+   928→   928→  // Stable seed for initial series generation
+   929→   929→  const seed = useMemo(
+   930→   930→    () => `dash-${runningDeployments.map((d) => d.id).join(",")}`,
+   931→   931→    [runningDeployments],
+   932→   932→  );
+   933→   933→
+   934→   934→  // Tick counter drives series evolution
+   935→   935→  const [tick, setTick] = useState(0);
+   936→   936→
+   937→   937→  // Auto-refresh every 10 seconds
+   938→   938→  useEffect(() => {
+   939→   939→    const t = setInterval(() => setTick((n) => n + 1), 10000);
+   940→   940→    return () => clearInterval(t);
+   941→   941→  }, []);
+   942→   942→
+   943→   943→  // Compute full series from seed + tick (fully derived, no intermediate state)
+   944→   944→  const series = useMemo(() => {
+   945→   945→    const cpu = generateTimeSeries(aggMetrics.cpu, SPARKLINE_POINTS, 5, `${seed}:cpu`);
+   946→   946→    const memory = generateTimeSeries(aggMetrics.memory, SPARKLINE_POINTS, 4, `${seed}:mem`);
+   947→   947→    const network = generateTimeSeries(aggMetrics.network, SPARKLINE_POINTS, 6, `${seed}:net`);
+   948→   948→    const disk = generateTimeSeries(aggMetrics.disk, SPARKLINE_POINTS, 4, `${seed}:disk`);
+   949→   949→    // Apply tick-based evolution
+   950→   950→    let c = cpu, m = memory, n = network, d = disk;
+   951→   951→    for (let i = 0; i < tick; i++) {
+   952→   952→      c = tickTimeSeries(c, aggMetrics.cpu, 5, i + 1);
+   953→   953→      m = tickTimeSeries(m, aggMetrics.memory, 4, i + 1);
+   954→   954→      n = tickTimeSeries(n, aggMetrics.network, 6, i + 1);
+   955→   955→      d = tickTimeSeries(d, aggMetrics.disk, 4, i + 1);
+   956→   956→    }
+   957→   957→    return { cpu: c, memory: m, network: n, disk: d };
+   958→   958→  }, [aggMetrics, seed, tick]);
+   959→   959→
+   960→   960→  const color = hasRunning ? "#10b981" : "#a1a1aa";
+   961→   961→
+   962→   962→  const charts: {
+   963→   963→    key: string;
+   964→   964→    label: string;
+   965→   965→    icon: React.ReactNode;
+   966→   966→    data: number[];
+   967→   967→    unit: string;
+   968→   968→    decimals?: number;
+   969→   969→  }[] = [
+   970→   970→    {
+   971→   971→      key: "cpu",
+   972→   972→      label: "CPU Usage",
+   973→   973→      icon: <Cpu className="size-3.5" />,
+   974→   974→      data: series.cpu,
+   975→   975→      unit: "%",
+   976→   976→    },
+   977→   977→    {
+   978→   978→      key: "memory",
+   979→   979→      label: "Memory Usage",
+   980→   980→      icon: <MemoryStick className="size-3.5" />,
+   981→   981→      data: series.memory,
+   982→   982→      unit: "%",
+   983→   983→    },
+   984→   984→    {
+   985→   985→      key: "network",
+   986→   986→      label: "Network I/O",
+   987→   987→      icon: <Wifi className="size-3.5" />,
+   988→   988→      data: series.network,
+   989→   989→      unit: " MB/s",
+   990→   990→      decimals: 1,
+   991→   991→    },
+   992→   992→    {
+   993→   993→      key: "disk",
+   994→   994→      label: "Disk I/O",
+   995→   995→      icon: <HardDriveUpload className="size-3.5" />,
+   996→   996→      data: series.disk,
+   997→   997→      unit: " MB/s",
+   998→   998→      decimals: 1,
+   999→   999→    },
+  1000→  1000→  ];
+  1001→  1001→
+  1002→  1002→  return (
+  1003→  1003→    <div className="mt-8">
+  1004→  1004→      <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+  1005→  1005→        <Activity className="size-4" /> Resource usage
+  1006→  1006→      </h2>
+  1007→  1007→      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+  1008→  1008→        {charts.map((c) => {
+  1009→  1009→          const current = c.data[c.data.length - 1] ?? 0;
+  1010→  1010→          const prev = c.data[c.data.length - 2] ?? current;
+  1011→  1011→          const trendUp = current >= prev;
+  1012→  1012→          const displayVal = c.decimals ? current.toFixed(c.decimals) : Math.round(current);
+  1013→  1013→          return (
+  1014→  1014→            <div
+  1015→  1015→              key={c.key}
+  1016→  1016→              className="flex flex-col rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:border-brand/30"
+  1017→  1017→            >
+  1018→  1018→              <div className="flex items-center justify-between">
+  1019→  1019→                <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+  1020→  1020→                  {c.icon} {c.label}
+  1021→  1021→                </span>
+  1022→  1022→                <span className={`flex items-center gap-0.5 text-[10px] tabular-nums ${trendUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
+  1023→  1023→                  {trendUp ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+  1024→  1024→                  {Math.abs(Math.round(current - prev))}
+  1025→  1025→                </span>
+  1026→  1026→              </div>
+  1027→  1027→              <p className="mt-1 text-lg font-bold tabular-nums">
+  1028→  1028→                {displayVal}{c.unit}
+  1029→  1029→              </p>
+  1030→  1030→              <Sparkline
+  1031→  1031→                data={c.data}
+  1032→  1032→                color={color}
+  1033→  1033→                width={100}
+  1034→  1034→                height={24}
+  1035→  1035→                strokeWidth={1.5}
+  1036→  1036→                showArea
+  1037→  1037→                id={`dash-${c.key}`}
+  1038→  1038→                className="mt-1 w-full"
+  1039→  1039→              />
+  1040→  1040→            </div>
+  1041→  1041→          );
+  1042→  1042→        })}
+  1043→  1043→      </div>
+  1044→  1044→    </div>
+  1045→  1045→  );
+  1046→  1046→}
+  1047→  1047→

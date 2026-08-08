@@ -24,8 +24,12 @@ import {
   Container,
   Database,
   Zap,
+  Copy,
+  FileText,
+  Rocket,
+  Plus,
 } from "lucide-react";
-import { api, useAuth, navigate, type DeploymentItem, ApiError } from "@/lib/store";
+import { api, useAuth, navigate, type AppItem, type DeploymentItem, ApiError } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -97,6 +101,15 @@ export function SettingsView() {
           description="Default settings for new deployments"
         >
           <DeploymentDefaultsSection />
+        </SettingsCard>
+
+        {/* Deployment Templates */}
+        <SettingsCard
+          icon={<FileText className="size-5" />}
+          title="Deployment templates"
+          description="Save reusable deployment configurations"
+        >
+          <DeploymentTemplatesSection />
         </SettingsCard>
 
         {/* Notifications */}
@@ -489,6 +502,348 @@ function NotificationToggle({
         </div>
       </div>
       <Switch checked={checked} onCheckedChange={onChange} />
+    </div>
+  );
+}
+
+/* ---------- Deployment Templates ---------- */
+
+interface DeployTemplate {
+  id: string;
+  name: string;
+  appSlug: string;
+  labelPrefix: string;
+  envVars: Record<string, string>;
+}
+
+const TEMPLATES_KEY = "oss-deploy-templates";
+
+const DEFAULT_TEMPLATES: DeployTemplate[] = [
+  {
+    id: "tpl-prod-counter",
+    name: "Production Counter",
+    appSlug: "demo-counter",
+    labelPrefix: "prod",
+    envVars: { NODE_ENV: "production" },
+  },
+  {
+    id: "tpl-dev-wiki",
+    name: "Dev Wiki",
+    appSlug: "markdown-wiki",
+    labelPrefix: "dev",
+    envVars: { EDITOR_MODE: "development" },
+  },
+];
+
+function loadTemplates(): DeployTemplate[] {
+  if (typeof window === "undefined") return DEFAULT_TEMPLATES;
+  try {
+    const raw = localStorage.getItem(TEMPLATES_KEY);
+    if (!raw) {
+      // Pre-populate with defaults on first access
+      localStorage.setItem(TEMPLATES_KEY, JSON.stringify(DEFAULT_TEMPLATES));
+      return DEFAULT_TEMPLATES;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return DEFAULT_TEMPLATES;
+  }
+}
+
+function saveTemplates(templates: DeployTemplate[]) {
+  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+}
+
+function DeploymentTemplatesSection() {
+  const [templates, setTemplates] = useState<DeployTemplate[]>(() => loadTemplates());
+  const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [apps, setApps] = useState<AppItem[]>([]);
+  const [newName, setNewName] = useState("");
+  const [newAppSlug, setNewAppSlug] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [newEnvKey, setNewEnvKey] = useState("");
+  const [newEnvValue, setNewEnvValue] = useState("");
+  const [newEnvVars, setNewEnvVars] = useState<Record<string, string>>({});
+
+  // Load apps catalog for the select dropdown
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await api<{ apps: AppItem[] }>("/api/apps");
+        setApps(data.apps);
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
+
+  function handleCreate() {
+    if (!newName.trim() || !newAppSlug) {
+      toast.error("Template name and app are required");
+      return;
+    }
+    const tpl: DeployTemplate = {
+      id: `tpl-${Date.now()}`,
+      name: newName.trim(),
+      appSlug: newAppSlug,
+      labelPrefix: newLabel.trim(),
+      envVars: { ...newEnvVars },
+    };
+    const next = [...templates, tpl];
+    setTemplates(next);
+    saveTemplates(next);
+    setCreating(false);
+    setNewName("");
+    setNewAppSlug("");
+    setNewLabel("");
+    setNewEnvVars({});
+    toast.success("Template created");
+  }
+
+  function handleDelete(id: string) {
+    const next = templates.filter((t) => t.id !== id);
+    setTemplates(next);
+    saveTemplates(next);
+    toast.success("Template deleted");
+  }
+
+  function handleAddEnvVar() {
+    if (!newEnvKey.trim()) return;
+    setNewEnvVars((prev) => ({ ...prev, [newEnvKey.trim()]: newEnvValue.trim() }));
+    setNewEnvKey("");
+    setNewEnvValue("");
+  }
+
+  function handleRemoveEnvVar(key: string) {
+    setNewEnvVars((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
+
+  function startEdit(tpl: DeployTemplate) {
+    setEditingId(tpl.id);
+    setEditName(tpl.name);
+  }
+
+  function saveEdit(id: string) {
+    if (!editName.trim()) return;
+    const next = templates.map((t) => (t.id === id ? { ...t, name: editName.trim() } : t));
+    setTemplates(next);
+    saveTemplates(next);
+    setEditingId(null);
+    toast.success("Template renamed");
+  }
+
+  function applyTemplate(tpl: DeployTemplate) {
+    navigate({ name: "app", slug: tpl.appSlug });
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Template list */}
+      {templates.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No templates yet. Create one to get started.</p>
+      ) : (
+        <div className="space-y-2">
+          {templates.map((tpl) => {
+            const app = apps.find((a) => a.slug === tpl.appSlug);
+            const envCount = Object.keys(tpl.envVars).length;
+            return (
+              <div
+                key={tpl.id}
+                className="group flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/40 p-3 transition-colors hover:border-brand/30"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    {editingId === tpl.id ? (
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveEdit(tpl.id);
+                            if (e.key === "Escape") setEditingId(null);
+                          }}
+                          className="h-7 w-40 text-xs"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => saveEdit(tpl.id)}
+                          className="inline-flex size-7 items-center justify-center rounded-md bg-brand text-brand-foreground hover:bg-brand/90"
+                          aria-label="Save"
+                        >
+                          <Check className="size-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="inline-flex size-7 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
+                          aria-label="Cancel"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-sm font-medium">{tpl.name}</span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <Rocket className="size-3" /> {app?.name ?? tpl.appSlug}
+                    </span>
+                    {tpl.labelPrefix && (
+                      <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px] font-medium">
+                        {tpl.labelPrefix}
+                      </Badge>
+                    )}
+                    {envCount > 0 && (
+                      <span className="inline-flex items-center gap-1">
+                        <Container className="size-3" /> {envCount} env var{envCount !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button size="sm" variant="outline" onClick={() => applyTemplate(tpl)} className="gap-1.5">
+                    <Rocket className="size-3.5" /> Use
+                  </Button>
+                  {editingId !== tpl.id && (
+                    <Button size="sm" variant="ghost" onClick={() => startEdit(tpl)} className="size-8 p-0">
+                      <Pencil className="size-3.5" />
+                    </Button>
+                  )}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-destructive">
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete template &quot;{tpl.name}&quot;?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will remove this deployment template. This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDelete(tpl.id)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Create template form */}
+      {creating ? (
+        <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-4">
+          <p className="text-sm font-medium">Create new template</p>
+          <div className="space-y-1.5">
+            <Label htmlFor="tpl-name">Template name</Label>
+            <Input
+              id="tpl-name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="e.g. Production Counter"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="tpl-app">App</Label>
+            <Select value={newAppSlug} onValueChange={setNewAppSlug}>
+              <SelectTrigger id="tpl-app">
+                <SelectValue placeholder="Select an app…" />
+              </SelectTrigger>
+              <SelectContent>
+                {apps.map((a) => (
+                  <SelectItem key={a.slug} value={a.slug}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="tpl-label">Label prefix (optional)</Label>
+            <Input
+              id="tpl-label"
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              placeholder="e.g. prod, staging, dev"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Environment variables (optional)</Label>
+            <div className="flex gap-2">
+              <Input
+                value={newEnvKey}
+                onChange={(e) => setNewEnvKey(e.target.value)}
+                placeholder="KEY"
+                className="flex-1"
+              />
+              <Input
+                value={newEnvValue}
+                onChange={(e) => setNewEnvValue(e.target.value)}
+                placeholder="VALUE"
+                className="flex-1"
+              />
+              <Button size="sm" variant="outline" onClick={handleAddEnvVar} disabled={!newEnvKey.trim()}>
+                <Plus className="size-3.5" />
+              </Button>
+            </div>
+            {Object.keys(newEnvVars).length > 0 && (
+              <div className="mt-2 space-y-1">
+                {Object.entries(newEnvVars).map(([k, v]) => (
+                  <div key={k} className="flex items-center gap-2 text-xs">
+                    <span className="font-mono font-medium">{k}</span>
+                    <span className="text-muted-foreground">=</span>
+                    <span className="font-mono text-muted-foreground">{v || '""'}</span>
+                    <button
+                      onClick={() => handleRemoveEnvVar(k)}
+                      className="ml-auto text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <Button size="sm" onClick={handleCreate} disabled={!newName.trim() || !newAppSlug}>
+              <Check className="mr-1.5 size-3.5" /> Create template
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setCreating(false);
+                setNewName("");
+                setNewAppSlug("");
+                setNewLabel("");
+                setNewEnvVars({});
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
+          <Plus className="mr-1.5 size-3.5" /> Create Template
+        </Button>
+      )}
     </div>
   );
 }

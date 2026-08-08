@@ -58,7 +58,7 @@ export function LoginView() {
             <Feature title="Unique public URL" desc="Each deployment is reachable on its own subdomain." />
           </ul>
 
-          {/* Decorative geometric shapes */}
+          {/* Decorative geometric shapes — enhanced with more variety */}
           <div className="relative mt-8 h-40 overflow-hidden" aria-hidden="true">
             {/* Large circle */}
             <div className="animate-float-slow absolute -left-8 top-0 size-32 rounded-full border border-brand/20 bg-brand/5" />
@@ -73,107 +73,132 @@ export function LoginView() {
             <div className="animate-float-slower absolute bottom-4 left-12 h-1.5 w-28 rounded-full bg-gradient-to-r from-emerald-500/30 via-teal-500/20 to-transparent" />
             {/* Triangle-ish shape */}
             <div className="animate-float-slow absolute right-40 bottom-2 size-0 border-x-[12px] border-b-[20px] border-x-transparent border-b-brand/20" />
+            {/* Additional decorative shapes */}
+            {/* Ring */}
+            <div className="animate-float-slower absolute left-16 top-2 size-12 rounded-full border-2 border-teal-400/15" />
+            {/* Small diamond */}
+            <div className="animate-float-slow absolute right-28 top-14 size-6 rotate-45 rounded-sm border border-emerald-400/20 bg-emerald-400/5" />
+            {/* Wavy gradient line */}
+            <div className="animate-float-slower absolute bottom-8 right-0 h-1 w-32 rounded-full bg-gradient-to-l from-cyan-400/20 via-emerald-500/15 to-transparent" />
+            {/* Hexagon-ish (rounded square) */}
+            <div className="animate-float-slow absolute left-56 top-6 size-8 rounded-lg border border-brand/10 bg-brand/3 rotate-6" />
+            {/* Double dot */}
+            <div className="animate-float-slower absolute right-52 bottom-4 flex gap-1.5">
+              <div className="size-1.5 rounded-full bg-teal-400/25" />
+              <div className="size-1.5 rounded-full bg-emerald-400/25" />
+            </div>
           </div>
         </div>
 
         {/* Auth form */}
         <div className="mx-auto w-full max-w-md">
-          <div className="rounded-2xl border border-border/60 bg-card/70 p-7 shadow-lg backdrop-blur-xl supports-[backdrop-filter]:bg-card/50">
-            <div className="mb-6 flex items-center gap-2.5 lg:hidden">
-              <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
-                <Rocket className="size-5" />
-              </span>
-              <span className="text-sm font-bold">OSS Deploy</span>
-            </div>
+          {/* Dots pattern background behind the auth card */}
+          <div className="relative">
+            <div className="absolute -inset-6 -z-10 rounded-3xl bg-grid opacity-30 [mask-image:radial-gradient(ellipse_at_center,black,transparent_70%)]" />
+            <div className="rounded-2xl border border-border/60 bg-card/70 p-7 shadow-lg backdrop-blur-xl supports-[backdrop-filter]:bg-card/50">
+              <div className="mb-6 flex items-center gap-2.5 lg:hidden">
+                <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
+                  <Rocket className="size-5" />
+                </span>
+                <span className="text-sm font-bold">OSS Deploy</span>
+              </div>
 
-            <div className="mb-5 flex rounded-lg border border-border bg-muted/40 p-1">
-              {(["login", "register"] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setMode(m)}
-                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                    mode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              <div className="mb-5 relative flex rounded-lg border border-border bg-muted/40 p-1">
+                {/* Sliding indicator */}
+                <div
+                  className={`absolute top-1 bottom-1 rounded-md bg-background shadow-sm transition-all duration-200 ease-out ${
+                    mode === "login" ? "left-1 right-1/2" : "left-1/2 right-1"
                   }`}
-                >
-                  {m === "login" ? "Sign in" : "Create account"}
-                </button>
-              ))}
-            </div>
+                  style={{ margin: "0 2px" }}
+                />
+                {(["login", "register"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    className={`relative z-10 flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      mode === m ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {m === "login" ? "Sign in" : "Create account"}
+                  </button>
+                ))}
+              </div>
 
-            <form onSubmit={submit} className="space-y-4">
-              {mode === "register" && (
+              <form onSubmit={submit} className="space-y-4">
+                {mode === "register" && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="name">Name (optional)</Label>
+                    <div className="relative">
+                      <User className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Ada Lovelace"
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-1.5">
-                  <Label htmlFor="name">Name (optional)</Label>
+                  <Label htmlFor="email">Email</Label>
                   <div className="relative">
-                    <User className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      id="name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Ada Lovelace"
+                      id="email"
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
                       className="pl-9"
                     />
                   </div>
                 </div>
-              )}
-              <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="pl-9"
-                  />
+                <div className="space-y-1.5">
+                  <Label htmlFor="password">Password</Label>
+                  <div className="relative">
+                    <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type="password"
+                      required
+                      minLength={6}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="pl-9"
+                    />
+                  </div>
+                  {mode === "register" && (
+                    <p className="text-[11px] text-muted-foreground">At least 6 characters.</p>
+                  )}
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type="password"
-                    required
-                    minLength={6}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="pl-9"
-                  />
-                </div>
-                {mode === "register" && (
-                  <p className="text-[11px] text-muted-foreground">At least 6 characters.</p>
-                )}
-              </div>
 
-              <Button
-                type="submit"
-                disabled={busy}
-                className="w-full bg-brand text-brand-foreground hover:bg-brand/90"
-              >
-                {busy ? (
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                ) : (
-                  <ArrowRight className="mr-2 size-4" />
-                )}
-                {mode === "login" ? "Sign in" : "Create account"}
-              </Button>
-            </form>
+                <Button
+                  type="submit"
+                  disabled={busy}
+                  className="w-full bg-brand text-brand-foreground hover:bg-brand/90"
+                >
+                  {busy ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <ArrowRight className="mr-2 size-4" />
+                  )}
+                  {mode === "login" ? "Sign in" : "Create account"}
+                </Button>
+              </form>
 
-            <p className="mt-5 text-center text-xs text-muted-foreground">
-              {mode === "login" ? "No account yet?" : "Already registered?"}{" "}
-              <button
-                onClick={() => setMode(mode === "login" ? "register" : "login")}
-                className="font-medium text-brand hover:underline"
-              >
-                {mode === "login" ? "Create one" : "Sign in"}
-              </button>
-            </p>
+              <p className="mt-5 text-center text-xs text-muted-foreground">
+                {mode === "login" ? "No account yet?" : "Already registered?"}{" "}
+                <button
+                  onClick={() => setMode(mode === "login" ? "register" : "login")}
+                  className="font-medium text-brand hover:underline"
+                >
+                  {mode === "login" ? "Create one" : "Sign in"}
+                </button>
+              </p>
+            </div>
           </div>
         </div>
       </div>

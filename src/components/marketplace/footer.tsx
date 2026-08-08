@@ -6,8 +6,8 @@ import { navigate } from "@/lib/store";
 export function Footer() {
   return (
     <footer className="mt-auto bg-muted/30">
-      {/* Top gradient border */}
-      <div className="footer-gradient-border" />
+      {/* Top animated gradient line */}
+      <div className="footer-animated-gradient" />
       <div className="mx-auto max-w-6xl px-4 py-10">
         <div className="grid gap-8 md:grid-cols-4 md:items-start">
           <div className="md:col-span-2">

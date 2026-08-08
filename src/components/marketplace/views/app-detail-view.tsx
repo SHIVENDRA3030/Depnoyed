@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Rocket,
@@ -42,7 +42,9 @@ export function AppDetailView({ slug }: { slug: string }) {
   const [app, setApp] = useState<AppItem | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [showStickyDeploy, setShowStickyDeploy] = useState(false);
   const user = useAuth((s) => s.user);
+  const deployBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     (async () => {
@@ -55,6 +57,15 @@ export function AppDetailView({ slug }: { slug: string }) {
     })();
   }, [slug]);
 
+  useEffect(() => {
+    function onScroll() {
+      if (!deployBtnRef.current) return;
+      const rect = deployBtnRef.current.getBoundingClientRect();
+      setShowStickyDeploy(rect.bottom < 0);
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [app]);
   function deploy() {
     if (!app) return;
     if (!user) {
@@ -99,6 +110,12 @@ export function AppDetailView({ slug }: { slug: string }) {
       {/* Header */}
       <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-emerald-50 via-card to-card p-6 shadow-sm dark:from-emerald-950/30">
         <div className="absolute inset-0 -z-10 bg-grid opacity-30 [mask-image:radial-gradient(ellipse_at_top_left,black,transparent_70%)]" />
+        {/* Decorative mesh gradient behind header */}
+        <div className="pointer-events-none absolute inset-0 -z-5 overflow-hidden">
+          <div className="absolute -left-10 -top-10 size-40 rounded-full bg-emerald-400/8 blur-3xl dark:bg-emerald-500/5" />
+          <div className="absolute -right-6 bottom-0 size-32 rounded-full bg-teal-400/10 blur-3xl dark:bg-teal-500/6" />
+          <div className="absolute left-1/2 top-1/2 size-24 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-400/5 blur-2xl dark:bg-cyan-500/3" />
+        </div>
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
             <AppLogo logo={app.logo} simulator={app.simulator} name={app.name} size="lg" />
@@ -149,6 +166,7 @@ export function AppDetailView({ slug }: { slug: string }) {
             </div>
           </div>
           <Button
+            ref={deployBtnRef}
             size="lg"
             onClick={deploy}
             className="bg-brand text-brand-foreground hover:bg-brand/90"
@@ -159,9 +177,9 @@ export function AppDetailView({ slug }: { slug: string }) {
         </div>
       </div>
 
-      {/* What you get */}
+      {/* What you get — with gradient borders */}
       <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="gradient-border-card rounded-2xl border border-border bg-card p-5 shadow-sm">
           <h2 className="text-sm font-semibold">What you get</h2>
           <ul className="mt-3 space-y-2.5 text-sm">
             <Row icon={<Container className="size-4 text-brand" />} title="Isolated container" desc={`${app.dockerImage} · port ${app.containerPort}`} />
@@ -170,7 +188,7 @@ export function AppDetailView({ slug }: { slug: string }) {
             <Row icon={<ShieldCheck className="size-4 text-brand" />} title="Tenant isolation" desc="Only you can access it" />
           </ul>
         </div>
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="gradient-border-card rounded-2xl border border-border bg-card p-5 shadow-sm">
           <h2 className="text-sm font-semibold">Resource limits</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             Configured server-side so one tenant can't exhaust the host.
@@ -236,6 +254,20 @@ export function AppDetailView({ slug }: { slug: string }) {
         </div>
       )}
 
+      {/* Sticky Deploy Button */}
+      {showStickyDeploy && (
+        <div className="fixed top-4 right-4 z-50 animate-slide-in-right">
+          <Button
+            size="sm"
+            onClick={deploy}
+            className="bg-brand text-brand-foreground shadow-lg hover:bg-brand/90"
+          >
+            <Rocket className="mr-1.5 size-4" />
+            Deploy
+          </Button>
+        </div>
+      )}
+
       {app && <DeployModal app={app} open={modalOpen} onOpenChange={setModalOpen} />}
     </div>
   );
@@ -266,7 +298,7 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
 
 function Spec({ icon, label, value, mono }: { icon: React.ReactNode; label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-lg border border-border/60 bg-background/40 p-3">
+    <div className="rounded-lg border border-border/60 bg-background/40 p-3 transition-colors hover:bg-muted/30">
       <dt className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
         {icon} {label}
       </dt>

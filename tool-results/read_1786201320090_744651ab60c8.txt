@@ -1,0 +1,588 @@
+     1→"use client";
+     2→
+     3→import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+     4→import { Rocket, Search, Boxes, Container, Database, Globe, ArrowRight, Loader2, Sparkles, Zap, Flame, Star, TrendingUp, FlaskConical, Globe2, Wrench, FileText, Heart, Download, Clock, GitCompare, X, History } from "lucide-react";
+     5→import { api, navigate, useAuth, type AppItem, type DeploymentItem, ApiError } from "@/lib/store";
+     6→import { useCompare } from "@/lib/compare-store";
+     7→import { AppLogo } from "@/components/marketplace/app-logo";
+     8→import { DeployModal } from "@/components/marketplace/deploy-modal";
+     9→import { Button } from "@/components/ui/button";
+    10→import { Input } from "@/components/ui/input";
+    11→import { Badge } from "@/components/ui/badge";
+    12→import {
+    13→  Select,
+    14→  SelectContent,
+    15→  SelectItem,
+    16→  SelectTrigger,
+    17→  SelectValue,
+    18→} from "@/components/ui/select";
+    19→import { toast } from "sonner";
+    20→
+    21→type SortMode = "popular" | "newest" | "alpha" | "favorites";
+    22→
+    23→function getFavorites(): string[] {
+    24→  if (typeof window === "undefined") return [];
+    25→  try { return JSON.parse(localStorage.getItem("oss-favorites") || "[]"); } catch { return []; }
+    26→}
+    27→
+    28→function getRecentSearches(): string[] {
+    29→  if (typeof window === "undefined") return [];
+    30→  try { return JSON.parse(localStorage.getItem("oss-recent-searches") || "[]"); } catch { return []; }
+    31→}
+    32→
+    33→function addRecentSearch(q: string) {
+    34→  if (!q.trim()) return;
+    35→  try {
+    36→    const existing = getRecentSearches().filter(s => s !== q);
+    37→    const next = [q, ...existing].slice(0, 5);
+    38→    localStorage.setItem("oss-recent-searches", JSON.stringify(next));
+    39→  } catch {}
+    40→}
+    41→
+    42→function clearRecentSearches() {
+    43→  try { localStorage.removeItem("oss-recent-searches"); } catch {}
+    44→}
+    45→
+    46→export function MarketplaceView() {
+    47→  const [apps, setApps] = useState<AppItem[] | null>(null);
+    48→  const [query, setQuery] = useState("");
+    49→  const [activeCat, setActiveCat] = useState<string>("All");
+    50→  const [sort, setSort] = useState<SortMode>("popular");
+    51→  const [showRecent, setShowRecent] = useState(false);
+    52→  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+    53→  const [favVersion, setFavVersion] = useState(0); // bump to re-derive favorites
+    54→  const searchRef = useRef<HTMLInputElement>(null);
+    55→  const user = useAuth((s) => s.user);
+    56→
+    57→  useEffect(() => {
+    58→    (async () => {
+    59→      try {
+    60→        const { apps } = await api<{ apps: AppItem[] }>("/api/apps");
+    61→        setApps(apps);
+    62→      } catch {
+    63→        toast.error("Failed to load catalog");
+    64→        setApps([]);
+    65→      }
+    66→    })();
+    67→  }, []);
+    68→
+    69→  // Recent searches (refreshed on query change via handleSearch)
+    70→  const refreshRecent = useCallback(() => setRecentSearches(getRecentSearches()), []);
+    71→
+    72→  const categories = useMemo(() => {
+    73→    const cats = ["All", ...Array.from(new Set((apps ?? []).map((a) => a.category)))];
+    74→    const favs = getFavorites();
+    75→    if (favs.length > 0) cats.push("Favorites");
+    76→    return cats;
+    77→  }, [apps, favVersion]);
+    78→
+    79→  const filtered = useMemo(() => {
+    80→    const favs = getFavorites();
+    81→    const base = (apps ?? []).filter((a) => {
+    82→      const matchesCat = activeCat === "All" || (activeCat === "Favorites" && favs.includes(a.slug)) || a.category === activeCat;
+    83→      const q = query.trim().toLowerCase();
+    84→      const matchesQuery = !q || a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q);
+    85→      return matchesCat && matchesQuery;
+    86→    });
+    87→    const sorted = [...base];
+    88→    if (sort === "popular") {
+    89→      sorted.sort((a, b) => b.deploymentCount - a.deploymentCount);
+    90→    } else if (sort === "newest") {
+    91→      sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    92→    } else if (sort === "alpha") {
+    93→      sorted.sort((a, b) => a.name.localeCompare(b.name));
+    94→    } else if (sort === "favorites") {
+    95→      sorted.sort((a, b) => (favs.includes(b.slug) ? 1 : 0) - (favs.includes(a.slug) ? 1 : 0));
+    96→    }
+    97→    return sorted;
+    98→  }, [apps, activeCat, query, sort, favVersion]);
+    99→
+   100→  // Featured apps: top 3 by deployment count (only when no search active)
+   101→  const featured = useMemo(() => {
+   102→    if (query || activeCat !== "All") return [];
+   103→    return [...(apps ?? [])].sort((a, b) => b.deploymentCount - a.deploymentCount).slice(0, 3);
+   104→  }, [apps, query, activeCat]);
+   105→
+   106→  const totalDeploys = useMemo(() => (apps ?? []).reduce((sum, a) => sum + a.deploymentCount, 0), [apps]);
+   107→  const favCount = useMemo(() => getFavorites().length, [favVersion]); // re-derive when favorites change
+   108→
+   109→  function handleSearch(q: string) {
+   110→    setQuery(q);
+   111→    if (q.trim()) {
+   112→      addRecentSearch(q.trim());
+   113→      refreshRecent();
+   114→      setShowRecent(false);
+   115→    }
+   116→  }
+   117→
+   118→  return (
+   119→    <div>
+   120→      {/* Hero */}
+   121→      <section className="relative isolate overflow-hidden border-b border-border/80">
+   122→        <div className="absolute inset-0 -z-20 hero-gradient mesh-gradient" />
+   123→        <div className="absolute inset-0 -z-10 bg-grid opacity-30 [mask-image:radial-gradient(ellipse_at_top,black,transparent_75%)]" />
+   124→
+   125→        {/* Floating orbs */}
+   126→        <div className="pointer-events-none absolute inset-0 -z-5 overflow-hidden">
+   127→          <div className="hero-orb-1 absolute -left-20 top-10 size-64 rounded-full bg-emerald-400/8 blur-3xl dark:bg-emerald-500/5" />
+   128→          <div className="hero-orb-2 absolute right-10 top-20 size-48 rounded-full bg-teal-400/10 blur-3xl dark:bg-teal-500/6" />
+   129→          <div className="hero-orb-3 absolute left-1/3 -bottom-10 size-56 rounded-full bg-emerald-300/8 blur-3xl dark:bg-emerald-600/4" />
+   130→          {/* Small decorative particles */}
+   131→          <div className="animate-particle-drift absolute left-[15%] top-[60%] size-1 rounded-full bg-emerald-500/30 [animation-delay:0s]" />
+   132→          <div className="animate-particle-drift absolute left-[45%] top-[70%] size-1.5 rounded-full bg-teal-500/20 [animation-delay:1.5s]" />
+   133→          <div className="animate-particle-drift absolute left-[75%] top-[55%] size-1 rounded-full bg-emerald-400/25 [animation-delay:3s]" />
+   134→          <div className="animate-particle-drift absolute left-[30%] top-[80%] size-0.5 rounded-full bg-teal-400/30 [animation-delay:2s]" />
+   135→        </div>
+   136→
+   137→        <div className="mx-auto max-w-6xl px-4 py-14 sm:py-20">
+   138→          <div className="mx-auto max-w-2xl text-center">
+   139→            <span className="animate-fade-in-up inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+   140→              <Sparkles className="size-3" /> Deploy in one click
+   141→            </span>
+   142→            <h1 className="animate-fade-in-up mt-5 text-4xl font-bold tracking-tight sm:text-5xl [animation-delay:100ms]">
+   143→              The open-source app marketplace
+   144→            </h1>
+   145→            <p className="animate-fade-in-up mt-4 text-lg text-muted-foreground [animation-delay:200ms]">
+   146→              Spin up your own isolated instance of open-source applications. Each deployment gets a
+   147→              dedicated container, persistent storage, and a unique public URL.
+   148→            </p>
+   149→            <div className="animate-fade-in-up mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3 [animation-delay:300ms]">
+   150→              <StatCard icon={<Container className="size-5" />} label="Isolated containers" desc="Per deployment" />
+   151→              <StatCard icon={<Database className="size-5" />} label="Persistent volumes" desc="Data survives restarts" />
+   152→              <StatCard icon={<Globe className="size-5" />} label="Unique public URLs" desc="Instant access" />
+   153→            </div>
+   154→            {/* Quick stats row */}
+   155→            {apps && apps.length > 0 && (
+   156→              <div className="animate-fade-in-up mt-6 flex flex-wrap items-center justify-center gap-3 text-sm text-muted-foreground [animation-delay:400ms]">
+   157→                <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-3 py-1 shadow-sm">
+   158→                  <Boxes className="size-3.5 text-brand" /> {apps.length} apps available
+   159→                </span>
+   160→                <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-3 py-1 shadow-sm">
+   161→                  <Download className="size-3.5 text-brand" /> {totalDeploys} total deployments
+   162→                </span>
+   163→                {favCount > 0 && (
+   164→                  <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200/60 bg-rose-50/60 px-3 py-1 shadow-sm dark:border-rose-800/40 dark:bg-rose-950/20">
+   165→                    <Heart className="size-3.5 fill-rose-500 text-rose-500" /> {favCount} favorites
+   166→                  </span>
+   167→                )}
+   168→              </div>
+   169→            )}
+   170→          </div>
+   171→        </div>
+   172→      </section>
+   173→
+   174→      {/* Featured apps */}
+   175→      {featured.length > 0 && (
+   176→        <section className="mx-auto max-w-6xl px-4 pt-10">
+   177→          <div className="flex items-center gap-2">
+   178→            <Flame className="size-5 text-orange-500" />
+   179→            <h2 className="text-xl font-semibold">Trending now</h2>
+   180→            <Badge variant="secondary" className="ml-1 gap-1 font-normal animate-badge-pop">
+   181→              <TrendingUp className="size-3" /> Most deployed
+   182→            </Badge>
+   183→          </div>
+   184→          <p className="mt-1 text-sm text-muted-foreground">
+   185→            The most popular apps in the marketplace, ranked by deployments.
+   186→          </p>
+   187→          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+   188→            {featured.map((app, i) => (
+   189→              <div key={app.id} className="animate-card-entrance" style={{ animationDelay: `${i * 100}ms` }}>
+   190→                <FeaturedAppCard app={app} rank={i + 1} />
+   191→              </div>
+   192→            ))}
+   193→          </div>
+   194→        </section>
+   195→      )}
+   196→
+   197→      {/* Catalog */}
+   198→      <section className="mx-auto max-w-6xl px-4 py-10">
+   199→        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   200→          <div>
+   201→            <h2 className="text-xl font-semibold">Browse applications</h2>
+   202→            <p className="text-sm text-muted-foreground">Pick an app and deploy your own instance.</p>
+   203→          </div>
+   204→          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+   205→            <div className="relative w-full sm:w-72">
+   206→              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+   207→              <Input
+   208→                ref={searchRef}
+   209→                value={query}
+   210→                onChange={(e) => setQuery(e.target.value)}
+   211→                onFocus={() => setShowRecent(true)}
+   212→                onBlur={() => setTimeout(() => setShowRecent(false), 200)}
+   213→                onKeyDown={(e) => {
+   214→                  if (e.key === "Enter" && query.trim()) {
+   215→                    handleSearch(query);
+   216→                  }
+   217→                }}
+   218→                placeholder="Search apps…"
+   219→                className="pl-9 pr-8"
+   220→              />
+   221→              {query && (
+   222→                <button
+   223→                  onClick={() => { setQuery(""); searchRef.current?.focus(); }}
+   224→                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-muted-foreground"
+   225→                >
+   226→                  <X className="size-3.5" />
+   227→                </button>
+   228→              )}
+   229→              {/* Recent searches dropdown */}
+   230→              {showRecent && !query && recentSearches.length > 0 && (
+   231→                <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg">
+   232→                  <div className="flex items-center justify-between px-3 py-1.5">
+   233→                    <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+   234→                      <History className="size-3" /> Recent searches
+   235→                    </span>
+   236→                    <button
+   237→                      onClick={() => { clearRecentSearches(); setRecentSearches([]); }}
+   238→                      className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground"
+   239→                    >
+   240→                      Clear
+   241→                    </button>
+   242→                  </div>
+   243→                  {recentSearches.map((s) => (
+   244→                    <button
+   245→                      key={s}
+   246→                      onMouseDown={() => handleSearch(s)}
+   247→                      className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground/80 hover:bg-muted"
+   248→                    >
+   249→                      <History className="size-3 text-muted-foreground/50" /> {s}
+   250→                    </button>
+   251→                  ))}
+   252→                </div>
+   253→              )}
+   254→            </div>
+   255→            <Select value={sort} onValueChange={(v) => setSort(v as SortMode)}>
+   256→              <SelectTrigger className="w-full sm:w-44" size="sm">
+   257→                <SelectValue placeholder="Sort by" />
+   258→              </SelectTrigger>
+   259→              <SelectContent>
+   260→                <SelectItem value="popular">Most deployed</SelectItem>
+   261→                <SelectItem value="newest">Newest</SelectItem>
+   262→                <SelectItem value="alpha">A → Z</SelectItem>
+   263→              </SelectContent>
+   264→            </Select>
+   265→          </div>
+   266→        </div>
+   267→
+   268→        <div className="mt-4 flex flex-wrap gap-2">
+   269→          {categories.map((cat) => (
+   270→            <button
+   271→              key={cat}
+   272→              onClick={() => setActiveCat(cat)}
+   273→              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+   274→                activeCat === cat
+   275→                  ? cat === "Favorites"
+   276→                    ? "border-rose-500/40 bg-rose-500/10 text-rose-700 shadow-sm dark:text-rose-300"
+   277→                    : "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 shadow-sm dark:text-emerald-300"
+   278→                  : "border-border bg-background text-muted-foreground hover:bg-muted hover:border-border/80"
+   279→              }`}
+   280→            >
+   281→              {cat === "Favorites" ? (
+   282→                <Heart className={`size-3 ${activeCat === "Favorites" ? "fill-rose-500" : ""}`} />
+   283→              ) : (
+   284→                <CategoryIcon category={cat} />
+   285→              )}
+   286→              {cat}
+   287→              {cat === "Favorites" && (
+   288→                <span className="ml-0.5 text-[10px] text-muted-foreground/70">{favCount}</span>
+   289→              )}
+   290→              {cat !== "All" && cat !== "Favorites" && (
+   291→                <span className="ml-0.5 text-[10px] text-muted-foreground/70">
+   292→                  {(apps ?? []).filter(a => a.category === cat).length}
+   293→                </span>
+   294→              )}
+   295→            </button>
+   296→          ))}
+   297→        </div>
+   298→
+   299→        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   300→          {apps === null ? (
+   301→            Array.from({ length: 6 }).map((_, i) => (
+   302→              <div key={i} className="animate-card-entrance" style={{ animationDelay: `${i * 80}ms` }}>
+   303→                <AppCardSkeleton />
+   304→              </div>
+   305→            ))
+   306→          ) : filtered.length === 0 ? (
+   307→            <div className="col-span-full flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
+   308→              {activeCat === "Favorites" ? (
+   309→                <>
+   310→                  <Heart className="size-8 text-rose-300/50" />
+   311→                  <p className="mt-2 text-sm font-medium text-muted-foreground">No favorites yet</p>
+   312→                  <p className="mt-1 text-xs text-muted-foreground/70">Click the heart icon on any app to add it to your favorites.</p>
+   313→                </>
+   314→              ) : (
+   315→                <>
+   316→                  <Boxes className="size-8 text-muted-foreground/50" />
+   317→                  <p className="mt-2 text-sm text-muted-foreground">No applications match your search.</p>
+   318→                </>
+   319→              )}
+   320→              {query && (
+   321→                <Button variant="outline" size="sm" className="mt-3" onClick={() => setQuery("")}>
+   322→                  Clear search
+   323→                </Button>
+   324→              )}
+   325→            </div>
+   326→          ) : (
+   327→            filtered.map((app, i) => (
+   328→              <div key={app.id} className="animate-card-entrance" style={{ animationDelay: `${Math.min(i * 60, 400)}ms` }}>
+   329→                <AppCard app={app} onFavToggle={() => setFavVersion(v => v + 1)} />
+   330→              </div>
+   331→            ))
+   332→          )}
+   333→        </div>
+   334→      </section>
+   335→    </div>
+   336→  );
+   337→}
+   338→
+   339→function FeaturedAppCard({ app, rank }: { app: AppItem; rank: number }) {
+   340→  const user = useAuth((s) => s.user);
+   341→  const [modalOpen, setModalOpen] = useState(false);
+   342→
+   343→  function handleDeploy(e: React.MouseEvent) {
+   344→    e.stopPropagation();
+   345→    e.preventDefault();
+   346→    if (!user) {
+   347→      toast.info("Sign in to deploy");
+   348→      navigate({ name: "login" });
+   349→      return;
+   350→    }
+   351→    setModalOpen(true);
+   352→  }
+   353→
+   354→  const rankColor =
+   355→    rank === 1
+   356→      ? "from-amber-400 to-orange-500 text-white"
+   357→      : rank === 2
+   358→      ? "from-zinc-300 to-zinc-400 text-zinc-900"
+   359→      : "from-orange-700 to-amber-800 text-white";
+   360→
+   361→  const rankGlow =
+   362→    rank === 1
+   363→      ? "shadow-amber-500/20"
+   364→      : rank === 2
+   365→      ? "shadow-zinc-400/20"
+   366→      : "shadow-orange-500/20";
+   367→
+   368→  return (
+   369→    <div
+   370→      onClick={() => navigate({ name: "app", slug: app.slug })}
+   371→      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-50/60 via-card to-card p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-500/40 hover:shadow-xl dark:from-emerald-950/20 ${rankGlow} card-glow-hover`}
+   372→    >
+   373→      {/* Decorative glow */}
+   374→      <div className="pointer-events-none absolute -right-8 -top-8 size-24 rounded-full bg-emerald-500/5 blur-2xl transition-opacity duration-300 group-hover:opacity-100" />
+   375→      {/* Shimmer edge on hover */}
+   376→      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+   377→      
+   378→      <div className="flex items-start justify-between gap-3">
+   379→        <div className="flex items-center gap-3">
+   380→          <div className="relative">
+   381→            <AppLogo logo={app.logo} simulator={app.simulator} name={app.name} size="lg" />
+   382→            <span className={`absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-gradient-to-br ${rankColor} text-[10px] font-bold shadow-sm ring-2 ring-background`}>
+   383→              {rank}
+   384→            </span>
+   385→          </div>
+   386→          <div>
+   387→            <h3 className="text-base font-semibold leading-tight">{app.name}</h3>
+   388→            <p className="mt-0.5 text-[11px] text-muted-foreground">{app.category}</p>
+   389→          </div>
+   390→        </div>
+   391→        <Badge variant="secondary" className="gap-1 font-normal shadow-sm">
+   392→          <Zap className="size-3 text-orange-500" /> {app.deploymentCount}
+   393→        </Badge>
+   394→      </div>
+   395→      <p className="mt-3 line-clamp-2 flex-1 text-sm text-muted-foreground">{app.description}</p>
+   396→      <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-3">
+   397→        <span className="font-mono text-[11px] text-muted-foreground/80">{app.dockerImage}</span>
+   398→        <button
+   399→          onClick={handleDeploy}
+   400→          className="relative z-20 inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:shadow-md hover:brightness-110"
+   401→        >
+   402→          <Rocket className="size-3" />
+   403→          Deploy
+   404→        </button>
+   405→      </div>
+   406→      <DeployModal app={app} open={modalOpen} onOpenChange={setModalOpen} />
+   407→    </div>
+   408→  );
+   409→}
+   410→
+   411→function AppCard({ app, onFavToggle }: { app: AppItem; onFavToggle?: () => void }) {
+   412→  const user = useAuth((s) => s.user);
+   413→  const [modalOpen, setModalOpen] = useState(false);
+   414→  const inCompare = useCompare((s) => s.has(app.slug));
+   415→  const toggleCompare = useCompare((s) => s.toggle);
+   416→  const compareCount = useCompare((s) => s.slugs.length);
+   417→  const [fav, setFav] = useState(() => {
+   418→    if (typeof window === "undefined") return false;
+   419→    try {
+   420→      return JSON.parse(localStorage.getItem("oss-favorites") || "[]").includes(app.slug);
+   421→    } catch { return false; }
+   422→  });
+   423→
+   424→  function handleDeploy(e: React.MouseEvent) {
+   425→    e.stopPropagation();
+   426→    e.preventDefault();
+   427→    if (!user) {
+   428→      toast.info("Sign in to deploy");
+   429→      navigate({ name: "login" });
+   430→      return;
+   431→    }
+   432→    setModalOpen(true);
+   433→  }
+   434→
+   435→  function toggleFav(e: React.MouseEvent) {
+   436→    e.stopPropagation();
+   437→    e.preventDefault();
+   438→    try {
+   439→      const favs: string[] = JSON.parse(localStorage.getItem("oss-favorites") || "[]");
+   440→      const next = favs.includes(app.slug) ? favs.filter(f => f !== app.slug) : [...favs, app.slug];
+   441→      localStorage.setItem("oss-favorites", JSON.stringify(next));
+   442→      setFav(!fav);
+   443→      onFavToggle?.();
+   444→    } catch {}
+   445→  }
+   446→
+   447→  return (
+   448→    <div
+   449→      onClick={() => navigate({ name: "app", slug: app.slug })}
+   450→      className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border bg-card p-0 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-500/30 hover:shadow-lg card-glow-hover"
+   451→    >
+   452→      {/* Top accent bar with gradient animation */}
+   453→      <div className="h-1 w-full bg-gradient-to-r from-emerald-500/0 via-emerald-500/40 to-teal-500/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+   454→      
+   455→      <div className="flex flex-1 flex-col p-5">
+   456→        {/* Header */}
+   457→        <div className="flex items-start justify-between">
+   458→          <div className="relative">
+   459→            <AppLogo logo={app.logo} simulator={app.simulator} name={app.name} size="lg" />
+   460→            {fav && (
+   461→              <span className="absolute -right-1 -top-1 flex size-3 items-center justify-center">
+   462→                <Heart className="size-2.5 fill-rose-500 text-rose-500" />
+   463→              </span>
+   464→            )}
+   465→          </div>
+   466→          <div className="flex items-center gap-1.5">
+   467→            {app.deploymentCount > 0 && (
+   468→              <Badge variant="secondary" className="gap-1 font-normal">
+   469→                <Zap className="size-3 text-emerald-500" /> {app.deploymentCount}
+   470→              </Badge>
+   471→            )}
+   472→            <Badge variant="secondary" className="font-normal">{app.category}</Badge>
+   473→          </div>
+   474→        </div>
+   475→        <h3 className="mt-4 text-base font-semibold group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors duration-200">{app.name}</h3>
+   476→        <p className="mt-1.5 line-clamp-2 flex-1 text-sm text-muted-foreground">{app.description}</p>
+   477→        {/* Version & repo info */}
+   478→        <div className="mt-3 flex items-center gap-3 text-[11px] text-muted-foreground/60">
+   479→          {app.version && (
+   480→            <span className="inline-flex items-center gap-1">
+   481→              <span className="size-1.5 rounded-full bg-emerald-500/40" /> v{app.version}
+   482→            </span>
+   483→          )}
+   484→          {app.repository && (
+   485→            <span className="inline-flex items-center gap-1">
+   486→              <Globe2 className="size-3" /> Repository
+   487→            </span>
+   488→          )}
+   489→        </div>
+   490→      </div>
+   491→
+   492→      {/* Footer */}
+   493→      <div className="relative z-20 flex items-center justify-between border-t border-border/40 bg-muted/20 px-5 py-3">
+   494→        <span className="font-mono text-[11px] text-muted-foreground/70">{app.dockerImage}</span>
+   495→        <div className="flex items-center gap-2">
+   496→          <button
+   497→            onClick={toggleFav}
+   498→            className={`inline-flex items-center justify-center rounded-md p-1 transition-all duration-200 ${fav ? "text-rose-500 hover:text-rose-600" : "text-muted-foreground/60 hover:bg-muted hover:text-rose-500"}`}
+   499→            aria-label={fav ? "Remove from favorites" : "Add to favorites"}
+   500→          >
+   501→            <Heart className={`size-3.5 transition-all duration-200 ${fav ? "fill-rose-500" : ""}`} />
+   502→          </button>
+   503→          <button
+   504→            onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleCompare(app.slug); if (!inCompare && compareCount >= 3) toast.info("Compare tray full (max 3)"); }}
+   505→            className={`inline-flex items-center justify-center rounded-md p-1 transition-colors ${inCompare ? "text-brand bg-brand-soft" : "text-muted-foreground/60 hover:bg-muted hover:text-brand"}`}
+   506→            aria-label={inCompare ? "Remove from compare" : "Add to compare"}
+   507→            title={inCompare ? "Remove from compare" : "Add to compare"}
+   508→          >
+   509→            <GitCompare className="size-3.5" />
+   510→          </button>
+   511→          <button
+   512→            onClick={handleDeploy}
+   513→            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-all duration-200 hover:bg-emerald-500/20 hover:shadow-sm dark:text-emerald-400"
+   514→          >
+   515→            <Rocket className="size-3" /> Deploy
+   516→          </button>
+   517→          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground/60 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-muted-foreground">
+   518→            Details <ArrowRight className="size-3" />
+   519→          </span>
+   520→        </div>
+   521→      </div>
+   522→      <DeployModal app={app} open={modalOpen} onOpenChange={setModalOpen} />
+   523→    </div>
+   524→  );
+   525→}
+   526→
+   527→function StatCard({ icon, label, desc }: { icon: React.ReactNode; label: string; desc: string }) {
+   528→  return (
+   529→    <div className="group flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-background/60 px-4 py-5 text-center backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/30 hover:bg-emerald-50/30 hover:shadow-md dark:hover:bg-emerald-950/10">
+   530→      <span className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 transition-all duration-300 group-hover:bg-emerald-500/20 group-hover:scale-110 dark:text-emerald-400">
+   531→        {icon}
+   532→      </span>
+   533→      <span className="text-sm font-semibold">{label}</span>
+   534→      <span className="text-[11px] text-muted-foreground">{desc}</span>
+   535→    </div>
+   536→  );
+   537→}
+   538→
+   539→function Stat({ icon, label }: { icon: React.ReactNode; label: string }) {
+   540→  return (
+   541→    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 px-3 py-1">
+   542→      {icon} {label}
+   543→    </span>
+   544→  );
+   545→}
+   546→
+   547→function AppCardSkeleton() {
+   548→  return (
+   549→    <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card p-0">
+   550→      <div className="h-1 w-full shimmer" />
+   551→      <div className="flex flex-1 flex-col p-5">
+   552→        <div className="flex items-start justify-between">
+   553→          <div className="size-14 rounded-xl shimmer" />
+   554→          <div className="h-5 w-16 rounded-full shimmer" />
+   555→        </div>
+   556→        <div className="mt-4 h-4 w-1/2 rounded shimmer" />
+   557→        <div className="mt-2 h-3 w-full rounded shimmer" />
+   558→        <div className="mt-1.5 h-3 w-3/4 rounded shimmer" />
+   559→      </div>
+   560→      <div className="h-10 shimmer" />
+   561→    </div>
+   562→  );
+   563→}
+   564→
+   565→function CategoryIcon({ category }: { category: string }) {
+   566→  const props = { className: "size-3" };
+   567→  switch (category) {
+   568→    case "Demo":
+   569→      return <FlaskConical {...props} />;
+   570→    case "Web":
+   571→      return <Globe2 {...props} />;
+   572→    case "DevOps":
+   573→      return <Wrench {...props} />;
+   574→    case "Productivity":
+   575→      return <FileText {...props} />;
+   576→    case "Database":
+   577→      return <Database {...props} />;
+   578→    case "Monitoring":
+   579→      return <TrendingUp {...props} />;
+   580→    case "All":
+   581→      return <Boxes {...props} />;
+   582→    default:
+   583→      return null;
+   584→  }
+   585→}
+   586→
+   587→export { Loader2, Rocket };
+   588→

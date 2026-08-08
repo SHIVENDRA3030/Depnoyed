@@ -954,3 +954,64 @@ Stage Summary:
 - **QA**: Full agent-browser testing — marketplace, login, register, deploy, favorites, dark mode, mobile — all passing
 - **Lint**: Clean, zero errors
 - **Key files modified**: globals.css, marketplace-view.tsx, dashboard-view.tsx, footer.tsx
+
+---
+Task ID: 7
+Agent: lead-engineer (Z.ai Code)
+Task: Round 7 — QA testing, feature additions (Health Monitoring, Quick Actions,
+Activity Timeline, Deployment Templates, Resource Usage Donuts), and comprehensive
+styling polish across all views.
+
+Work Log:
+- Assessed project status by reading worklog.md and all key source files
+- Performed comprehensive QA testing with agent-browser:
+  - Marketplace page loads correctly with hero, trending, and browse sections
+  - Login/registration flow works (registered testuser@oss.local and qatest@oss.local)
+  - API deployment works (created Demo Counter and Gitea Lite deployments via API)
+  - Navigation between all views works correctly
+  - Dark mode toggle works
+  - All existing features intact: command palette, notifications, compare tray, favorites, etc.
+- Added Deployment Health Monitoring Widget to Dashboard:
+  - Circular SVG progress indicator for overall health score
+  - 24h uptime bar chart with staggered entrance animation
+  - Per-deployment health cards with uptime %, response time, last check
+  - Color coding: green (>95%), amber (80-95%), red (<80%)
+- Added Quick Actions Widget to Dashboard:
+  - Deploy Popular App, View All Apps, Refresh All, Stop All
+  - Gradient backgrounds, hover lift effects
+  - Contextual display (prominent "Get Started" when no deployments)
+- Enhanced Activity Timeline:
+  - Vertical connector lines between entries
+  - Descriptive action text (Deployment started, Container stopped, etc.)
+  - Relative time with tooltip for exact timestamp
+  - Expandable "View all activity" with chevron toggle
+  - Color-coded timeline dots by action type
+  - Staggered entrance animations
+- Added Resource Usage Donut Charts:
+  - 3 SVG donut charts: CPU, Memory, Storage
+  - Animated stroke-dashoffset on mount (1s ease-out transition)
+  - Color-coded strokes based on usage level
+  - Only shown when deployments exist
+- Added Deployment Templates (Settings View):
+  - Create, edit, delete, and use deployment templates
+  - Templates stored in localStorage with app slug, label prefix, env vars
+  - 2 default templates: "Production Counter" and "Dev Wiki"
+  - Positioned between Deployment defaults and Notifications sections
+- Comprehensive Styling Polish:
+  - Dashboard: gradient header, glass morphism stat cards, inner shadow on deployment rows
+  - Marketplace: animated glow on Deploy buttons, parallax hover on trending cards, extra floating orbs
+  - Login: dots grid pattern behind auth form, sliding tab indicator animation
+  - App Detail: sticky Deploy button on scroll, tech specs hover background, mesh gradient header
+  - Deployment Detail: animated gradient border on status card, terminal-style log viewer
+  - Footer: animated gradient line at top
+- New CSS animations: circular-progress-spin, health-bar-entrance, timeline-entrance,
+  footer-gradient-slide, deploy-glow-rotate, gradient-border-rotate
+- Final QA testing confirmed all features working in both light and dark mode
+- Lint passes cleanly with no errors
+
+Stage Summary:
+- All 5 new features implemented and verified: Health Monitoring, Quick Actions,
+  Enhanced Activity Timeline, Resource Usage Donuts, Deployment Templates
+- Comprehensive styling polish applied across all 6 views
+- No bugs or errors found during QA
+- Project is stable and feature-rich for MVP stage

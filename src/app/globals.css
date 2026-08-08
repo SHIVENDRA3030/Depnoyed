@@ -419,6 +419,108 @@
     opacity: 1;
   }
 
+  /* Circular progress indicator */
+  .circular-progress {
+    border-radius: 50%;
+    animation: circular-progress-spin 1.5s ease-out both;
+  }
+
+  /* Health bar entrance */
+  .animate-health-bar-entrance {
+    animation: health-bar-entrance 0.6s ease-out both;
+  }
+
+  /* Quick action card hover */
+  .quick-action-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .quick-action-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px -5px oklch(0.145 0 0 / 0.1), 0 4px 10px -4px oklch(0.145 0 0 / 0.04);
+  }
+  .dark .quick-action-card:hover {
+    box-shadow: 0 8px 25px -5px oklch(1 0 0 / 0.08), 0 4px 10px -4px oklch(1 0 0 / 0.03);
+  }
+
+  /* Timeline entrance stagger */
+  .animate-timeline-entrance {
+    animation: timeline-entrance 0.4s ease-out both;
+  }
+
+  /* Footer animated gradient line */
+  .footer-animated-gradient {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      oklch(0.696 0.17 162.48) 20%,
+      oklch(0.628 0.19 200) 40%,
+      oklch(0.696 0.17 162.48) 60%,
+      oklch(0.628 0.19 200) 80%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: footer-gradient-slide 4s linear infinite;
+    height: 2px;
+  }
+  .dark .footer-animated-gradient {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      oklch(0.696 0.17 162.48 / 0.7) 20%,
+      oklch(0.628 0.19 200 / 0.7) 40%,
+      oklch(0.696 0.17 162.48 / 0.7) 60%,
+      oklch(0.628 0.19 200 / 0.7) 80%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: footer-gradient-slide 4s linear infinite;
+  }
+
+  /* Dashboard glass stat card */
+  .glass-stat-card {
+    background: oklch(1 0 0 / 0.6);
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+  }
+  .dark .glass-stat-card {
+    background: oklch(0.205 0 0 / 0.6);
+  }
+
+  /* Gradient border wrapper for What You Get cards */
+  .gradient-border-card {
+    position: relative;
+    background: var(--card);
+    border-radius: 1rem;
+  }
+  .gradient-border-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, oklch(0.696 0.17 162.48 / 0.3), transparent 50%, oklch(0.628 0.19 200 / 0.2));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Category pill hover lift */
+  .category-pill-lift {
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+  }
+  .category-pill-lift:hover {
+    transform: translateY(-1px);
+  }
+
+  /* Dashboard header gradient bg */
+  .dashboard-header-gradient {
+    background: linear-gradient(135deg, oklch(0.96 0.03 162.48) 0%, oklch(0.98 0 0) 100%);
+  }
+  .dark .dashboard-header-gradient {
+    background: linear-gradient(135deg, oklch(0.16 0.03 162.48) 0%, oklch(0.145 0 0) 100%);
+  }
+
   /* Deployment status gradient bar */
   .status-bar-running {
     background: linear-gradient(90deg, oklch(0.696 0.17 162.48) 0%, oklch(0.628 0.19 200) 100%);
@@ -464,6 +566,50 @@
   }
   .number-change-down {
     transform: translateY(2px);
+  }
+
+  /* Deploy button animated glow border */
+  .deploy-glow-btn {
+    position: relative;
+  }
+  .deploy-glow-btn::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, oklch(0.696 0.17 162.48 / 0.4), oklch(0.628 0.19 200 / 0.3), oklch(0.696 0.17 162.48 / 0.4));
+    background-size: 200% 200%;
+    animation: deploy-glow-rotate 3s ease-in-out infinite;
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .deploy-glow-btn:hover::after {
+    opacity: 1;
+  }
+
+  /* Animated gradient border for deployment status card */
+  .gradient-border-animated {
+    position: relative;
+  }
+  .gradient-border-animated::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, oklch(0.696 0.17 162.48 / 0.3), oklch(0.628 0.19 200 / 0.2), oklch(0.696 0.17 162.48 / 0.3));
+    background-size: 200% 200%;
+    animation: gradient-border-rotate 4s ease-in-out infinite;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Terminal inner shadow for log viewer */
+  .shadow-inner-terminal {
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 0 2px rgba(0, 0, 0, 0.2);
   }
 }
 
@@ -601,4 +747,42 @@
 @keyframes cursor-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+
+/* Circular progress spin-in */
+@keyframes circular-progress-spin {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Health bar entrance */
+@keyframes health-bar-entrance {
+  from { opacity: 0; transform: scaleX(0); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+
+/* Timeline entrance */
+@keyframes timeline-entrance {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Footer gradient slide */
+@keyframes footer-gradient-slide {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Deploy button glow rotation */
+@keyframes deploy-glow-rotate {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Gradient border rotation */
+@keyframes gradient-border-rotate {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }

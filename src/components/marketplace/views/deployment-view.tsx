@@ -366,7 +366,7 @@ export function DeploymentView({ id }: { id: string }) {
       />
 
       {/* Header */}
-      <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div className="gradient-border-animated flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <AppLogo logo={dep.app?.logo ?? null} simulator={dep.app?.simulator ?? "static"} name={dep.app?.name ?? "App"} size="lg" />
@@ -560,7 +560,7 @@ export function DeploymentView({ id }: { id: string }) {
           </div>
           <div
             ref={logRef}
-            className="scroll-thin mt-3 h-72 overflow-y-auto rounded-lg bg-zinc-950 p-3 font-mono text-[11px] leading-relaxed text-zinc-300"
+            className="scroll-thin mt-3 h-72 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 font-mono text-[11px] leading-relaxed text-zinc-300 shadow-inner-terminal"
           >
             {logs.length === 0 ? (
               <p className="text-zinc-500">No logs yet.</p>
