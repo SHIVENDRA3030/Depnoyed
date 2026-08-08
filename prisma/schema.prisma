@@ -1,0 +1,57 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deployments  Deployment[]
+}
+
+model App {
+  id            String        @id @default(cuid())
+  name          String
+  slug          String        @unique
+  description   String
+  dockerImage   String
+  containerPort Int           @default(80)
+  logo          String?
+  category      String        @default("General")
+  simulator     String        @default("static")
+  defaultEnv    String?
+  createdAt     DateTime      @default(now())
+  deployments   Deployment[]
+}
+
+model Deployment {
+  id            String   @id @default(cuid())
+  userId        String
+  appId         String
+  containerId   String?
+  containerName String
+  volumeName    String
+  status        String   @default("pending")
+  subdomain     String   @unique
+  port          Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app  App  @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([appId])
+  @@index([status])
+}

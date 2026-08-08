@@ -1,0 +1,160 @@
+{
+  "containers": {
+    "ossmp-demo-counter-7igia6-f4ud": {
+      "id": "cnt_a46d30584806",
+      "name": "ossmp-demo-counter-7igia6-f4ud",
+      "status": "running",
+      "image": "ossmp/demo-counter:1.0",
+      "port": 80,
+      "volumeName": "ossmp-vol-demo-counter-7igia6-h5af",
+      "simulator": "counter",
+      "cpuLimit": 0.5,
+      "memoryLimitMb": 512,
+      "env": {
+        "DEPLOYMENT_ID": "cmska5y6r0005q63u154yvwzx",
+        "APP_SLUG": "demo-counter"
+      },
+      "logs": [
+        {
+          "t": "2026-08-08T11:18:32.791Z",
+          "stream": "stdout",
+          "message": "Creating container from image ossmp/demo-counter:1.0"
+        },
+        {
+          "t": "2026-08-08T11:18:32.791Z",
+          "stream": "stdout",
+          "message": "Mounting volume ossmp-vol-demo-counter-7igia6-h5af at /data"
+        },
+        {
+          "t": "2026-08-08T11:18:32.791Z",
+          "stream": "stdout",
+          "message": "Resource limits: cpu=0.5 memory=512MB"
+        },
+        {
+          "t": "2026-08-08T11:18:32.943Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=counter) on port 80"
+        },
+        {
+          "t": "2026-08-08T11:18:32.943Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:80"
+        },
+        {
+          "t": "2026-08-08T11:18:40.157Z",
+          "stream": "stdout",
+          "message": "Received SIGTERM, gracefully stopping application"
+        },
+        {
+          "t": "2026-08-08T11:18:40.157Z",
+          "stream": "stdout",
+          "message": "Container exited (volume data preserved)"
+        },
+        {
+          "t": "2026-08-08T11:18:41.056Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=counter) on port 80"
+        },
+        {
+          "t": "2026-08-08T11:18:41.056Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:80"
+        }
+      ],
+      "startedAt": "2026-08-08T11:18:41.056Z"
+    },
+    "ossmp-gitea-lite-7igia6-tywz": {
+      "id": "cnt_f3602a4f98e2",
+      "name": "ossmp-gitea-lite-7igia6-tywz",
+      "status": "running",
+      "image": "gitea/gitea:1.21",
+      "port": 3000,
+      "volumeName": "ossmp-vol-gitea-lite-7igia6-w9ra",
+      "simulator": "notes",
+      "cpuLimit": 0.5,
+      "memoryLimitMb": 512,
+      "env": {
+        "DEPLOYMENT_ID": "cmskaa3js000aq63ukyz4r0fh",
+        "APP_SLUG": "gitea-lite"
+      },
+      "logs": [
+        {
+          "t": "2026-08-08T11:21:46.363Z",
+          "stream": "stdout",
+          "message": "Creating container from image gitea/gitea:1.21"
+        },
+        {
+          "t": "2026-08-08T11:21:46.363Z",
+          "stream": "stdout",
+          "message": "Mounting volume ossmp-vol-gitea-lite-7igia6-w9ra at /data"
+        },
+        {
+          "t": "2026-08-08T11:21:46.363Z",
+          "stream": "stdout",
+          "message": "Resource limits: cpu=0.5 memory=512MB"
+        },
+        {
+          "t": "2026-08-08T11:21:46.515Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=notes) on port 3000"
+        },
+        {
+          "t": "2026-08-08T11:21:46.515Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:3000"
+        },
+        {
+          "t": "2026-08-08T11:25:18.673Z",
+          "stream": "stdout",
+          "message": "Received SIGTERM, gracefully stopping application"
+        },
+        {
+          "t": "2026-08-08T11:25:18.673Z",
+          "stream": "stdout",
+          "message": "Container exited (volume data preserved)"
+        },
+        {
+          "t": "2026-08-08T11:25:20.400Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=notes) on port 3000"
+        },
+        {
+          "t": "2026-08-08T11:25:20.400Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:3000"
+        },
+        {
+          "t": "2026-08-08T11:25:34.292Z",
+          "stream": "stdout",
+          "message": "Received SIGTERM, gracefully stopping application"
+        },
+        {
+          "t": "2026-08-08T11:25:34.292Z",
+          "stream": "stdout",
+          "message": "Container exited (volume data preserved)"
+        },
+        {
+          "t": "2026-08-08T11:25:34.674Z",
+          "stream": "stdout",
+          "message": "Starting container (simulator=notes) on port 3000"
+        },
+        {
+          "t": "2026-08-08T11:25:34.674Z",
+          "stream": "stdout",
+          "message": "Application is now listening on 0.0.0.0:3000"
+        }
+      ],
+      "startedAt": "2026-08-08T11:25:34.674Z"
+    }
+  },
+  "volumes": {
+    "ossmp-vol-demo-counter-7igia6-h5af": {
+      "name": "ossmp-vol-demo-counter-7igia6-h5af",
+      "createdAt": "2026-08-08T11:18:32.789Z"
+    },
+    "ossmp-vol-gitea-lite-7igia6-w9ra": {
+      "name": "ossmp-vol-gitea-lite-7igia6-w9ra",
+      "createdAt": "2026-08-08T11:21:46.360Z"
+    }
+  }
+}
