@@ -34,6 +34,7 @@ production against a real Docker host.
 - [Project Structure](#project-structure)
 - [Technology Stack](#technology-stack)
 - [Local Setup](#local-setup)
+- [How to Run (full guide)](RUN.md)
 - [Environment Variables](#environment-variables)
 - [Database Setup](#database-setup)
 - [Mock Deployment Runtime](#mock-deployment-runtime)
@@ -206,6 +207,11 @@ file from the pre-MongoDB era), `dev.log`, `worklog.md`, `download/`, etc.
 | Auth         | Dependency-free: Node `crypto` scrypt + HMAC-SHA256 signed cookies    |
 
 ## Local Setup
+
+> **Full step-by-step guide:** See [**RUN.md**](RUN.md) for complete setup
+> instructions covering both Mock mode (default, no Docker) and Real Docker
+> mode (runs actual containers), including MongoDB Atlas setup,
+> troubleshooting, and connecting to deployed databases.
 
 ### Prerequisites
 
