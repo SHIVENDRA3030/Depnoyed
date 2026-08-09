@@ -38,11 +38,11 @@ runs in the sandbox and in local development without Docker installed.
 
 ### State sharing
 
-State is stored on `globalThis` (the same pattern used for the Prisma client
-singleton). This is essential because Next.js dev can evaluate route handlers
-and server components in separate module instances — without `globalThis`
-sharing, a container created by an API route would be invisible to the
-preview page.
+State is stored on `globalThis` (the same pattern used for the MongoClient
+singleton in `backend/mongo.ts`). This is essential because Next.js dev can
+evaluate route handlers and server components in separate module instances —
+without `globalThis` sharing, a container created by an API route would be
+invisible to the preview page.
 
 ### Persistence
 
@@ -119,7 +119,8 @@ through Next.js at `/preview/[subdomain]`. In production, a reverse proxy
 (Caddy is recommended — a `Caddyfile` is already present at the repo root)
 should dynamically route `<subdomain>.<baseDomain>` to the container's
 published host port. The subdomain-to-deployment mapping is resolvable from
-the database (`Deployment.subdomain` is unique).
+the `deployments` collection in MongoDB Atlas (`subdomain` has a unique
+index).
 
 ### Network isolation per tenant (future work)
 
@@ -127,6 +128,38 @@ Today the mock runtime does not model networks. For production, each tenant
 should get an isolated Docker network (or a network per deployment) so
 deployments cannot reach each other directly. This is **future work** — not
 implemented in the stub.
+
+## MongoDB Atlas (production database)
+
+Depnoyed persists `User`, `App`, and `Deployment` documents in MongoDB Atlas
+via the raw `mongodb@7` driver — there is no ORM and no on-disk database
+file in production. The MongoClient singleton in
+[`backend/mongo.ts`](../backend/mongo.ts) reads `MONGODB_URI` and
+`MONGODB_DB_NAME` from the environment. For production deployment:
+
+- **Connection string:** use the Atlas SRV format
+  (`mongodb+srv://<user>:<password>@<cluster>/?appName=<app>`). Retrieve
+  it from the Atlas dashboard -> Connect -> Drivers.
+- **IP allowlist:** add every egress IP of your deployment host(s) to the
+  Atlas Network Access list. Atlas silently terminates TLS handshakes from
+  non-allowlisted IPs — this manifests as `tlsv1 alert internal error`
+  (alert 80) before the Mongo protocol layer is reached, and is easily
+  mistaken for a TLS/cert problem.
+- **Database user:** use a dedicated least-privilege user scoped to
+  readWrite on the `depnoyed` database only. Rotate the password if it was
+  ever shared in plaintext.
+- **Indexes:** created automatically by `ensureIndexes()` on module load
+  (fire-and-forget). For first-deploy verification, run
+  `bun run db:ensure-indexes` once. Unique constraints: `users.email`,
+  `apps.slug`, `deployments.subdomain`.
+- **Collections:** `users`, `apps`, `deployments` — auto-created on first
+  write. No schema-migration step is required.
+
+The facade in [`backend/db.ts`](../backend/db.ts) is the only module that
+touches collections directly. Route handlers and business logic go through
+`db.user.*`, `db.app.*`, `db.deployment.*` (Prisma-like signatures backed
+by raw MongoDB operations). See [architecture.md](architecture.md) for the
+full data-layer description.
 
 ## Switching Adapters
 

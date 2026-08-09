@@ -7,10 +7,8 @@
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
-    "db:push": "prisma db push --schema=backend/prisma/schema.prisma --accept-data-loss",
-    "db:generate": "prisma generate --schema=backend/prisma/schema.prisma",
-    "db:migrate": "prisma migrate dev --schema=backend/prisma/schema.prisma",
-    "db:reset": "prisma migrate reset --schema=backend/prisma/schema.prisma"
+    "db:ensure-indexes": "bun -e \"import { indexesReadyPromise } from './backend/db'; indexesReadyPromise.then(() => { console.log('MongoDB indexes ensured'); process.exit(0) }).catch((e) => { console.error('Index creation failed:', e.message); process.exit(1) })\"",
+    "db:ping": "bun -e \"import { pingMongo } from './backend/mongo'; pingMongo().then((r) => { console.log('ok=' + r.ok + ' ms=' + r.ms + ' host=' + (r.host || 'n/a')); process.exit(r.ok === 1 ? 0 : 1) }).catch((e) => { console.error('PING FAIL:', e.message); process.exit(1) })\""
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -18,7 +16,6 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^5.1.1",
     "@mdxeditor/editor": "^3.39.1",
-    "@prisma/client": "^6.11.1",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-aspect-ratio": "^1.1.7",
@@ -63,7 +60,6 @@
     "next-auth": "^4.24.11",
     "next-intl": "^4.3.4",
     "next-themes": "^0.4.6",
-    "prisma": "^6.11.1",
     "react": "^19.0.0",
     "react-day-picker": "^9.8.0",
     "react-dom": "^19.0.0",

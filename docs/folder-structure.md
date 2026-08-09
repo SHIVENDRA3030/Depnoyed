@@ -25,16 +25,15 @@ Depnoyed/
 │   └── lib/                      # Frontend-only: utils.ts (cn), store.ts,
 │                                 # compare-store.ts (Zustand), metrics.ts
 ├── backend/                      # Server-side control plane (@backend/* alias)
-│   ├── db.ts                     # PrismaClient singleton
+│   ├── db.ts                     # MongoDB-backed facade (was PrismaClient)
+│   ├── mongo.ts                  # MongoClient singleton (globalThis pattern)
 │   ├── auth.ts                   # scrypt hashing + HMAC-signed session cookie
 │   ├── deployments.ts            # Deployment Manager (privileged subsystem)
 │   ├── config.ts                 # Env config + name/subdomain generators
 │   ├── api.ts                    # Route helpers (json, withErrors, serializers)
-│   ├── docker/
-│   │   └── adapter.ts            # DockerAdapter + MockDockerAdapter
-│   │                             # + DockerEngineAdapter stub
-│   └── prisma/
-│       └── schema.prisma         # User, App, Deployment (SQLite)
+│   └── docker/
+│       └── adapter.ts            # DockerAdapter + MockDockerAdapter
+│                                 # + DockerEngineAdapter stub
 ├── deployed/                     # Marketplace app definitions (the catalog)
 │   ├── apps/
 │   │   ├── types.ts              # AppDefinition interface
@@ -59,8 +58,8 @@ Depnoyed/
 ├── README.md
 ├── .env.example
 ├── .gitignore
-├── package.json                  # Bun + Next.js 16; db:* scripts use
-│                                 # --schema=backend/prisma/schema.prisma
+├── package.json                  # Bun + Next.js 16; db:ensure-indexes +
+│                                 # db:ping scripts (MongoDB)
 ├── tsconfig.json                 # @/*, @backend/*, @deployed/* aliases
 ├── next.config.ts                # output: standalone
 ├── tailwind.config.ts
@@ -107,7 +106,7 @@ The catalog of apps that can be deployed lives in `deployed/apps/` — one
 `.ts` file per app, plus `types.ts` (the `AppDefinition` interface) and
 `index.ts` (the `MARKETPLACE_APPS` array and `findAppDefinition()` helper).
 The seed route (`src/app/api/seed/route.ts`) imports from `@deployed/apps`
-to populate the `App` table. Only apps listed here can be deployed — users
+to populate the `apps` collection. Only apps listed here can be deployed — users
 cannot supply arbitrary images.
 
 Two reserved subdirectories exist for future use:
@@ -156,7 +155,8 @@ Rules of thumb:
 Sandbox-only artifacts are gitignored to keep the repository clean:
 
 - `.ossmp-data/` — mock Docker runtime state (volumes, container records)
-- `db/custom.db` — the SQLite database file
+- `db/custom.db` — the orphaned SQLite database file from the pre-MongoDB
+  era (gitignored, harmless, can be deleted)
 - `dev.log`, `server.log` — `tee` output from the `dev` and `start` scripts
 - `worklog.md` — shared agent handover log (kept local)
 - `download/` — scratch directory for downloaded artifacts

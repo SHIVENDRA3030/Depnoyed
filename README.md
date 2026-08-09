@@ -3,7 +3,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-38bdf8)](https://tailwindcss.com/)
-[![Prisma](https://img.shields.io/badge/Prisma-6-2d3748)](https://www.prisma.io/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248)](https://www.mongodb.com/atlas)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df)](https://bun.sh/)
 [![License](https://img.shields.io/badge/License-MIT-green)](#license)
 
@@ -152,16 +152,15 @@ Depnoyed/
 │   └── lib/                      # Frontend-only: utils.ts (cn), store.ts,
 │                                 # compare-store.ts (Zustand), metrics.ts
 ├── backend/                      # Server-side control plane (@backend/* alias)
-│   ├── db.ts                     # PrismaClient singleton
+│   ├── db.ts                     # MongoDB-backed facade (was PrismaClient)
+│   ├── mongo.ts                  # MongoClient singleton (globalThis pattern)
 │   ├── auth.ts                   # scrypt hashing + HMAC-signed session cookie
 │   ├── deployments.ts            # Deployment Manager
 │   ├── config.ts                 # Env config + name/subdomain generators
 │   ├── api.ts                    # Route helpers (json, withErrors, serializers)
-│   ├── docker/
-│   │   └── adapter.ts            # DockerAdapter + MockDockerAdapter
-│   │                             # + DockerEngineAdapter stub
-│   └── prisma/
-│       └── schema.prisma         # User, App, Deployment (SQLite)
+│   └── docker/
+│       └── adapter.ts            # DockerAdapter + MockDockerAdapter
+│                                 # + DockerEngineAdapter stub
 ├── deployed/                     # Marketplace app definitions
 │   └── apps/
 │       ├── types.ts              # AppDefinition interface
@@ -175,8 +174,8 @@ Depnoyed/
 ├── README.md                     # this file
 ├── .env.example                  # environment template
 ├── .gitignore
-├── package.json                  # Bun + Next.js 16; db:* scripts use
-│                                 # --schema=backend/prisma/schema.prisma
+├── package.json                  # Bun + Next.js 16; db:ensure-indexes +
+│                                 # db:ping scripts (MongoDB)
 ├── tsconfig.json                 # @/*, @backend/*, @deployed/* aliases
 ├── next.config.ts                # output: standalone
 ├── tailwind.config.ts
@@ -185,8 +184,8 @@ Depnoyed/
 └── eslint.config.mjs
 ```
 
-Sandbox-only (gitignored): `.ossmp-data/`, `db/custom.db`, `dev.log`,
-`worklog.md`, `download/`, etc.
+Sandbox-only (gitignored): `.ossmp-data/`, `db/custom.db` (orphaned SQLite
+file from the pre-MongoDB era), `dev.log`, `worklog.md`, `download/`, etc.
 
 ## Technology Stack
 
@@ -196,7 +195,7 @@ Sandbox-only (gitignored): `.ossmp-data/`, `db/custom.db`, `dev.log`,
 | Language     | TypeScript 5 (strict)                                                 |
 | Styling      | Tailwind CSS 4                                                        |
 | UI kit       | shadcn/ui (New York style)                                            |
-| ORM          | Prisma 6 (SQLite)                                                     |
+| Database     | MongoDB Atlas (raw `mongodb` driver v7)                               |
 | Runtime/PM   | Bun (package manager + dev runtime)                                   |
 | Client state | Zustand                                                               |
 | Server state | TanStack Query                                                        |
@@ -219,11 +218,11 @@ bun install
 
 # 2. Configure environment
 cp .env.example .env
-# Edit .env and set AUTH_SECRET (see below)
+# Edit .env: set MONGODB_URI (Atlas SRV string) and AUTH_SECRET (see below)
 
-# 3. Initialize the database
-bun run db:generate
-bun run db:push
+# 3. Ensure MongoDB unique indexes are created (collections auto-create
+#    on first write, so there is no separate schema-push step)
+bun run db:ensure-indexes
 
 # 4. Start the dev server
 bun run dev
@@ -248,7 +247,8 @@ control.
 
 | Variable                  | Default      | Description                                                                          |
 | ------------------------- | ------------ | ----------------------------------------------------------------------------------- |
-| `DATABASE_URL`            | —            | SQLite connection string. Example: `file:./db/custom.db`                            |
+| `MONGODB_URI`             | —            | **Required.** MongoDB Atlas SRV connection string. Retrieve from Atlas -> Connect -> Drivers |
+| `MONGODB_DB_NAME`         | `depnoyed`   | Database name used by the MongoClient singleton (collections: users, apps, deployments) |
 | `AUTH_SECRET`             | —            | HMAC signing secret for session cookies. Generate with `openssl rand -hex 32`       |
 | `DEPLOY_CPU_LIMIT`        | `0.5`        | CPU limit per container (float)                                                     |
 | `DEPLOY_CPU_PERIOD`       | `100000`     | CFS CPU period in microseconds                                                       |
@@ -260,28 +260,57 @@ control.
 
 ## Database Setup
 
-The Prisma schema lives at [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma).
-All `db:*` scripts in `package.json` reference this path explicitly so they
-work from the repo root:
+Depnoyed uses **MongoDB Atlas** as its primary database, accessed through the
+raw `mongodb@7` driver (no ORM). The schema is defined by the TypeScript
+interfaces in [`backend/db.ts`](backend/db.ts) — `User`, `App`, and
+`Deployment` — not by a separate schema file. MongoDB collections are
+auto-created on the first write, so there is no schema-migration step.
+
+### Collections
+
+| Collection     | Document shape (key fields)                                                                                                         | Unique indexes                                  |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `users`        | `id`, `email`, `name`, `passwordHash`, `isAdmin`, `createdAt`, `updatedAt`                                                          | `id`, `email`                                   |
+| `apps`         | `id`, `name`, `slug`, `dockerImage`, `containerPort`, `logo`, `category`, `simulator`, `defaultEnv`, `readme`, `repository`, `website`, `version`, `createdAt`, `updatedAt` | `id`, `slug`                                    |
+| `deployments`  | `id`, `userId`, `appId`, `containerId`, `containerName`, `volumeName`, `status`, `subdomain`, `port`, `label`, `envVars` (object), `createdAt`, `updatedAt` | `id`, `subdomain` (plus secondary indexes on `userId`, `appId`, `status`) |
+
+- IDs are 24-character lowercase hex strings generated by `newId()` in
+  `backend/db.ts` (`randomBytes(12).toString('hex')`).
+- Timestamps are native JS `Date` objects (stored as BSON Date); `updatedAt`
+  is auto-set by the facade on every update.
+- Relations (e.g. `deployment → app`) are resolved by a secondary `findOne`
+  on the related collection, not by `$lookup` aggregation. This is documented
+  as a future optimization for high-cardinality workloads.
+
+### Index creation
+
+Unique indexes are created automatically on module load — the facade calls
+`ensureIndexes()` fire-and-forget when `backend/db.ts` is first imported.
+You can also create them explicitly before the first request:
 
 ```bash
-bun run db:generate    # prisma generate --schema=backend/prisma/schema.prisma
-bun run db:push        # prisma db push  --schema=backend/prisma/schema.prisma --accept-data-loss
-bun run db:migrate     # prisma migrate dev  --schema=backend/prisma/schema.prisma
-bun run db:reset       # prisma migrate reset --schema=backend/prisma/schema.prisma
+bun run db:ensure-indexes
 ```
 
-Models:
+A quick connectivity + auth check is available via:
 
-- **User** — `id`, `email` (unique), `name`, `passwordHash`, `isAdmin`
-- **App** — `id`, `name`, `slug` (unique), `dockerImage`, `containerPort`,
-  `logo`, `category`, `simulator`, `defaultEnv`, `readme`, `repository`,
-  `website`, `version`
-- **Deployment** — `id`, `userId`, `appId`, `containerId`, `containerName`,
-  `volumeName`, `status`, `subdomain` (unique), `port`, `label`, `envVars`
-  (JSON), `createdAt`, `updatedAt`
+```bash
+bun run db:ping
+```
 
-The SQLite file is written to `db/custom.db` (gitignored).
+### Connection
+
+The MongoClient singleton lives in [`backend/mongo.ts`](backend/mongo.ts).
+It reads `MONGODB_URI` (required — Atlas SRV connection string) and
+`MONGODB_DB_NAME` (default `"depnoyed"`) from the environment, and reuses
+the same client across hot-reloads via `globalThis`. The facade in
+`backend/db.ts` is the only module that should touch the collections
+directly — every other code path goes through `db.user.*`, `db.app.*`,
+`db.deployment.*`.
+
+> **Cleanup note:** The legacy SQLite file at `db/custom.db` is now an orphan
+> from the Prisma era. It is gitignored and harmless; it can be deleted
+> manually (`rm -rf db/custom.db`).
 
 ## Mock Deployment Runtime
 
@@ -298,7 +327,7 @@ lifecycle entirely in-process:
   simulators (counter, notes, wiki, static) read and write their dedicated
   volumes.
 - State is shared via `globalThis` so all module instances see one store
-  (same pattern as the Prisma client singleton).
+  (same pattern as the MongoClient singleton in `backend/mongo.ts`).
 
 **Persistence proof:** Deploy the Demo Counter, increment the counter, stop
 the deployment (the preview then returns `APP_NOT_RUNNING`), start it again —
@@ -378,6 +407,10 @@ When contributing:
 - Keep API route handlers in `src/app/api/**` thin — they should call
   `@backend/*` services and never contain business logic.
 - Do not import `@backend/*` from client components.
+- Database access goes through the facade in `backend/db.ts`
+  (`db.user.*`, `db.app.*`, `db.deployment.*`). Do not import
+  `backend/mongo.ts` (the MongoClient singleton) directly from route handlers
+  or business logic — only the facade should touch collections.
 - Do not add new runtime dependencies for features that can be implemented
   with Node `crypto`, the standard library, or existing deps.
 - Never commit real secrets. The `.env` file is gitignored; only

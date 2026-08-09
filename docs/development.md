@@ -20,13 +20,14 @@ bun install
 
 # 2. Configure environment
 cp .env.example .env
-# Edit .env and set AUTH_SECRET:
-#   openssl rand -hex 32
-# (DATABASE_URL defaults to file:./db/custom.db — fine for dev)
+# Edit .env and set:
+#   MONGODB_URI  — Atlas SRV connection string (required)
+#   AUTH_SECRET  — `openssl rand -hex 32`
+# (MONGODB_DB_NAME defaults to "depnoyed" — fine for dev)
 
-# 3. Generate the Prisma client and push the schema
-bun run db:generate
-bun run db:push
+# 3. Ensure MongoDB unique indexes are created (collections auto-create
+#    on first write, so there is no schema-push step)
+bun run db:ensure-indexes
 
 # 4. Start the dev server (http://localhost:3000)
 bun run dev
@@ -41,19 +42,16 @@ to verify persistence.
 
 ## Scripts
 
-All scripts are defined in `package.json`. Database scripts reference the
-schema path explicitly so they work from the repo root:
+All scripts are defined in `package.json`:
 
-| Script              | Command                                                                | Purpose                              |
-| ------------------- | ---------------------------------------------------------------------- | ------------------------------------ |
-| `bun run dev`        | `next dev -p 3000 2>&1 \| tee dev.log`                                  | Start the dev server on port 3000    |
-| `bun run build`      | `next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/` | Production build (standalone output) |
-| `bun run start`      | `NODE_ENV=production bun .next/standalone/server.js 2>&1 \| tee server.log` | Run the standalone production server |
-| `bun run lint`       | `eslint .`                                                              | Lint the whole repo                  |
-| `bun run db:generate`| `prisma generate --schema=backend/prisma/schema.prisma`                 | Regenerate the Prisma client         |
-| `bun run db:push`    | `prisma db push --schema=backend/prisma/schema.prisma --accept-data-loss` | Push schema to SQLite                |
-| `bun run db:migrate` | `prisma migrate dev --schema=backend/prisma/schema.prisma`              | Create + apply a migration           |
-| `bun run db:reset`   | `prisma migrate reset --schema=backend/prisma/schema.prisma`            | Drop + recreate the database         |
+| Script                    | Command                                                                                                | Purpose                              |
+| ------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `bun run dev`             | `next dev -p 3000 2>&1 \| tee dev.log`                                                                 | Start the dev server on port 3000    |
+| `bun run build`           | `next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/`          | Production build (standalone output) |
+| `bun run start`           | `NODE_ENV=production bun .next/standalone/server.js 2>&1 \| tee server.log`                            | Run the standalone production server |
+| `bun run lint`            | `eslint .`                                                                                             | Lint the whole repo                  |
+| `bun run db:ensure-indexes` | `bun -e "import { indexesReadyPromise } from './backend/db'; ..."`                                  | Create unique indexes on MongoDB (also auto-created on module load) |
+| `bun run db:ping`         | `bun -e "import { pingMongo } from './backend/mongo'; ..."`                                            | Ping the Atlas cluster (connectivity + auth check) |
 
 ## Environment Setup
 
@@ -65,7 +63,8 @@ cp .env.example .env
 
 Required for dev:
 
-- `DATABASE_URL` — defaults to `file:./db/custom.db` (fine for dev)
+- `MONGODB_URI` — **must** be set to a MongoDB Atlas SRV connection
+  string. Retrieve from the Atlas dashboard -> Connect -> Drivers.
 - `AUTH_SECRET` — **must** be set to a random 32-byte hex string:
 
   ```bash
@@ -74,6 +73,8 @@ Required for dev:
 
 Optional (sensible defaults apply):
 
+- `MONGODB_DB_NAME` — defaults to `"depnoyed"` (the database that holds the
+  `users`, `apps`, and `deployments` collections).
 - `DEPLOY_CPU_LIMIT`, `DEPLOY_CPU_PERIOD`, `DEPLOY_MEMORY_LIMIT_MB` —
   resource limits enforced per container.
 - `DEPLOY_BASE_DOMAIN` — base domain for generated deployment subdomains.
@@ -87,30 +88,53 @@ control.
 
 ## Database
 
-The Prisma schema lives at
-[`backend/prisma/schema.prisma`](../backend/prisma/schema.prisma). The
-SQLite file is written to `db/custom.db` (gitignored).
+Depnoyed uses **MongoDB Atlas** via the raw `mongodb@7` driver — there is no
+ORM and no schema-migration step. The schema is defined by the TypeScript
+interfaces in [`backend/db.ts`](../backend/db.ts) (`User`, `App`,
+`Deployment`). The MongoClient singleton lives in
+[`backend/mongo.ts`](../backend/mongo.ts); the facade in `backend/db.ts`
+exposes `db.user.*`, `db.app.*`, `db.deployment.*` with Prisma-like method
+signatures backed by raw MongoDB collection operations.
 
-Models:
+Collections (auto-created on first write):
 
-- **User** — `id`, `email` (unique), `name`, `passwordHash`, `isAdmin`
-- **App** — `id`, `name`, `slug` (unique), `dockerImage`, `containerPort`,
-  `logo`, `category`, `simulator`, `defaultEnv`, `readme`, `repository`,
-  `website`, `version`
-- **Deployment** — `id`, `userId`, `appId`, `containerId`, `containerName`,
-  `volumeName`, `status`, `subdomain` (unique), `port`, `label`, `envVars`
-  (JSON), `createdAt`, `updatedAt`
+- **users** — `id` (unique), `email` (unique), `name`, `passwordHash`,
+  `isAdmin`, `createdAt`, `updatedAt`
+- **apps** — `id` (unique), `name`, `slug` (unique), `dockerImage`,
+  `containerPort`, `logo`, `category`, `simulator`, `defaultEnv`, `readme`,
+  `repository`, `website`, `version`, `createdAt`, `updatedAt`
+- **deployments** — `id` (unique), `userId`, `appId`, `containerId`,
+  `containerName`, `volumeName`, `status`, `subdomain` (unique), `port`,
+  `label`, `envVars` (object), `createdAt`, `updatedAt`. Secondary indexes
+  on `userId`, `appId`, `status`.
 
-After schema changes:
+IDs are 24-char lowercase hex (`newId()` in `backend/db.ts`). Timestamps
+are native JS `Date` objects (BSON Date), auto-set by the facade.
+
+Before the first request, ensure the unique indexes are created:
 
 ```bash
-bun run db:generate    # regenerate the TS client (picks up new fields/types)
-bun run db:push        # apply the schema to SQLite
+bun run db:ensure-indexes    # idempotent — safe to re-run
 ```
 
-If the dev server is already running, restart it after `db:generate` — the
-Prisma client is cached on `globalThis` and will not pick up the new client
-until the process restarts.
+This is also done automatically on module load (fire-and-forget) when
+`backend/db.ts` is first imported, so the script is optional — it exists
+mainly for first-deploy verification and CI gates. To verify connectivity:
+
+```bash
+bun run db:ping
+```
+
+Because the schema lives in TypeScript, there are no `db:generate` /
+`db:push` / `db:migrate` / `db:reset` steps. To change a document shape,
+edit the interface in `backend/db.ts` and the corresponding facade method.
+Existing documents will simply lack the new field until they are next
+written. To add a new index, edit `ensureIndexes()` in `backend/db.ts`
+and re-run `bun run db:ensure-indexes`.
+
+> **Cleanup note:** The legacy SQLite file at `db/custom.db` (from the
+> pre-MongoDB era) is now an orphan. It is gitignored and harmless; it can
+> be deleted manually (`rm -rf db/custom.db`).
 
 ## Path Aliases
 

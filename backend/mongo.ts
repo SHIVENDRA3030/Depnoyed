@@ -47,7 +47,9 @@ const globalForMongo = globalThis as unknown as {
 }
 
 function createClient(): { client: MongoClient; db: Db } {
-  const client = new MongoClient(MONGODB_URI, {
+  // MONGODB_URI is guarded at module load (throw if missing); the non-null
+  // assertion is safe because this function only runs after that guard passed.
+  const client = new MongoClient(MONGODB_URI!, {
     // Atlas-recommended defaults. The driver handles SRV resolution, TLS,
     // and retryable writes automatically.
     serverSelectionTimeoutMS: 10_000, // fail fast if Atlas unreachable

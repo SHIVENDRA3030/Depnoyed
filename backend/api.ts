@@ -44,9 +44,9 @@ export function withErrors<TArgs extends unknown[]>(
 
 /* ------------------------------- Serializers ------------------------------ */
 
-import type { Deployment, App, User } from "@prisma/client";
+import type { Deployment, App, User, AppWithCounts, DeploymentWithApp } from "@backend/db";
 
-export type AppWithCounts = App & { _count?: { deployments: number } };
+export type { AppWithCounts, DeploymentWithApp };
 
 export function serializeApp(app: AppWithCounts) {
   return {
