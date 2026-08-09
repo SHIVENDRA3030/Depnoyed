@@ -31,6 +31,20 @@ export const config = {
   docker: {
     adapter: (process.env.DOCKER_ADAPTER ?? "mock") as "mock" | "docker",
     mockPersist: process.env.MOCK_PERSIST !== "false",
+    /** Path to the Docker daemon socket. Defaults to the standard unix socket. */
+    socketPath: process.env.DOCKER_SOCKET ?? "/var/run/docker.sock",
+    /**
+     * When DOCKER_ADAPTER=docker, containers are exposed on the Docker host's
+     * network. This base URL is used to construct the "Open real app" link
+     * (e.g. http://localhost:<port>). Leave empty to disable the link.
+     */
+    realAppBaseUrl: process.env.DEPLOY_REAL_APP_BASE_URL ?? "http://localhost",
+    /**
+     * Port range for host port bindings. Docker will pick a free ephemeral
+     * port from this range for each container.
+     */
+    portRangeStart: int("DOCKER_PORT_RANGE_START", 31000),
+    portRangeEnd: int("DOCKER_PORT_RANGE_END", 39999),
   },
 } as const;
 
@@ -74,4 +88,17 @@ export function deploymentPublicUrl(subdomain: string): string {
   // In this sandbox we route the "deployed app" through our own preview path.
   // The subdomain form is still generated so production routing is trivial.
   return `https://${subdomain}.${base}`;
+}
+
+/**
+ * Construct the URL of the *real* running container (only meaningful when
+ * DOCKER_ADAPTER=docker). Returns null if the real-app base URL is not
+ * configured (e.g. when running the mock adapter in the sandbox).
+ */
+export function realAppUrl(port: number | null): string | null {
+  if (port == null) return null;
+  const base = config.docker.realAppBaseUrl;
+  if (!base) return null;
+  // Strip trailing slash, append :port
+  return `${base.replace(/\/+$/, "")}:${port}`;
 }

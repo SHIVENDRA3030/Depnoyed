@@ -6,6 +6,7 @@ import {
   generateSubdomain,
   generateVolumeName,
   deploymentPublicUrl,
+  realAppUrl,
 } from "@backend/config";
 
 /**
@@ -31,6 +32,8 @@ export interface DeployResult {
   status: string;
   subdomain: string;
   publicUrl: string;
+  /** URL of the real running container (only set when DOCKER_ADAPTER=docker). */
+  realAppUrl: string | null;
   containerName: string;
   volumeName: string;
   containerId: string | null;
@@ -62,7 +65,9 @@ export async function createDeployment(input: DeployInput): Promise<DeployResult
   const subdomain = generateSubdomain(app.slug);
   const containerName = generateContainerName(input.userId, app.slug);
   const volumeName = generateVolumeName(input.userId, app.slug);
-  const port = pickPort();
+  // Pre-allocate a candidate port (used by the mock adapter). The real Docker
+  // adapter ignores this and binds its own host port, which we persist below.
+  const candidatePort = pickPort();
 
   // 1. Persist the deployment record as `pending`.
   const envVarsJson = input.envVars && Object.keys(input.envVars).length > 0 ? JSON.stringify(input.envVars) : null;
@@ -73,7 +78,7 @@ export async function createDeployment(input: DeployInput): Promise<DeployResult
       containerName,
       volumeName,
       subdomain,
-      port,
+      port: candidatePort,
       status: "pending",
       envVars: envVarsJson,
     },
@@ -106,12 +111,17 @@ export async function createDeployment(input: DeployInput): Promise<DeployResult
     // 4. Start the container.
     const started = await adapter.startContainer(containerName);
 
+    // The real Docker adapter assigns a host port via PortBindings; prefer
+    // that over the candidate port. The mock adapter returns the candidate.
+    const actualPort = started.port ?? info.port ?? candidatePort;
+
     // 5. Synchronise state with the database.
     const updated = await db.deployment.update({
       where: { id: deployment.id },
       data: {
         containerId: info.id,
         status: mapStatus(started.status),
+        port: actualPort,
       },
     });
 
@@ -120,6 +130,7 @@ export async function createDeployment(input: DeployInput): Promise<DeployResult
       status: updated.status,
       subdomain: updated.subdomain,
       publicUrl: deploymentPublicUrl(updated.subdomain),
+      realAppUrl: realAppUrl(updated.port),
       containerName: updated.containerName,
       volumeName: updated.volumeName,
       containerId: updated.containerId,

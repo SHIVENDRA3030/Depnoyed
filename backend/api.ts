@@ -45,6 +45,7 @@ export function withErrors<TArgs extends unknown[]>(
 /* ------------------------------- Serializers ------------------------------ */
 
 import type { Deployment, App, User, AppWithCounts, DeploymentWithApp } from "@backend/db";
+import { realAppUrl } from "@backend/config";
 
 export type { AppWithCounts, DeploymentWithApp };
 
@@ -74,12 +75,16 @@ export function serializeDeployment(
   opts?: { baseDomain?: string }
 ) {
   const baseDomain = opts?.baseDomain ?? process.env.DEPLOY_BASE_DOMAIN ?? "apps.local";
+  // realAppUrl is only non-null when DOCKER_ADAPTER=docker and a real-app base
+  // URL is configured. Frontend uses this to render an "Open real app" link.
+  const realApp = realAppUrl(dep.port);
   return {
     id: dep.id,
     status: dep.status,
     subdomain: dep.subdomain,
     publicUrl: `https://${dep.subdomain}.${baseDomain}`,
     previewPath: `/preview/${dep.subdomain}`,
+    realAppUrl: realApp,
     containerId: dep.containerId,
     containerName: dep.containerName,
     volumeName: dep.volumeName,

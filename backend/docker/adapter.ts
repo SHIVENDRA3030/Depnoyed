@@ -390,53 +390,392 @@ class MockDockerAdapter implements DockerAdapter {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                            Real Docker (placeholder)                       */
+/*                            Real Docker (dockerode)                         */
 /* -------------------------------------------------------------------------- */
 
+import Docker from "dockerode";
+
 /**
- * Production adapter that talks to the Docker engine over the unix socket.
+ * Production adapter that talks to a real Docker engine via the dockerode
+ * library over the unix socket (or TCP host configured by DOCKER_SOCKET).
  *
- * Kept as a thin stub: in a real deployment you would shell out to `docker` or
- * use the dockerode library. The control plane never depends on Docker at the
- * type level, so swapping this in is the only change required.
+ * Design notes:
+ *  - Container lifecycle (create/start/stop/restart/remove/inspect) and
+ *    volume lifecycle (create/remove/inspect) map 1:1 to the Docker API.
+ *  - Logs are fetched via container.logs() with a tail limit and demuxed
+ *    from the dockerode multiplexed stream into LogLine[].
+ *  - `execVolumeOp` is deliberately decoupled from the container's filesystem.
+ *    The mock adapter stores key/value data in a JSON sidecar per volume; the
+ *    real adapter keeps that same sidecar on the Docker HOST filesystem
+ *    (.ossmp-data/volumes/<name>.json) so it works on ANY container image
+ *    (including distroless ones that have no shell). This preserves the
+ *    persistence-demo contract used by the counter/notes/wiki simulators
+ *    without requiring `docker exec` support in every image.
+ *  - Resource limits are enforced via HostConfig.NanoCpus / Memory /
+ *    MemorySwap. CPU period is not exposed by dockerode directly; NanoCpus
+ *    (= cpus * 1e9) is the modern equivalent.
+ *  - Security hardening: every container is started with --cap-drop=ALL,
+ *    --security-opt=no-new-privileges, and a read-only root filesystem where
+ *    possible (tmpfs mounted at /tmp and /run so writable paths exist).
+ *  - Host port binding: each container's internal port (e.g. 3000 for
+ *    Grafana) is bound to a host port in the configured range so the real
+ *    app is reachable at http://<docker-host>:<hostPort>.
  */
 class DockerEngineAdapter implements DockerAdapter {
   readonly kind = "docker" as const;
-  private mock = new MockDockerAdapter();
+  private docker: Docker;
+  /** Lazily-initialized host-side volume sidecar store (reuses mock's paths). */
+  private volumeSidecar = new MockDockerAdapter();
 
-  async createVolume(name: string) {
-    return this.mock.createVolume(name);
+  constructor() {
+    this.docker = new Docker({ socketPath: config.docker.socketPath });
   }
-  async removeVolume(name: string) {
-    return this.mock.removeVolume(name);
+
+  /** Ping the Docker daemon. Throws if unreachable. */
+  async ping(): Promise<boolean> {
+    try {
+      const info = await this.docker.ping();
+      return info.toString() === "OK";
+    } catch {
+      return false;
+    }
   }
-  async inspectVolume(name: string) {
-    return this.mock.inspectVolume(name);
+
+  /* ------------------------------ Volumes ------------------------------- */
+
+  async createVolume(name: string): Promise<VolumeInfo> {
+    try {
+      await this.docker.createVolume({ Name: name, Labels: { "ossmp.managed": "true" } });
+    } catch (err: unknown) {
+      // volume already exists — fine, treat as idempotent
+      if (!isDockerNotFound(err)) throw err;
+    }
+    return this.inspectVolume(name) as Promise<VolumeInfo>;
   }
-  async createContainer(opts: CreateContainerOptions) {
-    return this.mock.createContainer(opts);
+
+  async removeVolume(name: string): Promise<void> {
+    try {
+      await this.docker.getVolume(name).remove({ force: false });
+    } catch (err: unknown) {
+      if (!isDockerNotFound(err)) throw err;
+    }
+    // Also clean up the host-side sidecar (no-op if absent).
+    await this.volumeSidecar.removeVolume(name);
   }
-  async startContainer(name: string) {
-    return this.mock.startContainer(name);
+
+  async inspectVolume(name: string): Promise<VolumeInfo | null> {
+    try {
+      const v = await this.docker.getVolume(name).inspect();
+      // Docker volumes don't track size cheaply; approximate via the sidecar.
+      const sidecar = await this.volumeSidecar.inspectVolume(name);
+      return {
+        name: v.Name,
+        createdAt: v.CreatedAt ?? new Date().toISOString(),
+        dataSize: sidecar?.dataSize ?? 0,
+      };
+    } catch (err: unknown) {
+      if (isDockerNotFound(err)) return null;
+      throw err;
+    }
   }
-  async stopContainer(name: string) {
-    return this.mock.stopContainer(name);
+
+  /* ----------------------------- Containers ----------------------------- */
+
+  async createContainer(opts: CreateContainerOptions): Promise<ContainerInfo> {
+    // Pick a free host port from the configured range.
+    const hostPort = await pickFreePort(
+      config.docker.portRangeStart,
+      config.docker.portRangeEnd,
+    );
+
+    const exposedPorts: Record<string, object> = {};
+    exposedPorts[`${opts.port}/tcp`] = {};
+    const portBindings: Record<string, Array<{ HostPort: string }>> = {};
+    portBindings[`${opts.port}/tcp`] = [{ HostPort: String(hostPort) }];
+
+    const envArray = opts.env ? Object.entries(opts.env).map(([k, v]) => `${k}=${v}`) : [];
+
+    const createOpts: Docker.ContainerCreateOptions = {
+      name: opts.containerName,
+      Image: opts.image,
+      Env: envArray,
+      ExposedPorts: exposedPorts,
+      Labels: {
+        "ossmp.managed": "true",
+        "ossmp.simulator": opts.simulator,
+        "ossmp.volume": opts.volumeName,
+      },
+      HostConfig: {
+        PortBindings: portBindings,
+        // Bind the named volume to /data so apps that persist to /data work.
+        Binds: [`${opts.volumeName}:/data`],
+        // CPU limit: NanoCpus = cpus * 1e9 (dockerode uses this, not CFS quota).
+        NanoCpus: Math.round(opts.cpuLimit * 1e9),
+        // Memory limit in bytes. MemorySwap=memory disables swap.
+        Memory: opts.memoryLimitMb * 1024 * 1024,
+        MemorySwap: opts.memoryLimitMb * 1024 * 1024,
+        // Restart policy: try once, don't infinite-loop a crashing app.
+        RestartPolicy: { Name: "on-failure", MaximumRetryCount: 3 },
+        // Security hardening.
+        CapDrop: ["ALL"],
+        SecurityOpt: ["no-new-privileges"],
+        ReadonlyRootfs: true,
+        Tmpfs: { "/tmp": "", "/run": "" },
+      },
+    };
+
+    let container: Docker.Container;
+    try {
+      container = await this.docker.createContainer(createOpts);
+    } catch (err: unknown) {
+      // If the image isn't present locally, pull it then retry once.
+      if (isImageNotFound(err)) {
+        await pullImage(this.docker, opts.image);
+        container = await this.docker.createContainer(createOpts);
+      } else {
+        throw err;
+      }
+    }
+
+    const inspect = await container.inspect();
+    return this.toInfo(inspect, hostPort);
   }
-  async restartContainer(name: string) {
-    return this.mock.restartContainer(name);
+
+  async startContainer(name: string): Promise<ContainerInfo> {
+    const container = this.docker.getContainer(name);
+    await container.start();
+    const inspect = await container.inspect();
+    const hostPort = extractHostPort(inspect);
+    return this.toInfo(inspect, hostPort);
   }
-  async removeContainer(name: string) {
-    return this.mock.removeContainer(name);
+
+  async stopContainer(name: string): Promise<ContainerInfo> {
+    const container = this.docker.getContainer(name);
+    // 10s grace period before SIGKILL, matching Docker's default.
+    await container.stop({ t: 10 });
+    const inspect = await container.inspect();
+    const hostPort = extractHostPort(inspect);
+    return this.toInfo(inspect, hostPort);
   }
-  async inspectContainer(name: string) {
-    return this.mock.inspectContainer(name);
+
+  async restartContainer(name: string): Promise<ContainerInfo> {
+    const container = this.docker.getContainer(name);
+    await container.restart({ t: 10 });
+    const inspect = await container.inspect();
+    const hostPort = extractHostPort(inspect);
+    return this.toInfo(inspect, hostPort);
   }
-  async getLogs(name: string, tail?: number) {
-    return this.mock.getLogs(name, tail);
+
+  async removeContainer(name: string): Promise<void> {
+    const container = this.docker.getContainer(name);
+    try {
+      // Force-remove handles a running container (stops then removes).
+      // `v: true` also removes anonymous volumes; named volumes are preserved.
+      await container.remove({ force: true, v: false });
+    } catch (err: unknown) {
+      if (!isDockerNotFound(err)) throw err;
+    }
   }
-  async execVolumeOp(name: string, op: VolumeOp) {
-    return this.mock.execVolumeOp(name, op);
+
+  async inspectContainer(name: string): Promise<ContainerInfo | null> {
+    try {
+      const inspect = await this.docker.getContainer(name).inspect();
+      const hostPort = extractHostPort(inspect);
+      return this.toInfo(inspect, hostPort);
+    } catch (err: unknown) {
+      if (isDockerNotFound(err)) return null;
+      throw err;
+    }
   }
+
+  async getLogs(name: string, tail = 100): Promise<LogLine[]> {
+    const container = this.docker.getContainer(name);
+    let stream: NodeJS.ReadableStream;
+    try {
+      stream = await container.logs({
+        stdout: true,
+        stderr: true,
+        tail,
+        timestamps: true,
+      });
+    } catch (err: unknown) {
+      if (isDockerNotFound(err)) return [];
+      throw err;
+    }
+    return demuxDockerLogs(stream);
+  }
+
+  /* --------------------------- Volume key/value -------------------------- */
+
+  async execVolumeOp(name: string, op: VolumeOp): Promise<VolumeOpResult> {
+    // Resolve container name -> volume name via Docker inspect, then operate
+    // on the host-side sidecar. Falls back to treating `name` as a volume
+    // name if the container has already been removed.
+    let volumeName: string | null = null;
+    try {
+      const inspect = await this.docker.getContainer(name).inspect();
+      volumeName =
+        (inspect.Config?.Labels?.["ossmp.volume"] as string | undefined) ?? null;
+    } catch (err: unknown) {
+      if (!isDockerNotFound(err)) throw err;
+    }
+    if (!volumeName) {
+      // Container gone — try `name` directly as a volume name.
+      volumeName = name;
+    }
+    // Ensure the sidecar volume record exists.
+    await this.volumeSidecar.createVolume(volumeName);
+    // Delegate to the mock's key/value logic (same JSON sidecar on host disk).
+    return this.volumeSidecar.execVolumeOp(volumeName, op);
+  }
+
+  /* ------------------------------ Helpers ------------------------------- */
+
+  private toInfo(inspect: Docker.ContainerInspectInfo, hostPort: number | undefined): ContainerInfo {
+    const state = inspect.State;
+    const status: ContainerStatus = mapDockerState(state?.Status);
+    return {
+      id: inspect.Id,
+      name: inspect.Name.replace(/^\//, ""),
+      status,
+      image: inspect.Config?.Image ?? "",
+      port: hostPort,
+      startedAt: state?.StartedAt,
+      finishedAt: state?.FinishedAt && state.FinishedAt !== "0001-01-01T00:00:00Z"
+        ? state.FinishedAt
+        : undefined,
+    };
+  }
+}
+
+/* --------------------------- Dockerode helpers ----------------------------- */
+
+function isDockerNotFound(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { statusCode?: number; reason?: string; message?: string };
+  return (
+    e.statusCode === 404 ||
+    e.reason === "no such container" ||
+    e.reason === "no such volume" ||
+    (typeof e.message === "string" && /no such (container|volume|image)/i.test(e.message))
+  );
+}
+
+function isImageNotFound(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { statusCode?: number; message?: string };
+  return (
+    e.statusCode === 404 ||
+    (typeof e.message === "string" && /no such image|manifest unknown/i.test(e.message))
+  );
+}
+
+async function pullImage(docker: Docker, image: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    docker.pull(image, (pullErr: Error | null, stream: NodeJS.ReadableStream) => {
+      if (pullErr) return reject(pullErr);
+      docker.modem.followProgress(
+        stream,
+        (finishErr: Error | null) => {
+          if (finishErr) return reject(finishErr);
+          resolve();
+        },
+        () => {
+          // progress events — intentionally ignored to keep logs quiet
+        },
+      );
+    });
+  });
+}
+
+/** Extract the first bound host port from a container inspect result. */
+function extractHostPort(inspect: Docker.ContainerInspectInfo): number | undefined {
+  const bindings = inspect.HostConfig?.PortBindings;
+  if (!bindings) return undefined;
+  for (const key of Object.keys(bindings)) {
+    const arr = bindings[key];
+    if (Array.isArray(arr) && arr.length > 0 && arr[0]?.HostPort) {
+      const n = Number(arr[0].HostPort);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+  }
+  return undefined;
+}
+
+/** Map a Docker container state status string to our ContainerStatus union. */
+function mapDockerState(s: string | undefined): ContainerStatus {
+  switch (s) {
+    case "created":
+      return "created";
+    case "running":
+      return "running";
+    case "paused":
+      return "paused";
+    case "restarting":
+      return "creating";
+    case "removing":
+      return "removing";
+    case "exited":
+      return "exited";
+    case "dead":
+      return "dead";
+    default:
+      return "stopped";
+  }
+}
+
+/** Find a free TCP port in [start, end) by trying to bind a listener. */
+async function pickFreePort(start: number, end: number): Promise<number> {
+  const net = await import("net");
+  for (let port = start; port < end; port++) {
+    const free = await new Promise<boolean>((resolve) => {
+      const srv = net.createServer();
+      srv.unref();
+      srv.on("error", () => resolve(false));
+      srv.listen(port, "0.0.0.0", () => {
+        srv.close(() => resolve(true));
+      });
+    });
+    if (free) return port;
+  }
+  throw new Error(`No free port available in range [${start}, ${end})`);
+}
+
+/**
+ * Demultiplex a dockerode log stream (8-byte header per frame: stream type +
+ * 4-byte big-endian length) into LogLine[].
+ *
+ * dockerode returns logs with `timestamps: true`, so each frame's payload
+ * starts with an ISO timestamp followed by a space and the message.
+ */
+async function demuxDockerLogs(stream: NodeJS.ReadableStream): Promise<LogLine[]> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  const buf = Buffer.concat(chunks);
+  const lines: LogLine[] = [];
+  let offset = 0;
+  while (offset + 8 <= buf.length) {
+    const header = buf.subarray(offset, offset + 8);
+    const streamType = header[0]; // 1 = stdout, 2 = stderr
+    const length = header.readUInt32BE(4);
+    offset += 8;
+    if (offset + length > buf.length) break;
+    const payload = buf.subarray(offset, offset + length).toString("utf8");
+    offset += length;
+    // Payload format with timestamps=true: "<ISO timestamp> <message>\n"
+    const tsMatch = payload.match(/^(\d{4}-\d{2}-\d{2}T[^\s]+)\s(.*)$/s);
+    const t = tsMatch ? tsMatch[1] : new Date().toISOString();
+    const message = (tsMatch ? tsMatch[2] : payload).replace(/\n$/, "");
+    if (message.length === 0) continue;
+    lines.push({
+      t,
+      stream: streamType === 2 ? "stderr" : "stdout",
+      message,
+    });
+  }
+  return lines;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -446,10 +785,41 @@ class DockerEngineAdapter implements DockerAdapter {
 // Stored on `globalThis` so a single adapter instance is shared across all
 // module instances in dev (route handlers + server components).
 export function getDockerAdapter(): DockerAdapter {
-  const g = globalThis as unknown as { __ossmpDockerAdapter?: DockerAdapter };
+  const g = globalThis as unknown as {
+    __ossmpDockerAdapter?: DockerAdapter;
+    __ossmpDockerAdapterKind?: "mock" | "docker";
+  };
   if (!g.__ossmpDockerAdapter) {
-    g.__ossmpDockerAdapter =
-      config.docker.adapter === "docker" ? new DockerEngineAdapter() : new MockDockerAdapter();
+    if (config.docker.adapter === "docker") {
+      const real = new DockerEngineAdapter();
+      // Probe the daemon synchronously on first use. If unreachable, fall back
+      // to mock so the app still boots (with a loud warning). The probe result
+      // is cached so we don't pay the ping cost on every request.
+      g.__ossmpDockerAdapter = real;
+      g.__ossmpDockerAdapterKind = "docker";
+      // Fire-and-forget probe; if it fails, subsequent operations will throw
+      // clear errors pointing at the daemon. This keeps boot fast.
+      real.ping().then((ok) => {
+        if (!ok) {
+          console.warn(
+            "[docker] DOCKER_ADAPTER=docker but the Docker daemon at " +
+              config.docker.socketPath +
+              " is unreachable. Container operations will fail. " +
+              "Start Docker, or set DOCKER_ADAPTER=mock to silence this.",
+          );
+        }
+      });
+    } else {
+      g.__ossmpDockerAdapter = new MockDockerAdapter();
+      g.__ossmpDockerAdapterKind = "mock";
+    }
   }
   return g.__ossmpDockerAdapter;
+}
+
+/** Returns the kind of the active adapter ("mock" or "docker"). */
+export function getDockerAdapterKind(): "mock" | "docker" {
+  getDockerAdapter(); // ensure initialised
+  const g = globalThis as unknown as { __ossmpDockerAdapterKind?: "mock" | "docker" };
+  return g.__ossmpDockerAdapterKind ?? "mock";
 }

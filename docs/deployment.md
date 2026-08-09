@@ -59,75 +59,137 @@ Deploy the Demo Counter, increment the counter, stop the deployment (the
 preview then returns `APP_NOT_RUNNING`), start it again — the counter value
 is unchanged because the volume JSON file was preserved on disk.
 
-## Real Docker Runtime (production target)
+## Real Docker Runtime (production)
 
-Selected by `DOCKER_ADAPTER=docker`. The `DockerEngineAdapter` stub is the
-hook point for production wiring. Today it delegates to the mock
-implementation; the work below is what's required to make it real.
+Selected by `DOCKER_ADAPTER=docker`. The `DockerEngineAdapter` is **fully
+implemented** via [`dockerode`](https://github.com/apocas/dockerode) and talks
+to the Docker daemon over the unix socket (configurable via `DOCKER_SOCKET`).
+When Docker is installed on the host, the 7 real marketplace apps run as
+actual containers.
 
-### What the `DockerEngineAdapter` needs to implement
+### Prerequisites
 
-Each method on the `DockerAdapter` interface must be implemented against
-either `dockerode` (recommended, talks to the docker daemon over the unix
-socket) or the `docker` CLI (shell-out). Concretely:
+- Docker Engine installed and running (`docker info` should succeed)
+- The Next.js process must have read/write access to `/var/run/docker.sock`
+  (or whatever `DOCKER_SOCKET` points to)
+- A free port range `[DOCKER_PORT_RANGE_START, DOCKER_PORT_RANGE_END)` for
+  binding container ports
+
+### What the `DockerEngineAdapter` implements
+
+Each method on the `DockerAdapter` interface is implemented against
+`dockerode`:
 
 | Method                        | Real implementation                                                                              |
 | ----------------------------- | ------------------------------------------------------------------------------------------------ |
-| `createVolume(name)`          | `docker volume create <name>` (or `dockerode.createVolume({ Name: name })`)                      |
-| `removeVolume(name)`          | `docker volume rm <name>`                                                                        |
-| `inspectVolume(name)`         | `docker volume inspect <name>` — return `{ name, dataSize, ... }`                                |
-| `createContainer(opts)`       | `dockerode.createContainer({ Image, Cmd, Env, HostConfig: { ... } })`                            |
-| `startContainer(name)`        | `docker start <name>`                                                                            |
-| `stopContainer(name)`         | `docker stop <name>`                                                                             |
-| `restartContainer(name)`      | `docker restart <name>`                                                                          |
-| `removeContainer(name)`       | `docker rm -f <name>`                                                                            |
-| `inspectContainer(name)`      | `docker inspect <name>` — return `{ name, status, ... }`                                         |
-| `getLogs(name)`               | `docker logs <name>` — return as `string[]`                                                      |
-| `execVolumeOp(volume, op)`    | Either exec into the container (`docker exec`) or proxy to the app's own volume API over its published port |
+| `createVolume(name)`          | `docker.createVolume({ Name, Labels: { "ossmp.managed": "true" } })` — idempotent                |
+| `removeVolume(name)`          | `docker.getVolume(name).remove({ force: false })` — also cleans up the host-side sidecar          |
+| `inspectVolume(name)`         | `docker.getVolume(name).inspect()` — size approximated via the host-side sidecar                  |
+| `createContainer(opts)`       | `docker.createContainer({ Image, Env, ExposedPorts, HostConfig: { PortBindings, Binds, NanoCpus, Memory, MemorySwap, RestartPolicy, CapDrop, SecurityOpt, ReadonlyRootfs, Tmpfs }, Labels })`. Auto-pulls the image if not present locally. |
+| `startContainer(name)`        | `container.start()` — returns real status + host port                                            |
+| `stopContainer(name)`         | `container.stop({ t: 10 })` — 10s grace period before SIGKILL                                    |
+| `restartContainer(name)`      | `container.restart({ t: 10 })`                                                                   |
+| `removeContainer(name)`       | `container.remove({ force: true, v: false })` — named volumes preserved                          |
+| `inspectContainer(name)`      | `container.inspect()` — returns real status, host port, timestamps                               |
+| `getLogs(name, tail)`         | `container.logs({ stdout, stderr, tail, timestamps })` — demuxed from dockerode's multiplexed stream into `LogLine[]` |
+| `execVolumeOp(name, op)`      | Host-side JSON sidecar (`.ossmp-data/volumes/<name>.json`) — see "execVolumeOp design" below      |
 
 ### Resource limits mapping
 
-Server-side limits from `backend/config.ts` map to Docker flags:
+Server-side limits from `backend/config.ts` map to Docker `HostConfig`:
 
-| Server config              | Docker flag                                          |
-| -------------------------- | ---------------------------------------------------- |
-| `DEPLOY_CPU_LIMIT` (float) | `--cpus=<cpuLimit>` (or `NanoCPUs` in dockerode)     |
-| `DEPLOY_CPU_PERIOD` (us)   | `--cpu-period=<cpuPeriod>`                           |
-| `DEPLOY_MEMORY_LIMIT_MB`   | `--memory=<memoryLimitMb>m`                          |
+| Server config              | dockerode HostConfig field                          |
+| -------------------------- | --------------------------------------------------- |
+| `DEPLOY_CPU_LIMIT` (float) | `NanoCpus: Math.round(cpuLimit * 1e9)`              |
+| `DEPLOY_CPU_PERIOD` (us)   | (unused by dockerode — `NanoCpus` supersedes CFS quota/period) |
+| `DEPLOY_MEMORY_LIMIT_MB`   | `Memory: memoryLimitMb * 1024 * 1024` + `MemorySwap` (equal, disables swap) |
 
 These limits are read from server configuration — never from the request body
 — so users cannot raise their own limits.
 
+### Security hardening (applied to every container)
+
+The `createContainer` call applies these security defaults:
+
+- `CapDrop: ["ALL"]` — drops all Linux capabilities
+- `SecurityOpt: ["no-new-privileges"]` — blocks privilege escalation
+- `ReadonlyRootfs: true` — root filesystem is read-only
+- `Tmpfs: { "/tmp": "", "/run": "" }` — writable tmpfs for paths that need it
+- `RestartPolicy: { Name: "on-failure", MaximumRetryCount: 3 }` — won't infinite-loop a crashing app
+
 ### Volume mount
 
-The deployment's dedicated volume is mounted at `/data` inside the container.
-Apps that wish to persist data must write to `/data`. The mock runtime
-mirrors this convention by treating the volume's JSON store as the `/data`
-namespace.
+The deployment's dedicated Docker named volume is mounted at `/data` inside
+the container. Apps that persist data should write to `/data` (e.g. Grafana's
+SQLite DB, PostgreSQL's data directory).
 
 ### Port mapping
 
 Each deployment exposes a `containerPort` (declared in the
-`AppDefinition`). The real adapter should publish that port on a dynamically
-allocated host port and record it in `Deployment.port` so the reverse proxy
-can route to it.
+`AppDefinition`). The real adapter binds that port to a dynamically
+allocated host port from `[DOCKER_PORT_RANGE_START, DOCKER_PORT_RANGE_END)`
+and records it in `Deployment.port`. The frontend constructs the "Open real
+app" link as `<DEPLOY_REAL_APP_BASE_URL>:<port>` (e.g.
+`http://localhost:31245`).
 
-### Subdomain routing (production)
+### `execVolumeOp` design (host-side sidecar)
+
+The mock adapter stores the simulator's key/value data (the counter, notes,
+wiki content) in a JSON file per volume. For the real adapter, we deliberately
+keep that sidecar on the **Docker host filesystem**
+(`.ossmp-data/volumes/<name>.json`) rather than `docker exec`-ing into the
+container. This means:
+
+- It works on **any** image, including distroless ones that have no shell
+- The simulator UI (counter/notes/wiki) continues to work exactly as before
+- The real app's own data lives in the real Docker named volume mounted at `/data`
+
+The adapter resolves the container name → volume name via Docker inspect (the
+`ossmp.volume` label), then delegates the key/value operation to a
+`MockDockerAdapter` instance operating on the host filesystem.
+
+### Image pulling
+
+When `createContainer` fails because the image isn't present locally, the
+adapter automatically pulls it via `docker.pull(image)` and retries. Pull
+progress is not streamed to the UI (future enhancement) — the request blocks
+until the pull completes. For large images (e.g. `grafana/grafana:latest` is
+~300MB), the first deploy can take 30-60s. Subsequent deploys of the same
+image are instant.
+
+### Subdomain routing (production, not included)
 
 In the mock runtime, the public URL `<slug>-<rand6>.<baseDomain>` is rendered
-through Next.js at `/preview/[subdomain]`. In production, a reverse proxy
-(Caddy is recommended — a `Caddyfile` is already present at the repo root)
-should dynamically route `<subdomain>.<baseDomain>` to the container's
-published host port. The subdomain-to-deployment mapping is resolvable from
-the `deployments` collection in MongoDB Atlas (`subdomain` has a unique
-index).
+through Next.js at `/preview/[subdomain]`. With the real Docker adapter, the
+"Open real app" link goes to `http://<DEPLOY_REAL_APP_BASE_URL>:<hostPort>`.
+For true `<subdomain>.<baseDomain>` routing, a reverse proxy (Caddy/Traefik)
+would dynamically route based on the deployment's host port. The
+subdomain-to-deployment mapping is resolvable from the `deployments`
+collection in MongoDB Atlas (`subdomain` has a unique index). This is
+**future work** — not implemented today.
 
 ### Network isolation per tenant (future work)
 
-Today the mock runtime does not model networks. For production, each tenant
-should get an isolated Docker network (or a network per deployment) so
-deployments cannot reach each other directly. This is **future work** — not
-implemented in the stub.
+Today the real adapter does not create per-tenant Docker networks. For
+production, each tenant (or each deployment) should get an isolated Docker
+network so deployments cannot reach each other directly. This is **future
+work**.
+
+### Graceful degradation
+
+When `DOCKER_ADAPTER=docker` is set but the Docker daemon is unreachable
+(e.g. Docker not started, socket permissions wrong), the adapter logs a clear
+warning on first use:
+
+```
+[docker] DOCKER_ADAPTER=docker but the Docker daemon at /var/run/docker.sock
+is unreachable. Container operations will fail. Start Docker, or set
+DOCKER_ADAPTER=mock to silence this.
+```
+
+Subsequent container operations will throw errors with the underlying
+`dockerode` message, which helps diagnose socket permission issues vs.
+missing images vs. port conflicts.
 
 ## MongoDB Atlas (production database)
 

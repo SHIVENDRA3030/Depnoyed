@@ -410,6 +410,17 @@ export function DeploymentView({ id }: { id: string }) {
               >
                 <Globe className="size-3 shrink-0" /> <span className="truncate">{dep.subdomain}.apps.local</span>
               </a>
+              {dep.realAppUrl && (
+                <a
+                  href={dep.realAppUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-2 mt-1 inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
+                  title={`Open the real running container at ${dep.realAppUrl}`}
+                >
+                  <ExternalLink className="size-3" /> Open real app
+                </a>
+              )}
               {/* Label row */}
               <div className="mt-2 flex items-center gap-2">
                 {labelEditing ? (

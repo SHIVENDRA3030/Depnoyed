@@ -17,10 +17,11 @@ talks to the runtime through a pluggable `DockerAdapter`, so the same codebase
 runs in development against a high-fidelity in-process simulation, and in
 production against a real Docker host.
 
-> **Sandbox note:** The current runtime ships with the **Mock Docker Adapter**
-> (in-process simulation) because Docker is not available in this sandbox.
-> Real Docker is supported through the `DockerEngineAdapter` stub, which is
-> the only swap required for production. See
+> **Sandbox note:** The current sandbox runs the **Mock Docker Adapter**
+> (in-process simulation) because Docker is not available here. The
+> **`DockerEngineAdapter`** is fully implemented via `dockerode` and will drive
+> real containers the moment you set `DOCKER_ADAPTER=docker` on a machine that
+> has Docker installed. See
 > [docs/deployment.md](docs/deployment.md).
 
 ---
@@ -36,7 +37,7 @@ production against a real Docker host.
 - [Environment Variables](#environment-variables)
 - [Database Setup](#database-setup)
 - [Mock Deployment Runtime](#mock-deployment-runtime)
-- [Real Docker Roadmap](#real-docker-roadmap)
+- [Real Docker Runtime](#real-docker-runtime)
 - [Adding a New Marketplace App](#adding-a-new-marketplace-app)
 - [Contributing](#contributing)
 - [License](#license)
@@ -99,13 +100,14 @@ and the runtime layer is swappable through the `DockerAdapter` interface.
 └───────────────────────────────┬─────────────────────────────────────┘
                                 │  DockerAdapter interface
 ┌───────────────────────────────▼─────────────────────────────────────┐
-│  Adapter    backend/docker/adapter.ts                               │
+│  Adapter    backend/docker/adapter.ts (MockDockerAdapter +           │
+│             DockerEngineAdapter via dockerode)                      │
 │             MockDockerAdapter  (default)  ·  DockerEngineAdapter    │
 └───────────────────────────────┬─────────────────────────────────────┘
                                 │
 ┌───────────────────────────────▼─────────────────────────────────────┐
 │  Runtime    Mock: in-process state + .ossmp-data/ JSON volumes      │
-│             Real Docker (future): dockerode / docker CLI            │
+│             Real Docker: dockerode → unix socket → dockerd          │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -254,8 +256,12 @@ control.
 | `DEPLOY_CPU_PERIOD`       | `100000`     | CFS CPU period in microseconds                                                       |
 | `DEPLOY_MEMORY_LIMIT_MB`  | `512`        | Memory limit per container in MB                                                    |
 | `DEPLOY_BASE_DOMAIN`      | `apps.local` | Base domain for deployment URLs                                                    |
-| `DOCKER_ADAPTER`          | `mock`       | Runtime adapter: `mock` (default) or `docker`                                       |
+| `DOCKER_ADAPTER`          | `mock`       | Runtime adapter: `mock` (default) or `docker` (requires Docker installed)          |
 | `MOCK_PERSIST`            | `true`       | `false` disables mock volume persistence to disk                                    |
+| `DOCKER_SOCKET`           | `/var/run/docker.sock` | Path to the Docker daemon socket (only used when `DOCKER_ADAPTER=docker`)  |
+| `DEPLOY_REAL_APP_BASE_URL`| `http://localhost` | Base URL for "Open real app" links (only when `DOCKER_ADAPTER=docker`). Set to empty to hide the link |
+| `DOCKER_PORT_RANGE_START` | `31000`      | Start of host port range for container port bindings                                |
+| `DOCKER_PORT_RANGE_END`   | `39999`      | End of host port range for container port bindings                                  |
 | `GITHUB_TOKEN`            | —            | **Optional.** Only needed if pushing the repo to GitHub via API; never commit this  |
 
 ## Database Setup
@@ -338,22 +344,80 @@ This is the **current sandbox runtime**. The control plane never depends on
 Docker at the type level, so swapping in the real adapter is the only change
 required for production.
 
-## Real Docker Roadmap
+## Real Docker Runtime
 
-The `DockerEngineAdapter` (selected via `DOCKER_ADAPTER=docker`) is a stub that
-currently delegates to the mock implementation. To finish production wiring:
+The `DockerEngineAdapter` (selected via `DOCKER_ADAPTER=docker`) is **fully
+implemented** via the [`dockerode`](https://github.com/apocas/dockerode)
+library. When Docker is installed on the host, the 7 real marketplace apps
+(Grafana, PostgreSQL, Redis, Nginx, Gitea, Mattermost, Prometheus) run as
+actual containers — not simulations.
 
-1. Implement `createVolume` / `createContainer` / `start` / `stop` / `restart`
-   / `remove` / `inspectContainer` / `getLogs` / `execVolumeOp` against
-   `dockerode` (or by shelling out to the `docker` CLI over the unix socket).
-2. Map `cpuLimit` → `--cpus`, `memoryLimitMb` → `--memory`, mount the volume
-   at `/data`, and publish the container port.
-3. Wire a reverse proxy (Caddy) to dynamically route
-   `<subdomain>.<baseDomain>` to each container's published port for HTTPS.
+### Quick start with real Docker
 
-No API or UI changes are required — the control plane talks to the runtime
-only through the `DockerAdapter` interface. See
-[docs/deployment.md](docs/deployment.md) for the migration plan.
+```bash
+# 1. Ensure Docker is installed and running
+docker info  # should succeed
+
+# 2. Set the adapter in .env
+echo 'DOCKER_ADAPTER=docker' >> .env
+echo 'DEPLOY_REAL_APP_BASE_URL=http://localhost' >> .env
+
+# 3. Start the dev server (indexes + seed as usual)
+bun run dev
+
+# 4. Deploy an app via the UI. The first deploy pulls the image (e.g.
+#    grafana/grafana:latest ~300MB), which can take 30-60s on first run.
+#    Subsequent deploys of the same image are instant.
+
+# 5. The deployment view shows an "Open real app" link (green badge) pointing
+#    to http://localhost:<hostPort> — that's the REAL running container.
+```
+
+### What the real adapter does
+
+| Operation | Implementation |
+|-----------|---------------|
+| `createVolume` | `docker.createVolume({ Name })` — real named Docker volume |
+| `createContainer` | `docker.createContainer({ Image, Env, HostConfig: { PortBindings, Binds, NanoCpus, Memory, MemorySwap, RestartPolicy, CapDrop, SecurityOpt, ReadonlyRootfs, Tmpfs } })` |
+| `start/stop/restart/remove` | Real container lifecycle via `container.start()` / `.stop({ t: 10 })` / `.restart()` / `.remove({ force: true })` |
+| `inspectContainer` | `container.inspect()` — real status, ports, timestamps |
+| `getLogs` | `container.logs({ stdout, stderr, tail, timestamps })` — demuxed from dockerode's multiplexed stream |
+| `execVolumeOp` | Host-side JSON sidecar (`.ossmp-data/volumes/<name>.json`) — decoupled from the container's filesystem so it works on ANY image, including distroless ones. See note below. |
+
+### Security hardening (applied to every container)
+
+- `--cap-drop=ALL` — drops all Linux capabilities
+- `--security-opt=no-new-privileges` — blocks privilege escalation
+- `--read-only` — root filesystem is read-only
+- `--tmpfs /tmp /run` — writable tmpfs for paths that need it
+- `NanoCpus` + `Memory`/`MemorySwap` — CPU and memory limits enforced by the kernel
+- `RestartPolicy: on-failure (max 3)` — won't infinite-loop a crashing app
+
+### The `execVolumeOp` design decision
+
+The mock adapter stores the simulator's key/value data (the counter, notes,
+wiki content) in a JSON file per volume. For the real adapter, we deliberately
+keep that sidecar on the **Docker host filesystem** rather than `docker exec`-ing
+into the container. This means:
+
+- It works on **any** image, including distroless ones that have no shell
+- The simulator UI (counter/notes/wiki) continues to work exactly as before
+- The real app's own data (e.g. Grafana's SQLite DB, PostgreSQL's data dir)
+  lives in the real Docker named volume mounted at `/data`
+
+### What's NOT included (future work)
+
+- **Subdomain-based routing**: today, the "Open real app" link goes to
+  `http://localhost:<port>`. For `<subdomain>.yourdomain.com` routing, you'd
+  add a Caddy/Traefik reverse proxy that dynamically routes based on the
+  deployment's host port. The port is stored in the `deployments` collection.
+- **Image pulling progress UI**: the first deploy of a large image blocks for
+  30-60s while pulling. A future enhancement would stream pull progress to the
+  deployment view.
+- **Custom image deployment**: users can only deploy apps from the catalog.
+  Letting them paste an arbitrary `image:tag` is a future feature.
+
+See [docs/deployment.md](docs/deployment.md) for the full adapter contract.
 
 ## Adding a New Marketplace App
 

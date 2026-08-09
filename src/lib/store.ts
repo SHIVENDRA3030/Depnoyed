@@ -47,6 +47,8 @@ export interface DeploymentItem {
   subdomain: string;
   publicUrl: string;
   previewPath: string;
+  /** URL of the real running container (only set when DOCKER_ADAPTER=docker). */
+  realAppUrl: string | null;
   containerId: string | null;
   containerName: string;
   volumeName: string;
