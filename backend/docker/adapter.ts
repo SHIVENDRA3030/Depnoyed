@@ -516,10 +516,11 @@ class DockerEngineAdapter implements DockerAdapter {
         MemorySwap: opts.memoryLimitMb * 1024 * 1024,
         // Restart policy: try once, don't infinite-loop a crashing app.
         RestartPolicy: { Name: "on-failure", MaximumRetryCount: 3 },
-        // Security hardening.
+        // Security hardening. Read-only rootfs is opt-in because most real
+        // images need to write to /var/lib, /var/run, etc.
         CapDrop: ["ALL"],
         SecurityOpt: ["no-new-privileges"],
-        ReadonlyRootfs: true,
+        ReadonlyRootfs: config.docker.readonlyRootfs,
         Tmpfs: { "/tmp": "", "/run": "" },
       },
     };

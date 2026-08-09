@@ -23,9 +23,9 @@ function float(name: string, fallback: number): number {
 
 export const config = {
   deploy: {
-    cpuLimit: float("DEPLOY_CPU_LIMIT", 0.5),
+    cpuLimit: float("DEPLOY_CPU_LIMIT", 1),
     cpuPeriod: int("DEPLOY_CPU_PERIOD", 100000),
-    memoryLimitMb: int("DEPLOY_MEMORY_LIMIT_MB", 512),
+    memoryLimitMb: int("DEPLOY_MEMORY_LIMIT_MB", 1024),
     baseDomain: process.env.DEPLOY_BASE_DOMAIN ?? "apps.local",
   },
   docker: {
@@ -45,6 +45,14 @@ export const config = {
      */
     portRangeStart: int("DOCKER_PORT_RANGE_START", 31000),
     portRangeEnd: int("DOCKER_PORT_RANGE_END", 39999),
+    /**
+     * Whether to start containers with a read-only root filesystem. Defaults
+     * to false because most real marketplace images (Postgres, Redis, Grafana,
+     * Gitea, Mattermost) need to write to /var/lib, /var/run, /tmp, etc. and
+     * fail to start under --read-only. Enable only if you know your images
+     * tolerate it.
+     */
+    readonlyRootfs: process.env.DOCKER_READONLY_ROOTFS === "true",
   },
 } as const;
 
