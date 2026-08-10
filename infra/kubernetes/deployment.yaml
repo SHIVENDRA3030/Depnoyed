@@ -16,6 +16,8 @@ spec:
         app: depnoyed
     spec:
       serviceAccountName: depnoyed-backend
+      imagePullSecrets:
+        - name: ghcr-secret
       containers:
         - name: web
           image: ghcr.io/shivendra3030/depnoyed:latest # Placeholder image
