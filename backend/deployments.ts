@@ -109,13 +109,17 @@ export async function createDeployment(input: DeployInput): Promise<DeployResult
       Object.assign(env, input.envVars);
     }
 
-    const publicUrl = deploymentPublicUrl(subdomain);
-    env["APP_PUBLIC_URL"] = publicUrl;
+    const isK8s = process.env.DOCKER_ADAPTER === "kubernetes";
+    const appUrlToInject = isK8s
+      ? `https://${containerName}.${config.deploy.baseDomain}`
+      : deploymentPublicUrl(subdomain);
+      
+    env["APP_PUBLIC_URL"] = appUrlToInject;
 
     // Substitute {{APP_URL}} placeholders
     for (const key of Object.keys(env)) {
       if (typeof env[key] === "string") {
-        env[key] = env[key].replace(/\{\{APP_URL\}\}/g, publicUrl);
+        env[key] = env[key].replace(/\{\{APP_URL\}\}/g, appUrlToInject);
       }
     }
 
