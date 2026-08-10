@@ -31,6 +31,12 @@ export default async function PreviewPage({ params }: { params: Promise<{ subdom
     }
   }
 
+  const baseDomain = process.env.DEPLOY_BASE_DOMAIN ?? "apps.local";
+  const isK8s = process.env.DOCKER_ADAPTER === "kubernetes";
+  const realApp = isK8s
+    ? `https://${deployment.containerName}.${baseDomain}`
+    : realAppUrl(deployment.port);
+
   return (
     <AppSimulator
       subdomain={subdomain}
@@ -44,7 +50,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ subdom
       volumeName={deployment.volumeName}
       port={deployment.port}
       initialData={initialData}
-      realAppUrl={realAppUrl(deployment.port)}
+      realAppUrl={realApp}
       readme={deployment.app?.readme ?? undefined}
     />
   );
