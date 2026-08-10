@@ -75,9 +75,14 @@ export function serializeDeployment(
   opts?: { baseDomain?: string }
 ) {
   const baseDomain = opts?.baseDomain ?? process.env.DEPLOY_BASE_DOMAIN ?? "apps.local";
-  // realAppUrl is only non-null when DOCKER_ADAPTER=docker and a real-app base
-  // URL is configured. Frontend uses this to render an "Open real app" link.
-  const realApp = realAppUrl(dep.port);
+  
+  // In kubernetes mode, the real app URL is the ingress route: https://container-name.domain
+  // Otherwise, we use the configured realAppUrl (usually localhost:port for local docker)
+  const isK8s = process.env.DOCKER_ADAPTER === "kubernetes";
+  const realApp = isK8s 
+    ? `https://${dep.containerName}.${baseDomain}`
+    : realAppUrl(dep.port);
+  
   return {
     id: dep.id,
     status: dep.status,
