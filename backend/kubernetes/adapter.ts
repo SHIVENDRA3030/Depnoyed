@@ -213,7 +213,9 @@ export class KubernetesAdapter implements DockerAdapter {
   async startContainer(name: string, tenantId: string): Promise<ContainerInfo> {
     const namespace = getNamespace(tenantId);
     try {
-      await appsApi.patchNamespacedDeploymentScale({ name, namespace, body: { spec: { replicas: 1 } } });
+      const res = await appsApi.readNamespacedDeployment({ name, namespace });
+      if (res.spec) res.spec.replicas = 1;
+      await appsApi.replaceNamespacedDeployment({ name, namespace, body: res });
     } catch(err: any) {
       if (getErrorCode(err) !== 404) throw err;
     }
@@ -223,7 +225,9 @@ export class KubernetesAdapter implements DockerAdapter {
   async stopContainer(name: string, tenantId: string): Promise<ContainerInfo> {
     const namespace = getNamespace(tenantId);
     try {
-      await appsApi.patchNamespacedDeploymentScale({ name, namespace, body: { spec: { replicas: 0 } } });
+      const res = await appsApi.readNamespacedDeployment({ name, namespace });
+      if (res.spec) res.spec.replicas = 0;
+      await appsApi.replaceNamespacedDeployment({ name, namespace, body: res });
     } catch(err: any) {
       if (getErrorCode(err) !== 404) throw err;
     }
