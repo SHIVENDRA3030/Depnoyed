@@ -50,16 +50,7 @@ function AnimatedCounter({ target, duration = 1200, className = "" }: { target: 
 
 /* ----------------------------- Social Proof Data ----------------------------- */
 
-const AVATAR_COLORS = [
-  "bg-emerald-500", "bg-teal-500", "bg-cyan-500", "bg-emerald-600",
-  "bg-teal-600", "bg-cyan-600", "bg-emerald-400", "bg-teal-400",
-];
 
-const DEPLOYMENT_ACTIVITIES = [
-  { app: "Grafana", minutes: 3 },
-  { app: "n8n", minutes: 7 },
-  { app: "Supabase", minutes: 12 },
-];
 
 function getFavorites(): string[] {
   if (typeof window === "undefined") return [];
@@ -189,8 +180,6 @@ export function MarketplaceView() {
     return [...undeployed].sort((a, b) => b.deploymentCount - a.deploymentCount).slice(0, 3);
   }, [apps, effectiveUserDeploys]);
 
-  // Social proof developer count
-  const developerCount = useMemo(() => Math.max(totalDeploys * 2 + 3, 12), [totalDeploys]);
 
   function handleSearch(q: string) {
     setQuery(q);
@@ -260,37 +249,6 @@ export function MarketplaceView() {
               </div>
             )}
 
-            {/* Social Proof Section */}
-            {apps && apps.length > 0 && (
-              <div className="animate-fade-in-up mt-8 flex flex-col items-center gap-3 [animation-delay:500ms]">
-                {/* Avatar row */}
-                <div className="flex items-center -space-x-2">
-                  {AVATAR_COLORS.slice(0, 6).map((color, i) => (
-                    <div
-                      key={i}
-                      className={`${color} size-8 rounded-full border-2 border-background shadow-sm flex items-center justify-center text-[10px] font-bold text-white/90`}
-                    >
-                      {String.fromCharCode(65 + i)}
-                    </div>
-                  ))}
-                  <div className="flex size-8 items-center justify-center rounded-full border-2 border-border bg-muted text-[10px] font-semibold text-muted-foreground shadow-sm">
-                    +{developerCount - 6}
-                  </div>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Join <span className="font-semibold text-foreground"><AnimatedCounter target={developerCount} duration={1400} /></span> developers who have deployed <span className="font-semibold text-foreground"><AnimatedCounter target={totalDeploys} duration={1000} /></span> instances
-                </p>
-                {/* Deployment activity indicators */}
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  {DEPLOYMENT_ACTIVITIES.map((act, i) => (
-                    <span key={i} className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/5 px-2.5 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">
-                      <Activity className="size-3" />
-                      {act.app} deployed {act.minutes}m ago
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </section>

@@ -20,9 +20,6 @@ export const metadata: Metadata = {
   description:
     "Deploy your own isolated instance of open-source applications in one click. Each deployment gets its own container, persistent volume, and unique public URL.",
   keywords: ["open-source", "marketplace", "docker", "deploy", "self-hosted", "containers"],
-  icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
-  },
 };
 
 export default function RootLayout({

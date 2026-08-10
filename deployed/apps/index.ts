@@ -24,6 +24,20 @@ import prometheus from "./prometheus";
 import nginxProxy from "./nginx-proxy";
 import mattermostChat from "./mattermost-chat";
 import n8n from "./n8n";
+import uptimeKuma from "./uptime-kuma";
+import gitea from "./gitea";
+import nextcloud from "./nextcloud";
+import minio from "./minio";
+import ghost from "./ghost";
+import wordpress from "./wordpress";
+import vaultwarden from "./vaultwarden";
+import jellyfin from "./jellyfin";
+import openWebui from "./open-webui";
+import ollama from "./ollama";
+import meilisearch from "./meilisearch";
+import wikijs from "./wikijs";
+import mongodb from "./mongodb";
+import supabase from "./supabase";
 
 export type { AppDefinition } from "./types";
 
@@ -39,6 +53,20 @@ export const MARKETPLACE_APPS: readonly AppDefinition[] = [
   nginxProxy,
   mattermostChat,
   n8n,
+  uptimeKuma,
+  gitea,
+  nextcloud,
+  minio,
+  ghost,
+  wordpress,
+  vaultwarden,
+  jellyfin,
+  openWebui,
+  ollama,
+  meilisearch,
+  wikijs,
+  mongodb,
+  supabase,
 ];
 
 /** Look up a definition by slug. */
