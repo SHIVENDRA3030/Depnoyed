@@ -30,18 +30,33 @@ const getNamespace = (tenantId: string) => `depnoyed-${tenantId}`;
 async function ensureNamespace(namespace: string) {
   try {
     await coreApi.readNamespace({ name: namespace });
-  } catch (err: any) {
-    if (err.statusCode === 404) {
-      try {
-        await coreApi.createNamespace({ body: { metadata: { name: namespace } } });
-      } catch (e: any) {
-        if (e.statusCode !== 409) throw e;
+    } catch (err: any) {
+      if (getErrorCode(err) === 404) {
+        try {
+          await coreApi.createNamespace({ body: { metadata: { name: namespace } } });
+        } catch (e: any) {
+          if (getErrorCode(e) !== 409) throw e;
+        }
+      } else {
+        throw err;
       }
-    } else {
-      throw err;
     }
-  }
 }
+
+function getErrorCode(err: any): number | undefined {
+  if (typeof err?.statusCode === 'number') return err.statusCode;
+  if (typeof err?.code === 'number') return err.code;
+  if (err?.response?.statusCode) return err.response.statusCode;
+  if (typeof err?.body === 'string') {
+    try {
+      const parsed = JSON.parse(err.body);
+      if (typeof parsed.code === 'number') return parsed.code;
+    } catch {}
+  }
+  if (err?.body?.code) return err.body.code;
+  return undefined;
+}
+
 const BASE_DOMAIN = process.env.DEPLOY_BASE_DOMAIN || "apps.local";
 
 /**
@@ -68,7 +83,7 @@ export class KubernetesAdapter implements DockerAdapter {
     try {
       await coreApi.createNamespacedPersistentVolumeClaim({ namespace, body: pvc });
     } catch (err: any) {
-      if (err.statusCode !== 409) throw err; // Ignore already exists
+      if (getErrorCode(err) !== 409) throw err; // Ignore already exists
     }
     return { name, createdAt: new Date().toISOString(), dataSize: 0 };
   }
@@ -78,7 +93,7 @@ export class KubernetesAdapter implements DockerAdapter {
     try {
       await coreApi.deleteNamespacedPersistentVolumeClaim({ name, namespace });
     } catch (err: any) {
-      if (err.statusCode !== 404) throw err;
+      if (getErrorCode(err) !== 404) throw err;
     }
   }
 
@@ -92,7 +107,7 @@ export class KubernetesAdapter implements DockerAdapter {
         dataSize: 0,
       };
     } catch (err: any) {
-      if (err.statusCode === 404) return null;
+      if (getErrorCode(err) === 404) return null;
       throw err;
     }
   }
@@ -183,7 +198,7 @@ export class KubernetesAdapter implements DockerAdapter {
       await coreApi.createNamespacedService({ namespace, body: service });
       await networkingApi.createNamespacedIngress({ namespace, body: ingress });
     } catch (err: any) {
-      if (err.statusCode !== 409) throw err;
+      if (getErrorCode(err) !== 409) throw err;
     }
 
     return {
@@ -197,13 +212,21 @@ export class KubernetesAdapter implements DockerAdapter {
 
   async startContainer(name: string, tenantId: string): Promise<ContainerInfo> {
     const namespace = getNamespace(tenantId);
-    await appsApi.patchNamespacedDeploymentScale({ name, namespace, body: { spec: { replicas: 1 } } });
+    try {
+      await appsApi.patchNamespacedDeploymentScale({ name, namespace, body: { spec: { replicas: 1 } } });
+    } catch(err: any) {
+      if (getErrorCode(err) !== 404) throw err;
+    }
     return { id: name, name, status: "creating", image: "" };
   }
 
   async stopContainer(name: string, tenantId: string): Promise<ContainerInfo> {
     const namespace = getNamespace(tenantId);
-    await appsApi.patchNamespacedDeploymentScale({ name, namespace, body: { spec: { replicas: 0 } } });
+    try {
+      await appsApi.patchNamespacedDeploymentScale({ name, namespace, body: { spec: { replicas: 0 } } });
+    } catch(err: any) {
+      if (getErrorCode(err) !== 404) throw err;
+    }
     return { id: name, name, status: "stopped", image: "" };
   }
 
@@ -220,7 +243,7 @@ export class KubernetesAdapter implements DockerAdapter {
       await coreApi.deleteNamespacedService({ name, namespace });
       await networkingApi.deleteNamespacedIngress({ name, namespace });
     } catch (err: any) {
-      if (err.statusCode !== 404) throw err;
+      if (getErrorCode(err) !== 404) throw err;
     }
   }
 
@@ -265,7 +288,7 @@ export class KubernetesAdapter implements DockerAdapter {
         image,
       };
     } catch (err: any) {
-      if (err.statusCode === 404) return null;
+      if (getErrorCode(err) === 404) return null;
       throw err;
     }
   }
