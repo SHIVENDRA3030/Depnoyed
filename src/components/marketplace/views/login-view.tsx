@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Rocket, Mail, Lock, User, Loader2, ArrowRight, Package, Zap, Globe } from "lucide-react";
+import { signIn } from "next-auth/react";
 import { api, useAuth, navigate, ApiError } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,11 +21,18 @@ export function LoginView() {
     e.preventDefault();
     setBusy(true);
     try {
-      const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
-      await api(endpoint, {
-        method: "POST",
-        body: JSON.stringify(mode === "register" ? { email, name, password } : { email, password }),
-      });
+      if (mode === "register") {
+        await api("/api/auth/register", {
+          method: "POST",
+          body: JSON.stringify({ email, name, password }),
+        });
+      }
+
+      const res = await signIn("credentials", { email, password, redirect: false });
+      if (res?.error) {
+        throw new Error(res.error);
+      }
+
       await hydrate();
       toast.success(mode === "login" ? "Signed in" : "Account created");
       navigate({ name: "dashboard" });

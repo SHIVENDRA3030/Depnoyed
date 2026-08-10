@@ -18,9 +18,7 @@ import { KeyboardShortcuts } from "@/components/marketplace/keyboard-shortcuts";
 import { CompareTray } from "@/components/marketplace/compare-tray";
 
 export function MarketplaceApp() {
-  const [route, setRoute] = useState<Route>(() =>
-    typeof window !== "undefined" ? parseHash() : { name: "marketplace" },
-  );
+  const [route, setRoute] = useState<Route>({ name: "marketplace" });
   const user = useAuth((s) => s.user);
   const hydrating = useAuth((s) => s.hydrating);
   const hydrate = useAuth((s) => s.hydrate);
@@ -30,9 +28,9 @@ export function MarketplaceApp() {
     hydrate();
   }, [hydrate]);
 
-  // Hash-based router. Initial route is captured by the lazy state initializer;
-  // we only subscribe to future hash changes here.
+  // Hash-based router.
   useEffect(() => {
+    setRoute(parseHash());
     const onHash = () => setRoute(parseHash());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Rocket, Search, Boxes, Container, Database, Globe, ArrowRight, Loader2, Sparkles, Zap, Flame, Star, TrendingUp, FlaskConical, Globe2, Wrench, FileText, Heart, Download, Clock, GitCompare, X, History, Users, ShieldCheck, Activity, Server, MonitorSmart, Eye, FolderOpen } from "lucide-react";
+import { Rocket, Search, Boxes, Container, Database, Globe, ArrowRight, Loader2, Sparkles, Zap, Flame, Star, TrendingUp, FlaskConical, Globe2, Wrench, FileText, Heart, Download, Clock, GitCompare, X, History, Users, ShieldCheck, Activity, Server, MonitorSmartphone, Eye, FolderOpen } from "lucide-react";
 import { api, navigate, useAuth, type AppItem, type DeploymentItem, ApiError } from "@/lib/store";
 import { useCompare } from "@/lib/compare-store";
 import { AppLogo } from "@/components/marketplace/app-logo";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Rocket, ArrowRight, CheckCircle2 } from "lucide-react";
 import { navigate, useAuth } from "@/lib/store";
 
@@ -13,7 +13,11 @@ function getIsDismissed(): boolean {
 
 export function OnboardingBanner() {
   const user = useAuth((s) => s.user);
-  const [dismissed, setDismissed] = useState(getIsDismissed);
+  const [dismissed, setDismissed] = useState(true);
+
+  useEffect(() => {
+    setDismissed(getIsDismissed());
+  }, []);
 
   if (!user || dismissed) return null;
 

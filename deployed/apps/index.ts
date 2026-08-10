@@ -23,6 +23,7 @@ import grafanaDashboard from "./grafana-dashboard";
 import prometheus from "./prometheus";
 import nginxProxy from "./nginx-proxy";
 import mattermostChat from "./mattermost-chat";
+import n8n from "./n8n";
 
 export type { AppDefinition } from "./types";
 
@@ -37,6 +38,7 @@ export const MARKETPLACE_APPS: readonly AppDefinition[] = [
   prometheus,
   nginxProxy,
   mattermostChat,
+  n8n,
 ];
 
 /** Look up a definition by slug. */

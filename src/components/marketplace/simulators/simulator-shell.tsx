@@ -1,6 +1,7 @@
 "use client";
 
-import { Server, Database, Cpu, MemoryStick, Box, ShieldCheck, Activity, ArrowLeft } from "lucide-react";
+import { Server, Database, Cpu, MemoryStick, Box, ShieldCheck, Activity, ArrowLeft, ExternalLink } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 export interface SimulatorShellProps {
   subdomain: string;
@@ -13,6 +14,8 @@ export interface SimulatorShellProps {
   volumeName: string;
   port: number | null;
   children: React.ReactNode;
+  realAppUrl?: string | null;
+  readme?: string;
 }
 
 export function SimulatorShell(props: SimulatorShellProps) {
@@ -56,6 +59,36 @@ export function SimulatorShell(props: SimulatorShellProps) {
             >
               Go to dashboard
             </a>
+          </div>
+        ) : props.realAppUrl ? (
+          <div className="flex min-h-[50vh] flex-col items-center justify-center text-center rounded-2xl border border-emerald-200/60 bg-emerald-50/50 p-8 dark:border-emerald-900/30 dark:bg-emerald-950/20">
+            <div className="mb-5 flex size-20 items-center justify-center rounded-full bg-emerald-100/80 text-emerald-600 shadow-sm ring-1 ring-emerald-200/50 dark:bg-emerald-900/50 dark:text-emerald-400 dark:ring-emerald-800/50">
+              <Box className="size-10" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Your app is running live!</h1>
+            <p className="mt-3 max-w-lg text-sm text-muted-foreground">
+              This deployment is running as a real Docker container. You can access it securely via its dedicated port on your local machine.
+            </p>
+            <a
+              href={props.realAppUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 text-sm font-medium text-white shadow-md shadow-emerald-900/10 transition-all hover:bg-emerald-700 hover:shadow-lg active:scale-[0.98]"
+            >
+              Open {props.appName} <ExternalLink className="size-4" />
+            </a>
+            
+            {props.readme && (
+              <div className="mt-10 w-full max-w-3xl text-left">
+                <div className="rounded-xl bg-white p-8 shadow-sm ring-1 ring-black/5 dark:bg-zinc-950 dark:ring-white/10">
+                  <div className="prose prose-emerald prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown>
+                      {props.readme}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           props.children

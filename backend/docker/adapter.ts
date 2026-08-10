@@ -34,6 +34,8 @@ export interface CreateContainerOptions {
   env?: Record<string, string>;
   /** The app simulator type, used by the mock runtime. */
   simulator: string;
+  /** Tenant ID for namespace isolation (used by Kubernetes). */
+  tenantId: string;
 }
 
 export interface ContainerInfo {
@@ -75,25 +77,25 @@ export interface VolumeOpResult {
 export interface DockerAdapter {
   readonly kind: "mock" | "docker";
 
-  createVolume(name: string): Promise<VolumeInfo>;
-  removeVolume(name: string): Promise<void>;
-  inspectVolume(name: string): Promise<VolumeInfo | null>;
+  createVolume(name: string, tenantId: string): Promise<VolumeInfo>;
+  removeVolume(name: string, tenantId: string): Promise<void>;
+  inspectVolume(name: string, tenantId: string): Promise<VolumeInfo | null>;
 
   createContainer(opts: CreateContainerOptions): Promise<ContainerInfo>;
-  startContainer(name: string): Promise<ContainerInfo>;
-  stopContainer(name: string): Promise<ContainerInfo>;
-  restartContainer(name: string): Promise<ContainerInfo>;
-  removeContainer(name: string): Promise<void>;
-  inspectContainer(name: string): Promise<ContainerInfo | null>;
+  startContainer(name: string, tenantId: string): Promise<ContainerInfo>;
+  stopContainer(name: string, tenantId: string): Promise<ContainerInfo>;
+  restartContainer(name: string, tenantId: string): Promise<ContainerInfo>;
+  removeContainer(name: string, tenantId: string): Promise<void>;
+  inspectContainer(name: string, tenantId: string): Promise<ContainerInfo | null>;
 
-  getLogs(name: string, tail?: number): Promise<LogLine[]>;
+  getLogs(name: string, tenantId: string, tail?: number): Promise<LogLine[]>;
 
   /**
    * Execute an operation against the container's persistent volume.
    * The mock implementation interprets this as a key/value operation against
    * the persisted volume data, which is how the persistence demo is driven.
    */
-  execVolumeOp(name: string, op: VolumeOp): Promise<VolumeOpResult>;
+  execVolumeOp(name: string, tenantId: string, op: VolumeOp): Promise<VolumeOpResult>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -219,7 +221,7 @@ async function delay(ms: number) {
 class MockDockerAdapter implements DockerAdapter {
   readonly kind = "mock" as const;
 
-  async createVolume(name: string): Promise<VolumeInfo> {
+  async createVolume(name: string, tenantId: string): Promise<VolumeInfo> {
     await loadState();
     if (!getStore().state.volumes[name]) {
       getStore().state.volumes[name] = { name, createdAt: new Date().toISOString() };
@@ -230,7 +232,7 @@ class MockDockerAdapter implements DockerAdapter {
     return { ...getStore().state.volumes[name], dataSize };
   }
 
-  async removeVolume(name: string): Promise<void> {
+  async removeVolume(name: string, tenantId: string): Promise<void> {
     await loadState();
     delete getStore().state.volumes[name];
     try {
@@ -241,7 +243,7 @@ class MockDockerAdapter implements DockerAdapter {
     await saveState();
   }
 
-  async inspectVolume(name: string): Promise<VolumeInfo | null> {
+  async inspectVolume(name: string, tenantId: string): Promise<VolumeInfo | null> {
     await loadState();
     const v = getStore().state.volumes[name];
     if (!v) return null;
@@ -277,7 +279,7 @@ class MockDockerAdapter implements DockerAdapter {
     return this.toInfo(c);
   }
 
-  async startContainer(name: string): Promise<ContainerInfo> {
+  async startContainer(name: string, tenantId: string): Promise<ContainerInfo> {
     await loadState();
     const c = getStore().state.containers[name];
     if (!c) throw new Error(`Container ${name} not found`);
@@ -292,7 +294,7 @@ class MockDockerAdapter implements DockerAdapter {
     return this.toInfo(c);
   }
 
-  async stopContainer(name: string): Promise<ContainerInfo> {
+  async stopContainer(name: string, tenantId: string): Promise<ContainerInfo> {
     await loadState();
     const c = getStore().state.containers[name];
     if (!c) throw new Error(`Container ${name} not found`);
@@ -306,23 +308,23 @@ class MockDockerAdapter implements DockerAdapter {
     return this.toInfo(c);
   }
 
-  async restartContainer(name: string): Promise<ContainerInfo> {
-    await this.stopContainer(name);
-    return this.startContainer(name);
+  async restartContainer(name: string, tenantId: string): Promise<ContainerInfo> {
+    await this.stopContainer(name, tenantId);
+    return this.startContainer(name, tenantId);
   }
 
-  async removeContainer(name: string): Promise<void> {
+  async removeContainer(name: string, tenantId: string): Promise<void> {
     await loadState();
     const c = getStore().state.containers[name];
     if (!c) return;
     if (c.status === "running") {
-      await this.stopContainer(name);
+      await this.stopContainer(name, tenantId);
     }
     delete getStore().state.containers[name];
     await saveState();
   }
 
-  async inspectContainer(name: string): Promise<ContainerInfo | null> {
+  async inspectContainer(name: string, tenantId: string): Promise<ContainerInfo | null> {
     await loadState();
     let c = getStore().state.containers[name];
     if (!c) {
@@ -334,7 +336,7 @@ class MockDockerAdapter implements DockerAdapter {
     return c ? this.toInfo(c) : null;
   }
 
-  async getLogs(name: string, tail = 100): Promise<LogLine[]> {
+  async getLogs(name: string, tenantId: string, tail = 100): Promise<LogLine[]> {
     await loadState();
     let c = getStore().state.containers[name];
     if (!c) {
@@ -345,7 +347,7 @@ class MockDockerAdapter implements DockerAdapter {
     return c.logs.slice(-tail);
   }
 
-  async execVolumeOp(name: string, op: VolumeOp): Promise<VolumeOpResult> {
+  async execVolumeOp(name: string, tenantId: string, op: VolumeOp): Promise<VolumeOpResult> {
     await loadState();
     let c = getStore().state.containers[name];
     if (!c) {
@@ -443,34 +445,34 @@ class DockerEngineAdapter implements DockerAdapter {
 
   /* ------------------------------ Volumes ------------------------------- */
 
-  async createVolume(name: string): Promise<VolumeInfo> {
+  async createVolume(name: string, tenantId: string): Promise<VolumeInfo> {
     try {
       await this.docker.createVolume({ Name: name, Labels: { "ossmp.managed": "true" } });
     } catch (err: unknown) {
       // volume already exists — fine, treat as idempotent
       if (!isDockerNotFound(err)) throw err;
     }
-    return this.inspectVolume(name) as Promise<VolumeInfo>;
+    return this.inspectVolume(name, tenantId) as Promise<VolumeInfo>;
   }
 
-  async removeVolume(name: string): Promise<void> {
+  async removeVolume(name: string, tenantId: string): Promise<void> {
     try {
       await this.docker.getVolume(name).remove({ force: false });
     } catch (err: unknown) {
       if (!isDockerNotFound(err)) throw err;
     }
     // Also clean up the host-side sidecar (no-op if absent).
-    await this.volumeSidecar.removeVolume(name);
+    await this.volumeSidecar.removeVolume(name, tenantId);
   }
 
-  async inspectVolume(name: string): Promise<VolumeInfo | null> {
+  async inspectVolume(name: string, tenantId: string): Promise<VolumeInfo | null> {
     try {
       const v = await this.docker.getVolume(name).inspect();
       // Docker volumes don't track size cheaply; approximate via the sidecar.
-      const sidecar = await this.volumeSidecar.inspectVolume(name);
+      const sidecar = await this.volumeSidecar.inspectVolume(name, tenantId);
       return {
         name: v.Name,
-        createdAt: v.CreatedAt ?? new Date().toISOString(),
+        createdAt: (v as any).CreatedAt ?? new Date().toISOString(),
         dataSize: sidecar?.dataSize ?? 0,
       };
     } catch (err: unknown) {
@@ -482,16 +484,10 @@ class DockerEngineAdapter implements DockerAdapter {
   /* ----------------------------- Containers ----------------------------- */
 
   async createContainer(opts: CreateContainerOptions): Promise<ContainerInfo> {
-    // Pick a free host port from the configured range.
-    const hostPort = await pickFreePort(
-      config.docker.portRangeStart,
-      config.docker.portRangeEnd,
-    );
-
     const exposedPorts: Record<string, object> = {};
     exposedPorts[`${opts.port}/tcp`] = {};
     const portBindings: Record<string, Array<{ HostPort: string }>> = {};
-    portBindings[`${opts.port}/tcp`] = [{ HostPort: String(hostPort) }];
+    portBindings[`${opts.port}/tcp`] = [{ HostPort: "0" }]; // "0" asks Docker to assign an ephemeral port
 
     const envArray = opts.env ? Object.entries(opts.env).map(([k, v]) => `${k}=${v}`) : [];
 
@@ -539,10 +535,10 @@ class DockerEngineAdapter implements DockerAdapter {
     }
 
     const inspect = await container.inspect();
-    return this.toInfo(inspect, hostPort);
+    return this.toInfo(inspect, undefined); // Port is known only after start
   }
 
-  async startContainer(name: string): Promise<ContainerInfo> {
+  async startContainer(name: string, tenantId: string): Promise<ContainerInfo> {
     const container = this.docker.getContainer(name);
     await container.start();
     const inspect = await container.inspect();
@@ -550,7 +546,7 @@ class DockerEngineAdapter implements DockerAdapter {
     return this.toInfo(inspect, hostPort);
   }
 
-  async stopContainer(name: string): Promise<ContainerInfo> {
+  async stopContainer(name: string, tenantId: string): Promise<ContainerInfo> {
     const container = this.docker.getContainer(name);
     // 10s grace period before SIGKILL, matching Docker's default.
     await container.stop({ t: 10 });
@@ -559,7 +555,7 @@ class DockerEngineAdapter implements DockerAdapter {
     return this.toInfo(inspect, hostPort);
   }
 
-  async restartContainer(name: string): Promise<ContainerInfo> {
+  async restartContainer(name: string, tenantId: string): Promise<ContainerInfo> {
     const container = this.docker.getContainer(name);
     await container.restart({ t: 10 });
     const inspect = await container.inspect();
@@ -567,7 +563,7 @@ class DockerEngineAdapter implements DockerAdapter {
     return this.toInfo(inspect, hostPort);
   }
 
-  async removeContainer(name: string): Promise<void> {
+  async removeContainer(name: string, tenantId: string): Promise<void> {
     const container = this.docker.getContainer(name);
     try {
       // Force-remove handles a running container (stops then removes).
@@ -578,7 +574,7 @@ class DockerEngineAdapter implements DockerAdapter {
     }
   }
 
-  async inspectContainer(name: string): Promise<ContainerInfo | null> {
+  async inspectContainer(name: string, tenantId: string): Promise<ContainerInfo | null> {
     try {
       const inspect = await this.docker.getContainer(name).inspect();
       const hostPort = extractHostPort(inspect);
@@ -589,9 +585,9 @@ class DockerEngineAdapter implements DockerAdapter {
     }
   }
 
-  async getLogs(name: string, tail = 100): Promise<LogLine[]> {
+  async getLogs(name: string, tenantId: string, tail = 100): Promise<LogLine[]> {
     const container = this.docker.getContainer(name);
-    let stream: NodeJS.ReadableStream;
+    let stream: any;
     try {
       stream = await container.logs({
         stdout: true,
@@ -608,7 +604,7 @@ class DockerEngineAdapter implements DockerAdapter {
 
   /* --------------------------- Volume key/value -------------------------- */
 
-  async execVolumeOp(name: string, op: VolumeOp): Promise<VolumeOpResult> {
+  async execVolumeOp(name: string, tenantId: string, op: VolumeOp): Promise<VolumeOpResult> {
     // Resolve container name -> volume name via Docker inspect, then operate
     // on the host-side sidecar. Falls back to treating `name` as a volume
     // name if the container has already been removed.
@@ -625,9 +621,29 @@ class DockerEngineAdapter implements DockerAdapter {
       volumeName = name;
     }
     // Ensure the sidecar volume record exists.
-    await this.volumeSidecar.createVolume(volumeName);
-    // Delegate to the mock's key/value logic (same JSON sidecar on host disk).
-    return this.volumeSidecar.execVolumeOp(volumeName, op);
+    await this.volumeSidecar.createVolume(volumeName, tenantId);
+    // Execute the mock's key/value logic (same JSON sidecar on host disk).
+    const data = await readVolumeData(volumeName);
+    switch (op.kind) {
+      case "get":
+        return { ok: op.key in data, value: data[op.key] };
+      case "set":
+        data[op.key] = op.value;
+        await writeVolumeData(volumeName, data);
+        return { ok: true, value: data[op.key] };
+      case "incr": {
+        const next = String((Number(data[op.key] ?? 0) || 0) + 1);
+        data[op.key] = next;
+        await writeVolumeData(volumeName, data);
+        return { ok: true, value: next };
+      }
+      case "list":
+        return { ok: true, keys: Object.keys(data) };
+      case "delete":
+        delete data[op.key];
+        await writeVolumeData(volumeName, data);
+        return { ok: true };
+    }
   }
 
   /* ------------------------------ Helpers ------------------------------- */
@@ -691,13 +707,27 @@ async function pullImage(docker: Docker, image: string): Promise<void> {
 
 /** Extract the first bound host port from a container inspect result. */
 function extractHostPort(inspect: Docker.ContainerInspectInfo): number | undefined {
+  // First try NetworkSettings.Ports, which contains the actual runtime port assignment
+  const ports = inspect.NetworkSettings?.Ports;
+  if (ports) {
+    for (const key of Object.keys(ports)) {
+      const arr = ports[key];
+      if (Array.isArray(arr) && arr.length > 0 && arr[0]?.HostPort) {
+        const n = Number(arr[0].HostPort);
+        if (Number.isFinite(n) && n > 0) return n;
+      }
+    }
+  }
+
+  // Fallback to HostConfig.PortBindings if NetworkSettings is empty (e.g. not started)
   const bindings = inspect.HostConfig?.PortBindings;
-  if (!bindings) return undefined;
-  for (const key of Object.keys(bindings)) {
-    const arr = bindings[key];
-    if (Array.isArray(arr) && arr.length > 0 && arr[0]?.HostPort) {
-      const n = Number(arr[0].HostPort);
-      if (Number.isFinite(n) && n > 0) return n;
+  if (bindings) {
+    for (const key of Object.keys(bindings)) {
+      const arr = bindings[key];
+      if (Array.isArray(arr) && arr.length > 0 && arr[0]?.HostPort) {
+        const n = Number(arr[0].HostPort);
+        if (Number.isFinite(n) && n > 0) return n;
+      }
     }
   }
   return undefined;
@@ -749,12 +779,19 @@ async function pickFreePort(start: number, end: number): Promise<number> {
  * dockerode returns logs with `timestamps: true`, so each frame's payload
  * starts with an ISO timestamp followed by a space and the message.
  */
-async function demuxDockerLogs(stream: NodeJS.ReadableStream): Promise<LogLine[]> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of stream) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+async function demuxDockerLogs(stream: any): Promise<LogLine[]> {
+  let buf: Buffer;
+  if (Buffer.isBuffer(stream)) {
+    buf = stream;
+  } else if (typeof stream === "string") {
+    buf = Buffer.from(stream, "utf8");
+  } else {
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as any));
+    }
+    buf = Buffer.concat(chunks);
   }
-  const buf = Buffer.concat(chunks);
   const lines: LogLine[] = [];
   let offset = 0;
   while (offset + 8 <= buf.length) {
@@ -766,7 +803,7 @@ async function demuxDockerLogs(stream: NodeJS.ReadableStream): Promise<LogLine[]
     const payload = buf.subarray(offset, offset + length).toString("utf8");
     offset += length;
     // Payload format with timestamps=true: "<ISO timestamp> <message>\n"
-    const tsMatch = payload.match(/^(\d{4}-\d{2}-\d{2}T[^\s]+)\s(.*)$/s);
+    const tsMatch = payload.match(/^(\d{4}-\d{2}-\d{2}T[^\s]+)\s([\s\S]*)$/);
     const t = tsMatch ? tsMatch[1] : new Date().toISOString();
     const message = (tsMatch ? tsMatch[2] : payload).replace(/\n$/, "");
     if (message.length === 0) continue;
@@ -785,13 +822,18 @@ async function demuxDockerLogs(stream: NodeJS.ReadableStream): Promise<LogLine[]
 
 // Stored on `globalThis` so a single adapter instance is shared across all
 // module instances in dev (route handlers + server components).
+import { KubernetesAdapter } from "../kubernetes/adapter";
+
 export function getDockerAdapter(): DockerAdapter {
   const g = globalThis as unknown as {
     __ossmpDockerAdapter?: DockerAdapter;
     __ossmpDockerAdapterKind?: "mock" | "docker";
   };
   if (!g.__ossmpDockerAdapter) {
-    if (config.docker.adapter === "docker") {
+    if (config.docker.adapter === "kubernetes") {
+      g.__ossmpDockerAdapter = new KubernetesAdapter();
+      g.__ossmpDockerAdapterKind = "docker"; // masquerade as docker for frontend compatibility
+    } else if (config.docker.adapter === "docker") {
       const real = new DockerEngineAdapter();
       // Probe the daemon synchronously on first use. If unreachable, fall back
       // to mock so the app still boots (with a loud warning). The probe result

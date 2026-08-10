@@ -1,4 +1,4 @@
-import { db } from "@backend/db";
+import { db, newId } from "@backend/db";
 import { json, withErrors } from "@backend/api";
 import { MARKETPLACE_APPS } from "@deployed/apps";
 
@@ -28,6 +28,7 @@ export const POST = withErrors(async () => {
         version: a.version ?? null,
       },
       create: {
+        id: newId(),
         name: a.name,
         slug: a.slug,
         description: a.description,

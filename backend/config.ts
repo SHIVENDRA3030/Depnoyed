@@ -29,7 +29,7 @@ export const config = {
     baseDomain: process.env.DEPLOY_BASE_DOMAIN ?? "apps.local",
   },
   docker: {
-    adapter: (process.env.DOCKER_ADAPTER ?? "mock") as "mock" | "docker",
+    adapter: (process.env.DOCKER_ADAPTER ?? "mock") as "mock" | "docker" | "kubernetes",
     mockPersist: process.env.MOCK_PERSIST !== "false",
     /** Path to the Docker daemon socket. Defaults to the standard unix socket. */
     socketPath: process.env.DOCKER_SOCKET ?? "/var/run/docker.sock",

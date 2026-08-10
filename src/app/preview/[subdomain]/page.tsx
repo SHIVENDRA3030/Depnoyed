@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@backend/db";
 import { getDockerAdapter } from "@backend/docker/adapter";
 import { getDeploymentBySubdomain, isDeploymentRunning } from "@backend/deployments";
+import { realAppUrl } from "@backend/config";
 import { AppSimulator } from "@/components/marketplace/app-simulator";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +24,9 @@ export default async function PreviewPage({ params }: { params: Promise<{ subdom
   let initialData: Record<string, string> = {};
   if (running) {
     const adapter = getDockerAdapter();
-    const list = await adapter.execVolumeOp(deployment.containerName, { kind: "list" });
+    const list = await adapter.execVolumeOp(deployment.containerName, deployment.userId, { kind: "list" });
     for (const key of list.keys ?? []) {
-      const got = await adapter.execVolumeOp(deployment.containerName, { kind: "get", key });
+      const got = await adapter.execVolumeOp(deployment.containerName, deployment.userId, { kind: "get", key });
       if (got.value !== undefined) initialData[key] = got.value;
     }
   }
@@ -43,6 +44,8 @@ export default async function PreviewPage({ params }: { params: Promise<{ subdom
       volumeName={deployment.volumeName}
       port={deployment.port}
       initialData={initialData}
+      realAppUrl={realAppUrl(deployment.port)}
+      readme={deployment.app?.readme ?? undefined}
     />
   );
 }

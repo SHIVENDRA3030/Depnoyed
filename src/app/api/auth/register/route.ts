@@ -1,5 +1,5 @@
-import { db } from "@backend/db";
-import { hashPassword, setSessionCookie } from "@backend/auth";
+import { db, newId } from "@backend/db";
+import { hashPassword } from "@backend/auth";
 import { json, errorResponse, withErrors } from "@backend/api";
 
 export const POST = withErrors(async (req: Request) => {
@@ -25,10 +25,9 @@ export const POST = withErrors(async (req: Request) => {
   const isAdmin = userCount === 0;
 
   const user = await db.user.create({
-    data: { email, name, passwordHash: hashPassword(password), isAdmin },
+    data: { id: newId(), email, name, passwordHash: hashPassword(password), isAdmin },
     select: { id: true, email: true, name: true, createdAt: true, isAdmin: true },
   });
 
-  await setSessionCookie(user.id, user.email);
   return json({ user }, 201);
 });

@@ -1,0 +1,45 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: depnoyed
+  namespace: depnoyed-system
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+    - hosts:
+        - dashboard.enysis.in
+        - enysis.in
+      secretName: depnoyed-tls
+  rules:
+    - host: dashboard.enysis.in
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: depnoyed
+                port:
+                  number: 80
+    - host: enysis.in
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: depnoyed
+                port:
+                  number: 80
+    - host: a677bbd98b7ea4043965e35d908e8e24-6733cd14fa194965.elb.us-east-1.amazonaws.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: depnoyed
+                port:
+                  number: 80

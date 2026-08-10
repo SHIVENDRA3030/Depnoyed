@@ -1,4 +1,4 @@
-import { db } from "@backend/db";
+import { db, newId } from "@backend/db";
 import { getDockerAdapter, type ContainerInfo } from "@backend/docker/adapter";
 import {
   config,
@@ -56,6 +56,16 @@ function mapStatus(s: string): string {
 }
 
 export async function createDeployment(input: DeployInput): Promise<DeployResult> {
+  // Phase 11: Server-side quotas
+  const MAX_DEPLOYMENTS = 3;
+  const userDeploymentsCount = await db.deployment.count({
+    where: { userId: input.userId }
+  });
+  
+  if (userDeploymentsCount >= MAX_DEPLOYMENTS) {
+    throw new DeployError("QUOTA_EXCEEDED", `User quota exceeded: maximum ${MAX_DEPLOYMENTS} deployments allowed.`);
+  }
+
   const app = await db.app.findUnique({ where: { id: input.appId } });
   if (!app) {
     throw new DeployError("UNKNOWN_APP", "Requested application does not exist");
@@ -73,6 +83,7 @@ export async function createDeployment(input: DeployInput): Promise<DeployResult
   const envVarsJson = input.envVars && Object.keys(input.envVars).length > 0 ? JSON.stringify(input.envVars) : null;
   const deployment = await db.deployment.create({
     data: {
+      id: newId(),
       userId: input.userId,
       appId: app.id,
       containerName,
@@ -86,7 +97,7 @@ export async function createDeployment(input: DeployInput): Promise<DeployResult
 
   try {
     // 2. Create the isolated volume.
-    await adapter.createVolume(volumeName);
+    await adapter.createVolume(volumeName, input.userId);
 
     // 3. Create the container with resource limits + the app's env.
     const env = parseEnv(app.defaultEnv);
@@ -106,10 +117,11 @@ export async function createDeployment(input: DeployInput): Promise<DeployResult
       memoryLimitMb: config.deploy.memoryLimitMb,
       env,
       simulator: app.simulator,
+      tenantId: input.userId,
     });
 
     // 4. Start the container.
-    const started = await adapter.startContainer(containerName);
+    const started = await adapter.startContainer(containerName, input.userId);
 
     // The real Docker adapter assigns a host port via PortBindings; prefer
     // that over the candidate port. The mock adapter returns the candidate.
@@ -149,7 +161,7 @@ export async function createDeployment(input: DeployInput): Promise<DeployResult
 export async function syncDeploymentStatus(deploymentId: string, userId: string) {
   const deployment = await getOwnedDeployment(deploymentId, userId);
   const adapter = getDockerAdapter();
-  const info = await adapter.inspectContainer(deployment.containerName);
+  const info = await adapter.inspectContainer(deployment.containerName, deployment.userId);
   if (info) {
     const status = mapStatus(info.status);
     if (status !== deployment.status) {
@@ -163,7 +175,7 @@ export async function syncDeploymentStatus(deploymentId: string, userId: string)
 export async function startDeployment(deploymentId: string, userId: string) {
   const deployment = await getOwnedDeployment(deploymentId, userId);
   const adapter = getDockerAdapter();
-  const info = await adapter.startContainer(deployment.containerName);
+  const info = await adapter.startContainer(deployment.containerName, deployment.userId);
   const status = mapStatus(info.status);
   await db.deployment.update({ where: { id: deployment.id }, data: { status } });
   return { ...deployment, status };
@@ -172,7 +184,7 @@ export async function startDeployment(deploymentId: string, userId: string) {
 export async function stopDeployment(deploymentId: string, userId: string) {
   const deployment = await getOwnedDeployment(deploymentId, userId);
   const adapter = getDockerAdapter();
-  const info = await adapter.stopContainer(deployment.containerName);
+  const info = await adapter.stopContainer(deployment.containerName, deployment.userId);
   const status = mapStatus(info.status);
   await db.deployment.update({ where: { id: deployment.id }, data: { status } });
   return { ...deployment, status };
@@ -181,7 +193,7 @@ export async function stopDeployment(deploymentId: string, userId: string) {
 export async function restartDeployment(deploymentId: string, userId: string) {
   const deployment = await getOwnedDeployment(deploymentId, userId);
   const adapter = getDockerAdapter();
-  const info = await adapter.restartContainer(deployment.containerName);
+  const info = await adapter.restartContainer(deployment.containerName, deployment.userId);
   const status = mapStatus(info.status);
   await db.deployment.update({ where: { id: deployment.id }, data: { status } });
   return { ...deployment, status };
@@ -191,25 +203,25 @@ export async function deleteDeployment(deploymentId: string, userId: string) {
   const deployment = await getOwnedDeployment(deploymentId, userId);
   const adapter = getDockerAdapter();
   // Remove the container first, then the volume, then the DB record.
-  await adapter.removeContainer(deployment.containerName);
-  await adapter.removeVolume(deployment.volumeName);
+  await adapter.removeContainer(deployment.containerName, deployment.userId);
+  await adapter.removeVolume(deployment.volumeName, deployment.userId);
   await db.deployment.delete({ where: { id: deployment.id } });
 }
 
 export async function getDeploymentLogs(deploymentId: string, userId: string, tail = 100) {
   const deployment = await getOwnedDeployment(deploymentId, userId);
   const adapter = getDockerAdapter();
-  return adapter.getLogs(deployment.containerName, tail);
+  return adapter.getLogs(deployment.containerName, deployment.userId, tail);
 }
 
 export async function execVolumeOp(
   deploymentId: string,
   userId: string,
-  op: Parameters<ReturnType<typeof getDockerAdapter>["execVolumeOp"]>[1]
+  op: Parameters<ReturnType<typeof getDockerAdapter>["execVolumeOp"]>[2]
 ) {
   const deployment = await getOwnedDeployment(deploymentId, userId);
   const adapter = getDockerAdapter();
-  return adapter.execVolumeOp(deployment.containerName, op);
+  return adapter.execVolumeOp(deployment.containerName, deployment.userId, op);
 }
 
 /**
@@ -231,9 +243,9 @@ export async function getDeploymentBySubdomain(subdomain: string) {
  */
 export async function isDeploymentRunning(subdomain: string): Promise<boolean> {
   const deployment = await getDeploymentBySubdomain(subdomain);
-  if (!deployment) return false;
+  if (!deployment || !deployment.containerName) return false;
   const adapter = getDockerAdapter();
-  const info = await adapter.inspectContainer(deployment.containerName);
+  const info = await adapter.inspectContainer(deployment.containerName, deployment.userId);
   const running = !!info && info.status === "running";
   const status = info ? mapStatus(info.status) : deployment.status;
   if (status !== deployment.status) {
@@ -249,14 +261,14 @@ export async function isDeploymentRunning(subdomain: string): Promise<boolean> {
  */
 export async function execVolumeOpBySubdomain(
   subdomain: string,
-  op: Parameters<ReturnType<typeof getDockerAdapter>["execVolumeOp"]>[1]
+  op: Parameters<ReturnType<typeof getDockerAdapter>["execVolumeOp"]>[2]
 ) {
   const deployment = await getDeploymentBySubdomain(subdomain);
   if (!deployment) throw new DeployError("NOT_FOUND", "Deployment not found");
   const running = await isDeploymentRunning(subdomain);
   if (!running) throw new DeployError("APP_NOT_RUNNING", "Application is not running");
   const adapter = getDockerAdapter();
-  return adapter.execVolumeOp(deployment.containerName, op);
+  return adapter.execVolumeOp(deployment.containerName, deployment.userId, op);
 }
 
 export async function getOwnedDeployment(deploymentId: string, userId: string) {

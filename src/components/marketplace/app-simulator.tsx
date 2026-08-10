@@ -18,6 +18,8 @@ export interface AppSimulatorProps {
   volumeName: string;
   port: number | null;
   initialData: Record<string, string>;
+  realAppUrl?: string | null;
+  readme?: string;
 }
 
 export function AppSimulator(props: AppSimulatorProps) {

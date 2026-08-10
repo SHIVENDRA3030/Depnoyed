@@ -1,4 +1,4 @@
-import { db } from "@backend/db";
+import { db, newId } from "@backend/db";
 import { getSessionUser } from "@backend/auth";
 import { json, errorResponse, withErrors, serializeApp } from "@backend/api";
 
@@ -59,6 +59,7 @@ export const POST = withErrors(async (req: Request) => {
 
   const app = await db.app.create({
     data: {
+      id: newId(),
       name,
       slug,
       description,

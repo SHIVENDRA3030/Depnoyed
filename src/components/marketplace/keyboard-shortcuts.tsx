@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Keyboard, Command, ArrowUp, ArrowDown, Enter, CornerDownLeft, X } from "lucide-react";
+import { Keyboard, Command, ArrowUp, ArrowDown, CornerDownLeft, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,

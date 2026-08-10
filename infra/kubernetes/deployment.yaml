@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: depnoyed
+  namespace: depnoyed-system
+  labels:
+    app: depnoyed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: depnoyed
+  template:
+    metadata:
+      labels:
+        app: depnoyed
+    spec:
+      serviceAccountName: depnoyed-backend
+      containers:
+        - name: web
+          image: ghcr.io/shivendra3030/depnoyed:latest # Placeholder image
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: DOCKER_ADAPTER
+              value: "kubernetes"
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: depnoyed-secrets
+                  key: MONGODB_URI
+            - name: AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: depnoyed-secrets
+                  key: AUTH_SECRET
+            - name: DEPLOY_BASE_DOMAIN
+              value: "enysis.in"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: depnoyed-secrets
+  namespace: depnoyed-system
+type: Opaque
+stringData:
+  # MUST BE REPLACED BEFORE APPLYING
+  MONGODB_URI: "mongodb+srv://..."
+  AUTH_SECRET: "generate-me-with-openssl-rand-hex-32"

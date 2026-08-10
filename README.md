@@ -101,16 +101,37 @@ and the runtime layer is swappable through the `DockerAdapter` interface.
 └───────────────────────────────┬─────────────────────────────────────┘
                                 │  DockerAdapter interface
 ┌───────────────────────────────▼─────────────────────────────────────┐
-│  Adapter    backend/docker/adapter.ts (MockDockerAdapter +           │
-│             DockerEngineAdapter via dockerode)                      │
-│             MockDockerAdapter  (default)  ·  DockerEngineAdapter    │
+│  Adapter    backend/docker/adapter.ts                               │
+│             MockDockerAdapter | DockerEngineAdapter | KubernetesAdapter
 └───────────────────────────────┬─────────────────────────────────────┘
                                 │
 ┌───────────────────────────────▼─────────────────────────────────────┐
-│  Runtime    Mock: in-process state + .ossmp-data/ JSON volumes      │
-│             Real Docker: dockerode → unix socket → dockerd          │
+│  Runtime    1. Mock: in-process simulation + JSON volumes           │
+│             2. Local Docker: dockerode → unix socket → dockerd      │
+│             3. Local Kubernetes: @kubernetes/client-node → K8s API  │
+│             4. Production: @kubernetes/client-node → AWS EKS        │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+### Runtime Modes & Infrastructure
+
+Depnoyed supports multiple deployment targets via its adapter pattern:
+
+**Local Docker**
+`Depnoyed -> DockerAdapter -> Docker Engine`
+The default setup for local development. Fast and uses standard Docker APIs.
+
+**Local Kubernetes**
+`Depnoyed -> KubernetesAdapter -> Local Kubernetes`
+Useful for testing the production Kubernetes path locally via Docker Desktop or minikube.
+
+**Production (AWS EKS)**
+`Depnoyed -> KubernetesAdapter -> AWS EKS`
+The production target. Fully isolated tenant namespaces, persistent PVCs via EBS, and dynamic Ingress routing.
+
+**Infrastructure as Code**
+`Terraform/OpenTofu -> AWS -> EKS -> Depnoyed`
+The underlying infrastructure (VPC, EKS, IAM, EBS CSI) is provisioned separately via Terraform. Depnoyed expects to run inside this cluster with a scoped IAM Role for Service Accounts (IRSA). See [docs/aws.md](docs/aws.md) for details.
 
 ### Multi-tenancy isolation chain
 
