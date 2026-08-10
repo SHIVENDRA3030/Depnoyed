@@ -12,8 +12,8 @@ const definition: AppDefinition = {
   version: "latest",
   repository: "https://github.com/supabase/supabase",
   website: "https://supabase.com",
-  readme: "# Supabase\\n\\nOpen source Firebase alternative.\\n\\n## Access\\nAccess the Studio dashboard via the provided URL.",
-  defaultEnv: "STUDIO_PG_META_URL=http://host.docker.internal:8080\\nSUPABASE_URL=http://host.docker.internal:8000",
+  readme: "# Supabase\n\nOpen source Firebase alternative.\n\n## Access\nAccess the Studio dashboard via the provided URL.",
+  defaultEnv: "STUDIO_PG_META_URL={{APP_URL}}\nSUPABASE_URL={{APP_URL}}",
 };
 
 export default definition;
