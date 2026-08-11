@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: false,
   devIndicators: false,
+  serverExternalPackages: ["ssh2", "dockerode", "docker-modem"],
 };
 
 export default nextConfig;
