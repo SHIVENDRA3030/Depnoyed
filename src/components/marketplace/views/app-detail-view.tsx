@@ -166,197 +166,151 @@ export function AppDetailView({ slug }: { slug: string }) {
       </button>
 
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-emerald-50 via-card to-card p-6 shadow-sm dark:from-emerald-950/30">
-        <div className="absolute inset-0 -z-10 bg-grid opacity-30 [mask-image:radial-gradient(ellipse_at_top_left,black,transparent_70%)]" />
-        {/* Decorative mesh gradient behind header */}
-        <div className="pointer-events-none absolute inset-0 -z-5 overflow-hidden">
-          <div className="absolute -left-10 -top-10 size-40 rounded-full bg-emerald-400/8 blur-3xl dark:bg-emerald-500/5" />
-          <div className="absolute -right-6 bottom-0 size-32 rounded-full bg-teal-400/10 blur-3xl dark:bg-teal-500/6" />
-          <div className="absolute left-1/2 top-1/2 size-24 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-400/5 blur-2xl dark:bg-cyan-500/3" />
-        </div>
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start gap-4">
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between mb-8 pb-8 border-b border-border">
+        <div className="flex items-start gap-4">
+          <div className="h-16 w-16 shrink-0 rounded-xl border border-border bg-card flex items-center justify-center overflow-hidden shadow-sm">
             <AppLogo logo={app.logo} simulator={app.simulator} name={app.name} size="lg" />
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-bold tracking-tight">{app.name}</h1>
-                <Badge variant="secondary">{app.category}</Badge>
-                {app.version && (
-                  <Badge variant="outline" className="gap-1 font-mono">
-                    <GitBranch className="size-3" /> v{app.version}
-                  </Badge>
-                )}
-                {app.deploymentCount > 0 && (
-                  <Badge variant="outline" className="gap-1 border-brand/30 bg-brand-soft/50 text-brand">
-                    <Zap className="size-3" /> {app.deploymentCount} {app.deploymentCount === 1 ? "deployment" : "deployments"}
-                  </Badge>
-                )}
-              </div>
-              <p className="mt-1 max-w-xl text-sm text-muted-foreground">{app.description}</p>
-
-              {/* Deployment Status Indicator */}
-              {userAppDeploymentCount > 0 && (
-                <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
-                  <Circle className="size-2 fill-emerald-500 text-emerald-500 dark:fill-emerald-400 dark:text-emerald-400" />
-                  You have {userAppDeploymentCount} instance{userAppDeploymentCount !== 1 ? "s" : ""} running
-                </div>
-              )}
-
-              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <Calendar className="size-3" /> Added {new Date(app.createdAt).toLocaleDateString()}
-                </span>
-                <span className="inline-flex items-center gap-1 font-mono">
-                  <Layers className="size-3" /> {app.dockerImage}
-                </span>
-                {app.repository && (
-                  <a
-                    href={app.repository}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-brand hover:underline"
-                  >
-                    <Code className="size-3" /> Repository <ExternalLink className="size-2.5" />
-                  </a>
-                )}
-                {app.website && (
-                  <a
-                    href={app.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-brand hover:underline"
-                  >
-                    <Globe className="size-3" /> Website <ExternalLink className="size-2.5" />
-                  </a>
-                )}
-              </div>
-            </div>
           </div>
-          <Button
-            ref={deployBtnRef}
-            size="lg"
-            onClick={deploy}
-            className="bg-brand text-brand-foreground hover:bg-brand/90"
-          >
-            <Rocket className="mr-2 size-4" />
-            Deploy
-          </Button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="text-3xl font-bold tracking-tight">{app.name}</h1>
+              {["grafana", "influxdb", "supabase"].includes(app.slug) && (
+                <Badge variant="outline" className="text-xs text-brand border-brand/20 bg-brand/5">
+                  Verified
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">{app.category}</p>
+            
+            {userAppDeploymentCount > 0 && (
+              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600">
+                <Circle className="size-2 fill-emerald-500 text-emerald-500" />
+                You have {userAppDeploymentCount} instance{userAppDeploymentCount !== 1 ? "s" : ""} running
+              </div>
+            )}
+          </div>
         </div>
+        
+        <Button
+          ref={deployBtnRef}
+          size="lg"
+          onClick={deploy}
+          className="bg-foreground text-background hover:bg-foreground/90 w-full sm:w-auto"
+        >
+          <Rocket className="mr-2 size-4" />
+          Deploy this Application
+        </Button>
       </div>
 
-      {/* Tabbed Content */}
-      <Tabs defaultValue="overview" className="mt-6">
-        <TabsList className="h-10 w-full justify-start gap-0 rounded-none border-b border-border bg-transparent p-0">
-          <TabsTrigger
-            value="overview"
-            className="relative rounded-none border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors data-[state=active]:border-brand data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-          >
-            <LayoutGrid className="mr-1.5 size-4" />
-            Overview
-          </TabsTrigger>
-          <TabsTrigger
-            value="specifications"
-            className="relative rounded-none border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors data-[state=active]:border-brand data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-          >
-            <Wrench className="mr-1.5 size-4" />
-            Specifications
-          </TabsTrigger>
+      {/* Two Column Layout */}
+      <div className="grid gap-8 lg:grid-cols-3">
+        {/* Left Column: Overview & Features */}
+        <div className="lg:col-span-2 space-y-8">
+          <section>
+            <h2 className="text-xl font-semibold mb-3">Overview</h2>
+            <p className="text-muted-foreground leading-relaxed">
+              {app.description}
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold mb-3">Features</h2>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="rounded-xl border border-border bg-card p-4">
+                <Row icon={<Container className="size-4 text-foreground" />} title="Isolated container" desc={`${app.dockerImage}`} />
+              </div>
+              <div className="rounded-xl border border-border bg-card p-4">
+                <Row icon={<Database className="size-4 text-foreground" />} title="Persistent volume" desc="Data survives restarts" />
+              </div>
+              <div className="rounded-xl border border-border bg-card p-4">
+                <Row icon={<Globe className="size-4 text-foreground" />} title="Unique URL" desc="Accessible instantly" />
+              </div>
+              <div className="rounded-xl border border-border bg-card p-4">
+                <Row icon={<ShieldCheck className="size-4 text-foreground" />} title="Secure Tenant" desc="Private instance" />
+              </div>
+            </div>
+          </section>
+
           {showReadmeTab && (
-            <TabsTrigger
-              value="readme"
-              className="relative rounded-none border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors data-[state=active]:border-brand data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-            >
-              <BookOpen className="mr-1.5 size-4" />
-              README
-            </TabsTrigger>
-          )}
-          <TabsTrigger
-            value="reviews"
-            className="relative rounded-none border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors data-[state=active]:border-brand data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-          >
-            <Star className="mr-1.5 size-4" />
-            Reviews
-            {reviewCount > 0 && (
-              <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-[10px]">
-                {reviewCount}
-              </Badge>
-            )}
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Overview Tab */}
-        <TabsContent value="overview" className="mt-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="gradient-border-card rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <h2 className="text-sm font-semibold">What you get</h2>
-              <ul className="mt-3 space-y-2.5 text-sm">
-                <Row icon={<Container className="size-4 text-brand" />} title="Isolated container" desc={`${app.dockerImage} · port ${app.containerPort}`} />
-                <Row icon={<Database className="size-4 text-brand" />} title="Persistent volume" desc="Data survives stop / restart" />
-                <Row icon={<Globe className="size-4 text-brand" />} title="Unique public URL" desc="<subdomain>.apps.local" />
-                <Row icon={<ShieldCheck className="size-4 text-brand" />} title="Tenant isolation" desc="Only you can access it" />
-              </ul>
-            </div>
-            <div className="gradient-border-card rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <h2 className="text-sm font-semibold">Resource limits</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Configured server-side so one tenant can't exhaust the host.
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <Metric icon={<Cpu className="size-4" />} label="CPU" value="0.5 core" />
-                <Metric icon={<MemoryStick className="size-4" />} label="Memory" value="512 MB" />
-              </div>
-              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
-                <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-800 dark:text-emerald-300">
-                  <CheckCircle2 className="size-3.5" /> Ready to deploy
-                </p>
-                <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-400">
-                  {user ? "Click Deploy to launch your instance." : "Sign in first, then deploy in one click."}
-                </p>
-              </div>
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* Specifications Tab */}
-        <TabsContent value="specifications" className="mt-5">
-          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-            <h2 className="flex items-center gap-1.5 text-sm font-semibold">
-              <Server className="size-4" /> Technical specifications
-            </h2>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <Spec icon={<Layers className="size-3.5" />} label="Docker image" value={app.dockerImage} mono />
-              <Spec icon={<Hash className="size-3.5" />} label="Container port" value={String(app.containerPort)} mono />
-              <Spec icon={<Container className="size-3.5" />} label="Runtime" value={app.simulator === "static" ? "Static server" : `${app.simulator} simulator`} />
-              <Spec icon={<Cpu className="size-3.5" />} label="CPU limit" value="0.5 core" />
-              <Spec icon={<MemoryStick className="size-3.5" />} label="Memory limit" value="512 MB" />
-              <Spec icon={<ShieldCheck className="size-3.5" />} label="Isolation" value="Per-tenant volume + container" />
-            </dl>
-          </div>
-        </TabsContent>
-
-        {/* README Tab */}
-        {showReadmeTab && (
-          <TabsContent value="readme" className="mt-5">
-            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-              <div className="flex items-center gap-2 border-b border-border/40 bg-muted/20 px-5 py-3">
-                <BookOpen className="size-4 text-brand" />
-                <h2 className="text-sm font-semibold">README</h2>
-                <span className="text-[11px] text-muted-foreground">· Markdown</span>
-              </div>
-              <div className="px-5 py-4">
-                <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:scroll-mt-20 prose-headings:font-semibold prose-a:text-brand prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-zinc-950 prose-pre:text-zinc-100">
+            <section>
+              <h2 className="text-xl font-semibold mb-3">Documentation</h2>
+              <div className="overflow-hidden rounded-xl border border-border bg-card">
+                <div className="px-5 py-6 prose prose-sm dark:prose-invert max-w-none">
                   <MarkdownRenderer content={app.readme!} />
                 </div>
               </div>
-            </div>
-          </TabsContent>
-        )}
+            </section>
+          )}
 
-        {/* Reviews Tab */}
-        <TabsContent value="reviews" className="mt-5">
-          <AppRatingsSection appSlug={app.slug} appName={app.name} onReviewCountChange={setReviewCount} />
-        </TabsContent>
-      </Tabs>
+          <section>
+            <AppRatingsSection appSlug={app.slug} appName={app.name} onReviewCountChange={setReviewCount} />
+          </section>
+        </div>
+
+        {/* Right Column: Requirements & Developer Info */}
+        <div className="space-y-6">
+          <div className="rounded-xl border border-border bg-card p-5">
+            <h3 className="font-semibold mb-4">Requirements</h3>
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between text-sm mb-1.5">
+                  <span className="text-muted-foreground flex items-center gap-1.5"><Cpu className="size-4" /> CPU</span>
+                  <span className="font-medium">0.5 Core</span>
+                </div>
+                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                  <div className="h-full bg-foreground w-[50%] rounded-full" />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between text-sm mb-1.5">
+                  <span className="text-muted-foreground flex items-center gap-1.5"><MemoryStick className="size-4" /> Memory</span>
+                  <span className="font-medium">512 MB</span>
+                </div>
+                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                  <div className="h-full bg-foreground w-[50%] rounded-full" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-5">
+            <h3 className="font-semibold mb-4">Developer Info</h3>
+            <dl className="space-y-3 text-sm">
+              <div className="flex justify-between items-center py-1 border-b border-border/50">
+                <dt className="text-muted-foreground">Version</dt>
+                <dd className="font-medium">{app.version || "Latest"}</dd>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-border/50">
+                <dt className="text-muted-foreground">Added</dt>
+                <dd className="font-medium">{new Date(app.createdAt).toLocaleDateString()}</dd>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-border/50">
+                <dt className="text-muted-foreground">Port</dt>
+                <dd className="font-mono">{app.containerPort}</dd>
+              </div>
+              <div className="flex flex-col py-1">
+                <dt className="text-muted-foreground mb-1">Docker Image</dt>
+                <dd className="font-mono text-xs break-all bg-muted p-1.5 rounded border border-border/50">{app.dockerImage}</dd>
+              </div>
+            </dl>
+
+            <div className="mt-5 space-y-2">
+              {app.repository && (
+                <Button variant="outline" className="w-full justify-start bg-background" onClick={() => window.open(app.repository, "_blank")}>
+                  <Code className="mr-2 size-4" /> View Source
+                  <ExternalLink className="ml-auto size-3 opacity-50" />
+                </Button>
+              )}
+              {app.website && (
+                <Button variant="outline" className="w-full justify-start bg-background" onClick={() => window.open(app.website, "_blank")}>
+                  <Globe className="mr-2 size-4" /> Visit Website
+                  <ExternalLink className="ml-auto size-3 opacity-50" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Related Apps */}
       {relatedApps.length > 0 && (

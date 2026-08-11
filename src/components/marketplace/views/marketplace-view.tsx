@@ -193,62 +193,26 @@ export function MarketplaceView() {
   return (
     <div>
       {/* Hero */}
-      <section className="relative isolate overflow-hidden border-b border-border/80">
-        <div className="absolute inset-0 -z-20 hero-gradient mesh-gradient" />
-        <div className="absolute inset-0 -z-10 bg-grid opacity-30 [mask-image:radial-gradient(ellipse_at_top,black,transparent_75%)]" />
-
-        {/* Floating orbs — enhanced with more orbs and varied positions */}
-        <div className="pointer-events-none absolute inset-0 -z-5 overflow-hidden">
-          <div className="hero-orb-1 absolute -left-20 top-10 size-64 rounded-full bg-emerald-400/8 blur-3xl dark:bg-emerald-500/5" />
-          <div className="hero-orb-2 absolute right-10 top-20 size-48 rounded-full bg-teal-400/10 blur-3xl dark:bg-teal-500/6" />
-          <div className="hero-orb-3 absolute left-1/3 -bottom-10 size-56 rounded-full bg-emerald-300/8 blur-3xl dark:bg-emerald-600/4" />
-          {/* Additional orbs for richer atmosphere */}
-          <div className="hero-orb-2 absolute right-1/4 top-[60%] size-40 rounded-full bg-cyan-400/6 blur-3xl dark:bg-cyan-500/4" />
-          <div className="hero-orb-1 absolute left-[60%] -top-4 size-36 rounded-full bg-teal-300/7 blur-3xl dark:bg-teal-500/4" />
-          <div className="hero-orb-3 absolute -right-8 bottom-1/4 size-44 rounded-full bg-emerald-400/7 blur-3xl dark:bg-emerald-600/3" />
-          {/* Small decorative particles */}
-          <div className="animate-particle-drift absolute left-[15%] top-[60%] size-1 rounded-full bg-emerald-500/30 [animation-delay:0s]" />
-          <div className="animate-particle-drift absolute left-[45%] top-[70%] size-1.5 rounded-full bg-teal-500/20 [animation-delay:1.5s]" />
-          <div className="animate-particle-drift absolute left-[75%] top-[55%] size-1 rounded-full bg-emerald-400/25 [animation-delay:3s]" />
-          <div className="animate-particle-drift absolute left-[30%] top-[80%] size-0.5 rounded-full bg-teal-400/30 [animation-delay:2s]" />
-          <div className="animate-particle-drift absolute left-[85%] top-[40%] size-1 rounded-full bg-cyan-400/20 [animation-delay:0.8s]" />
-          <div className="animate-particle-drift absolute left-[55%] top-[25%] size-0.5 rounded-full bg-emerald-300/30 [animation-delay:2.5s]" />
-        </div>
-
-        <div className="mx-auto max-w-6xl px-4 py-14 sm:py-20">
-          <div className="mx-auto max-w-2xl text-center">
-            <span className="animate-fade-in-up inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-              <Sparkles className="size-3" /> Deploy in one click
-            </span>
-            <h1 className="animate-fade-in-up mt-5 text-4xl font-bold tracking-tight sm:text-5xl [animation-delay:100ms]">
-              The open-source app marketplace
+      <section className="border-b border-border bg-background">
+        <div className="mx-auto max-w-6xl px-4 py-12 md:py-16">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-mono tracking-[0.15em] uppercase mb-3 text-brand/70">Open Source Marketplace</p>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl text-foreground">
+              Deploy in one click.
             </h1>
-            <p className="animate-fade-in-up mt-4 text-lg text-muted-foreground [animation-delay:200ms]">
-              Spin up your own isolated instance of open-source applications. Each deployment gets a
-              dedicated container, persistent storage, and a unique public URL.
+            <p className="mt-4 text-lg text-muted-foreground">
+              Discover and deploy open-source applications. Every deployment gets a dedicated container, persistent storage, and a unique URL.
             </p>
-            <div className="animate-fade-in-up mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3 [animation-delay:300ms]">
-              <StatCard icon={<Container className="size-5" />} label="Isolated containers" desc="Per deployment" indicator="∞" />
-              <StatCard icon={<Database className="size-5" />} label="Persistent volumes" desc="Data survives restarts" indicator="24/7" />
-              <StatCard icon={<Globe className="size-5" />} label="Unique public URLs" desc="Instant access" indicator="100%" />
-            </div>
-            {/* Quick stats row — animated counters */}
             {apps && apps.length > 0 && (
-              <div className="animate-fade-in-up mt-6 flex flex-wrap items-center justify-center gap-3 text-sm text-muted-foreground [animation-delay:400ms]">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-3 py-1 shadow-sm">
-                  <Boxes className="size-3.5 text-brand" /> <AnimatedCounter target={apps.length} /> apps available
+              <div className="mt-6 flex flex-wrap gap-4 text-sm text-muted-foreground/80">
+                <span className="inline-flex items-center gap-1.5 font-mono">
+                  <Boxes className="size-4 text-brand" /> <AnimatedCounter target={apps.length} /> apps available
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-3 py-1 shadow-sm">
-                  <Download className="size-3.5 text-brand" /> <AnimatedCounter target={totalDeploys} /> total deployments
+                <span className="inline-flex items-center gap-1.5 font-mono">
+                  <Download className="size-4 text-brand" /> <AnimatedCounter target={totalDeploys} /> total deployments
                 </span>
-                {favCount > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200/60 bg-rose-50/60 px-3 py-1 shadow-sm dark:border-rose-800/40 dark:bg-rose-950/20">
-                    <Heart className="size-3.5 fill-rose-500 text-rose-500" /> {favCount} favorites
-                  </span>
-                )}
               </div>
             )}
-
           </div>
         </div>
       </section>
@@ -400,13 +364,10 @@ export function MarketplaceView() {
             <button
               key={cat}
               onClick={() => setActiveCat(cat)}
-              className={`category-pill-lift inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
-                activeCat === cat
-                  ? cat === "Favorites"
-                    ? "border-rose-500/40 bg-rose-500/10 text-rose-700 shadow-sm dark:text-rose-300"
-                    : "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 shadow-sm dark:text-emerald-300"
-                  : "border-border bg-background text-muted-foreground hover:bg-muted hover:border-border/80"
-              }`}
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-mono font-medium transition-all duration-150"
+              style={activeCat===cat
+                ?{border:"1px solid rgba(255,106,0,0.35)",background:"rgba(255,106,0,0.10)",color:"#FF6A00"}
+                :{border:"1px solid rgba(255,255,255,0.08)",background:"transparent",color:"rgba(255,255,255,0.45)"}}
             >
               {cat === "Favorites" ? (
                 <Heart className={`size-3 ${activeCat === "Favorites" ? "fill-rose-500" : ""}`} />
@@ -498,39 +459,33 @@ function FeaturedAppCard({ app, rank }: { app: AppItem; rank: number }) {
   return (
     <div
       onClick={() => navigate({ name: "app", slug: app.slug })}
-      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-50/60 via-card to-card p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:scale-[1.01] hover:border-emerald-500/40 hover:shadow-xl dark:from-emerald-950/20 ${rankGlow} card-glow-hover`}
+      className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl p-5 text-left transition-all duration-300 hover:-translate-y-0.5 bg-card border border-border hover:border-brand/30 hover:shadow-[0_8px_30px_rgba(0,0,0,0.12),0_0_0_1px_var(--dp-accent-subtle)]"
     >
-      {/* Decorative glow */}
-      <div className="pointer-events-none absolute -right-8 -top-8 size-24 rounded-full bg-emerald-500/5 blur-2xl transition-opacity duration-300 group-hover:opacity-100" />
-      {/* Shimmer edge on hover */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-      
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="relative">
             <AppLogo logo={app.logo} simulator={app.simulator} name={app.name} size="lg" />
-            <span className={`absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-gradient-to-br ${rankColor} text-[10px] font-bold shadow-sm ring-2 ring-background`}>
+            <span className={`absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-gradient-to-br ${rankColor} text-[10px] font-bold shadow-sm ring-2 ring-[#050505]`}>
               {rank}
             </span>
           </div>
           <div>
-            <h3 className="text-base font-semibold leading-tight">{app.name}</h3>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">{app.category}</p>
+            <h3 className="text-base font-semibold leading-tight text-foreground">{app.name}</h3>
+            <p className="mt-0.5 text-[11px] font-mono text-muted-foreground">{app.category}</p>
           </div>
         </div>
-        <Badge variant="secondary" className="gap-1 font-normal shadow-sm">
-          <Zap className="size-3 text-orange-500" /> {app.deploymentCount}
-        </Badge>
+        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-mono border border-brand/25 bg-brand-soft text-brand">
+          <Zap className="size-3" /> {app.deploymentCount}
+        </span>
       </div>
       <p className="mt-3 line-clamp-2 flex-1 text-sm text-muted-foreground">{app.description}</p>
-      <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-3">
-        <span className="font-mono text-[11px] text-muted-foreground/80">{app.dockerImage}</span>
+      <div className="mt-4 flex items-center justify-between pt-3 border-t border-border">
+        <span className="font-mono text-[10px] text-muted-foreground/60">{app.dockerImage}</span>
         <button
           onClick={handleDeploy}
-          className="deploy-glow-btn relative z-20 inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:shadow-md hover:brightness-110"
+          className="relative z-20 inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold font-mono uppercase tracking-wide transition-all hover:shadow-[0_0_15px_var(--dp-accent-subtle)] hover:-translate-y-px bg-brand text-brand-foreground"
         >
-          <Rocket className="size-3" />
-          Deploy
+          <Rocket className="size-3" /> Deploy
         </button>
       </div>
       <DeployModal app={app} open={modalOpen} onOpenChange={setModalOpen} />
@@ -577,78 +532,30 @@ function AppCard({ app, onFavToggle }: { app: AppItem; onFavToggle?: () => void 
   return (
     <div
       onClick={() => navigate({ name: "app", slug: app.slug })}
-      className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border bg-card p-0 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-500/30 hover:shadow-lg card-glow-hover"
+      className="group flex cursor-pointer flex-col overflow-hidden rounded-xl p-5 text-left transition-all duration-200 hover:-translate-y-0.5 bg-card border border-border hover:border-brand/30 hover:shadow-[0_4px_20px_rgba(0,0,0,0.1)]"
     >
-      {/* Top accent bar with gradient animation */}
-      <div className="h-1 w-full bg-gradient-to-r from-emerald-500/0 via-emerald-500/40 to-teal-500/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      <div className="flex items-start justify-between mb-4">
+        <div className="relative h-12 w-12 rounded-lg flex items-center justify-center overflow-hidden border border-border bg-background">
+          <AppLogo logo={app.logo} simulator={app.simulator} name={app.name} size="md" />
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          {["grafana", "influxdb", "supabase"].includes(app.slug) && (
+            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-mono border border-brand/30 bg-brand-soft text-brand">Verified</span>
+          )}
+          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-mono border border-border bg-muted/50 text-muted-foreground">{app.category}</span>
+        </div>
+      </div>
       
-      <div className="flex flex-1 flex-col p-5">
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div className="relative">
-            <AppLogo logo={app.logo} simulator={app.simulator} name={app.name} size="lg" />
-            {fav && (
-              <span className="absolute -right-1 -top-1 flex size-3 items-center justify-center">
-                <Heart className="size-2.5 fill-rose-500 text-rose-500" />
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5">
-            {app.deploymentCount > 0 && (
-              <Badge variant="secondary" className="gap-1 font-normal">
-                <Zap className="size-3 text-emerald-500" /> {app.deploymentCount}
-              </Badge>
-            )}
-            <Badge variant="secondary" className="font-normal">{app.category}</Badge>
-          </div>
-        </div>
-        <h3 className="mt-4 text-base font-semibold group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors duration-200">{app.name}</h3>
-        <p className="mt-1.5 line-clamp-2 flex-1 text-sm text-muted-foreground">{app.description}</p>
-        {/* Version & repo info */}
-        <div className="mt-3 flex items-center gap-3 text-[11px] text-muted-foreground/60">
-          {app.version && (
-            <span className="inline-flex items-center gap-1">
-              <span className="size-1.5 rounded-full bg-emerald-500/40" /> v{app.version}
-            </span>
-          )}
-          {app.repository && (
-            <span className="inline-flex items-center gap-1">
-              <Globe2 className="size-3" /> Repository
-            </span>
-          )}
-        </div>
+      <h3 className="text-base font-semibold transition-colors duration-200 text-foreground">{app.name}</h3>
+      <p className="mt-1.5 text-sm line-clamp-2 min-h-[40px] text-muted-foreground">{app.description}</p>
+
+      <div className="mt-5 flex items-center gap-2">
+        <Button variant="secondary" className="flex-1 h-8 text-xs"
+          onClick={(e) => { e.stopPropagation(); navigate({ name: "app", slug: app.slug }); }}
+        >View Details</Button>
+        <Button className="flex-1 h-8 text-xs" onClick={handleDeploy}>Deploy</Button>
       </div>
 
-      {/* Footer */}
-      <div className="relative z-20 flex items-center justify-between border-t border-border/40 bg-muted/20 px-5 py-3">
-        <span className="font-mono text-[11px] text-muted-foreground/70">{app.dockerImage}</span>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={toggleFav}
-            className={`inline-flex items-center justify-center rounded-md p-1 transition-all duration-200 ${fav ? "text-rose-500 hover:text-rose-600" : "text-muted-foreground/60 hover:bg-muted hover:text-rose-500"}`}
-            aria-label={fav ? "Remove from favorites" : "Add to favorites"}
-          >
-            <Heart className={`size-3.5 transition-all duration-200 ${fav ? "fill-rose-500" : ""}`} />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleCompare(app.slug); if (!inCompare && compareCount >= 3) toast.info("Compare tray full (max 3)"); }}
-            className={`inline-flex items-center justify-center rounded-md p-1 transition-colors ${inCompare ? "text-brand bg-brand-soft" : "text-muted-foreground/60 hover:bg-muted hover:text-brand"}`}
-            aria-label={inCompare ? "Remove from compare" : "Add to compare"}
-            title={inCompare ? "Remove from compare" : "Add to compare"}
-          >
-            <GitCompare className="size-3.5" />
-          </button>
-          <button
-            onClick={handleDeploy}
-            className="deploy-glow-btn inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-all duration-200 hover:bg-emerald-500/20 hover:shadow-sm dark:text-emerald-400"
-          >
-            <Rocket className="size-3" /> Deploy
-          </button>
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground/60 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-muted-foreground">
-            Details <ArrowRight className="size-3" />
-          </span>
-        </div>
-      </div>
       <DeployModal app={app} open={modalOpen} onOpenChange={setModalOpen} />
     </div>
   );
@@ -803,27 +710,22 @@ function CategoryExplorer({ apps, onSelectCategory }: { apps: AppItem[]; onSelec
             <button
               key={cat}
               onClick={() => onSelectCategory(cat)}
-              className={`group relative flex cursor-pointer flex-col items-center gap-3 rounded-2xl border bg-gradient-to-br ${theme.gradient} ${theme.darkGradient} ${theme.border} ${theme.hoverBorder} p-6 text-center shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg animate-card-entrance`}
-              style={{ animationDelay: `${i * 80}ms` }}
+              className={`group relative flex cursor-pointer flex-col items-center gap-3 rounded-xl p-6 text-center transition-all duration-300 hover:-translate-y-1 animate-card-entrance bg-card border border-border hover:border-brand/30 hover:shadow-[0_8px_25px_rgba(0,0,0,0.1)]`}
+              style={{
+                animationDelay: `${i * 80}ms`,
+              }}
             >
-              {/* Subtle decorative glow */}
-              <div className="pointer-events-none absolute -right-4 -top-4 size-20 rounded-full bg-current opacity-[0.04] blur-2xl transition-opacity duration-300 group-hover:opacity-[0.08]" />
-              <span className={`relative flex size-14 items-center justify-center rounded-2xl ${theme.iconBg} ${theme.iconColor} transition-transform duration-300 group-hover:animate-bounce`}>
+              <span className="relative flex size-14 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-110 bg-brand-soft text-brand">
                 <Icon className="size-7" />
               </span>
               <div>
-                <h3 className="text-base font-semibold">{cat}</h3>
-                <div className="mt-1 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <Boxes className="size-3" /> {stats.appCount} {stats.appCount === 1 ? "app" : "apps"}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Zap className="size-3" /> {stats.deployCount} deploys
-                  </span>
+                <h3 className="text-base font-semibold text-foreground">{cat}</h3>
+                <div className="mt-1 flex items-center justify-center gap-2 text-xs font-mono text-muted-foreground">
+                  <span className="inline-flex items-center gap-1"><Boxes className="size-3" /> {stats.appCount} {stats.appCount === 1 ? "app" : "apps"}</span>
+                  <span className="inline-flex items-center gap-1"><Zap className="size-3" /> {stats.deployCount}</span>
                 </div>
               </div>
-              {/* Hover arrow indicator */}
-              <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground/60 transition-all duration-200 group-hover:text-foreground/80 group-hover:translate-x-0.5">
+              <span className="mt-1 inline-flex items-center gap-1 text-xs font-mono transition-all duration-200 group-hover:translate-x-0.5 text-brand/50">
                 Browse <ArrowRight className="size-3" />
               </span>
             </button>

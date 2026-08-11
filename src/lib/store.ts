@@ -126,35 +126,48 @@ export const useAuth = create<AuthState>((set, get) => ({
   logout: async () => {
     await api("/api/auth/logout", { method: "POST" });
     set({ user: null });
+    navigate({ name: "landing" });
   },
 }));
 
 /* ------------------------------ Route helpers ----------------------------- */
 
 export type Route =
+  | { name: "landing" }
   | { name: "marketplace" }
   | { name: "login" }
   | { name: "app"; slug: string }
   | { name: "dashboard" }
   | { name: "deployment"; id: string }
   | { name: "settings" }
-  | { name: "admin" };
+  | { name: "admin" }
+  | { name: "billing" }
+  | { name: "deployments" }
+  | { name: "usage" }
+  | { name: "help" };
 
 export function parseHash(): Route {
   const hash = window.location.hash.replace(/^#\/?/, "");
   const parts = hash.split("/").filter(Boolean);
-  if (parts.length === 0) return { name: "marketplace" };
+  if (parts.length === 0) return { name: "landing" };
+  if (parts[0] === "marketplace") return { name: "marketplace" };
   if (parts[0] === "login") return { name: "login" };
   if (parts[0] === "dashboard") return { name: "dashboard" };
   if (parts[0] === "settings") return { name: "settings" };
   if (parts[0] === "admin") return { name: "admin" };
+  if (parts[0] === "billing") return { name: "billing" };
+  if (parts[0] === "deployments" && !parts[1]) return { name: "deployments" };
+  if (parts[0] === "usage") return { name: "usage" };
+  if (parts[0] === "help") return { name: "help" };
   if (parts[0] === "apps" && parts[1]) return { name: "app", slug: decodeURIComponent(parts[1]) };
   if (parts[0] === "deployments" && parts[1]) return { name: "deployment", id: decodeURIComponent(parts[1]) };
-  return { name: "marketplace" };
+  return { name: "landing" };
 }
 
 export function routeToHash(route: Route): string {
   switch (route.name) {
+    case "landing":
+      return "#/";
     case "marketplace":
       return "#/marketplace";
     case "login":
@@ -165,6 +178,14 @@ export function routeToHash(route: Route): string {
       return "#/settings";
     case "admin":
       return "#/admin";
+    case "billing":
+      return "#/billing";
+    case "deployments":
+      return "#/deployments";
+    case "usage":
+      return "#/usage";
+    case "help":
+      return "#/help";
     case "app":
       return `#/apps/${encodeURIComponent(route.slug)}`;
     case "deployment":

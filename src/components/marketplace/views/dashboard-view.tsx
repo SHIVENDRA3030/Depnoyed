@@ -37,7 +37,7 @@ import {
   ChevronDown,
   CircleDot,
 } from "lucide-react";
-import { api, navigate, type DeploymentItem, ApiError } from "@/lib/store";
+import { api, navigate, type DeploymentItem, ApiError, useAuth } from "@/lib/store";
 import { AppLogo } from "@/components/marketplace/app-logo";
 import { statusColor } from "@/components/marketplace/status";
 import {
@@ -115,6 +115,14 @@ export function DashboardView() {
   const [batchBusy, setBatchBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const user = useAuth((s) => s.user);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  };
 
   const load = useCallback(async () => {
     try {
@@ -296,22 +304,23 @@ export function DashboardView() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      {/* Header with gradient bg */}
-      <div className="dashboard-header-gradient -mx-4 -mt-8 px-4 pt-8 pb-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">My deployments</h1>
-            <p className="text-sm text-muted-foreground">Manage your isolated application instances.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={refresh} disabled={refreshing}>
-              {refreshing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
-              Refresh
-            </Button>
-            <Button size="sm" className="bg-brand text-brand-foreground hover:bg-brand/90" onClick={() => navigate({ name: "marketplace" })}>
-              <Plus className="mr-2 size-4" /> Deploy new
-            </Button>
-          </div>
+      {/* Header */}
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[11px] font-mono tracking-[0.15em] uppercase mb-2 text-brand/70">Mission Control</p>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            {getGreeting()}{user?.name ? `, ${user.name}` : ""}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">Here's what's running on your infrastructure.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={refresh} disabled={refreshing}>
+            {refreshing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
+            Refresh
+          </Button>
+          <Button onClick={() => navigate({ name: "marketplace" })}>
+            <Plus className="mr-2 size-4" /> New Deployment
+          </Button>
         </div>
       </div>
 
@@ -327,37 +336,32 @@ export function DashboardView() {
         const containerQuota = 10;
         const runningPct = Math.round((runningCount / Math.max(1, deployments.length)) * 100);
         return (
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <StatCard
               icon={<Boxes className="size-4" />}
               label="Total Deployments"
               value={String(deployments.length)}
               tone="default"
-              glass
-              trend={{ direction: "up", value: `${runningPct}%` }}
+              trend={{ direction: "up", value: `${runningPct}% active` }}
             />
             <StatCard
               icon={<Activity className="size-4" />}
               label="Running"
               value={String(runningCount)}
               tone="emerald"
-              glass
-              trend={{ direction: runningCount > 0 ? "up" : "down", value: runningCount > 0 ? "active" : "idle" }}
+              trend={{ direction: runningCount > 0 ? "up" : "down", value: runningCount > 0 ? "live" : "idle" }}
             />
             <StatCard
               icon={<Clock className="size-4" />}
               label="Total Uptime"
               value={uptimeStr}
               tone="teal"
-              glass
-              trend={{ direction: "up", value: "live" }}
             />
             <StatCard
               icon={<Cpu className="size-4" />}
               label="Resource Usage"
               value={`${deployments.length}/${containerQuota}`}
               tone="brand"
-              glass
               trend={{ direction: deployments.length > containerQuota * 0.7 ? "up" : "down", value: `${Math.round((deployments.length / containerQuota) * 100)}%` }}
             />
           </div>
@@ -404,14 +408,14 @@ export function DashboardView() {
 
       {/* Cost estimation */}
       {deployments && deployments.length > 0 && (
-        <div className="mt-4 rounded-2xl border border-border bg-gradient-to-br from-card via-card to-emerald-50/30 p-5 shadow-sm dark:to-emerald-950/10">
+        <div className="mt-4 rounded-xl p-5 bg-card border border-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="flex size-8 items-center justify-center rounded-lg bg-brand-soft text-brand">
+              <span className="flex size-8 items-center justify-center rounded-md bg-brand-soft text-brand">
                 <DollarSign className="size-4" />
               </span>
               <div>
-                <h3 className="text-sm font-semibold">Estimated usage cost</h3>
+                <h3 className="text-sm font-semibold text-foreground">Estimated usage cost</h3>
                 <p className="text-[11px] text-muted-foreground">Based on running deployments × resource usage</p>
               </div>
             </div>
@@ -473,11 +477,8 @@ export function DashboardView() {
               <button
                 key={f}
                 onClick={() => setStatusFilter(f)}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
-                  statusFilter === f
-                    ? "border-brand/40 bg-brand/10 text-brand"
-                    : "border-border bg-background text-muted-foreground hover:bg-muted"
-                }`}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-mono font-medium transition-all"
+                style={statusFilter===f?{border:"1px solid rgba(255,106,0,0.35)",background:"rgba(255,106,0,0.10)",color:"#FF6A00"}:{border:"1px solid rgba(255,255,255,0.08)",background:"transparent",color:"rgba(255,255,255,0.45)"}}
               >
                 {f === "all" && <Boxes className="size-3" />}
                 {f === "running" && <Activity className="size-3" />}
@@ -670,53 +671,30 @@ function StatCard({
   glass?: boolean;
   trend?: { direction: "up" | "down"; value: string };
 }) {
-  const toneClasses = {
-    default: "bg-muted/60 text-foreground",
-    emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-    zinc: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
-    brand: "bg-brand-soft text-brand",
-    teal: "bg-teal-500/10 text-teal-600 dark:text-teal-400",
-  }[tone];
   return (
-    <div className={`group flex items-center gap-3 rounded-xl border border-border p-3 shadow-sm transition-all duration-200 hover:border-brand/30 hover:shadow-md ${glassProp ? "glass-stat-card border-white/20 dark:border-white/5" : "bg-card"}`}>
-      <span className={`flex size-9 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-110 ${toneClasses}`}>
-        {icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          {label}
-        </p>
-        <div className="flex items-baseline gap-1.5">
-          <p className="truncate text-lg font-bold tabular-nums">{value}</p>
-          {trend && (
-            <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium tabular-nums ${trend.direction === "up" ? "stat-trend-up" : "stat-trend-down"}`}>
-              {trend.direction === "up" ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-              {trend.value}
-            </span>
-          )}
-        </div>
+    <div
+      className="group flex flex-col gap-3 rounded-xl p-5 transition-all duration-200 cursor-default bg-card border border-border hover:border-brand/30 hover:shadow-[0_0_20px_var(--dp-accent-subtle)]"
+    >
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-mono font-medium tracking-[0.12em] uppercase text-muted-foreground">{label}</p>
+        <span className="flex size-7 items-center justify-center rounded-md bg-brand-soft text-brand">
+          {icon}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <p className="text-2xl font-bold font-mono tabular-nums tracking-tight text-foreground">{value}</p>
+        {trend && (
+          <span className={`inline-flex items-center gap-0.5 text-xs font-mono tabular-nums ${trend.direction === "up" ? "text-emerald-400" : "text-[rgba(255,255,255,0.35)]"}`}>
+            {trend.direction === "up" ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+            {trend.value}
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
-function statusGradientBorder(status: string): string {
-  switch (status) {
-    case "running":
-      return "border-l-4 border-l-emerald-500 [border-left-style:solid]";
-    case "pending":
-    case "creating":
-      return "border-l-4 border-l-amber-500 [border-left-style:solid]";
-    case "failed":
-    case "dead":
-      return "border-l-4 border-l-red-500 [border-left-style:solid]";
-    case "stopped":
-    case "exited":
-      return "border-l-4 border-l-zinc-400 dark:border-l-zinc-500 [border-left-style:solid]";
-    default:
-      return "border-l-4 border-l-muted-foreground [border-left-style:solid]";
-  }
-}
+
 
 function DeploymentRow({
   d,
@@ -743,105 +721,78 @@ function DeploymentRow({
   const uptime = calculateUptime(d.createdAt, d.status);
 
   return (
-    <div className={`group flex flex-col gap-4 rounded-2xl border border-border ${statusGradientBorder(d.status)} bg-card p-4 shadow-sm transition-all duration-200 hover:border-brand/40 hover:shadow-[inset_0_1px_4px_rgba(16,185,129,0.06),0_4px_12px_rgba(0,0,0,0.08)] sm:flex-row sm:items-center sm:justify-between`}>
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        {/* Checkbox */}
+    <div
+      className="group flex flex-col gap-4 rounded-xl p-4 transition-all duration-200 sm:flex-row sm:items-center sm:justify-between dp-card dp-card-interactive"
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-4">
         <Checkbox
           checked={selected}
           onCheckedChange={onSelect}
           aria-label={`Select ${d.app?.name ?? "deployment"}`}
           onClick={(e) => e.stopPropagation()}
+          className="border-border data-[state=checked]:bg-brand data-[state=checked]:border-brand"
         />
 
-        <button
-          className="flex min-w-0 flex-1 items-center gap-4 text-left"
+        <div
+          className="flex min-w-0 flex-1 items-center gap-4 text-left cursor-pointer"
           onClick={() => navigate({ name: "deployment", id: d.id })}
         >
-          <AppLogo logo={d.app?.logo ?? null} simulator={d.app?.simulator ?? "static"} name={d.app?.name ?? "App"} />
+          <div className="h-10 w-10 shrink-0 rounded-lg flex items-center justify-center overflow-hidden border border-border bg-background">
+            <AppLogo logo={d.app?.logo ?? null} simulator={d.app?.simulator ?? "static"} name={d.app?.name ?? "App"} />
+          </div>
+          
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h3 className="truncate font-semibold">{d.app?.name ?? "Unknown app"}</h3>
-              {d.label && (
-                <Badge variant="outline" className="shrink-0 gap-1 border-brand/30 bg-brand-soft/50 px-1.5 py-0 text-[10px] font-medium text-brand">
-                  <Tag className="size-2.5" /> {d.label}
-                </Badge>
-              )}
-              <span className={`inline-flex shrink-0 items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusColor(d.status)}`}>
-                <span className="relative flex size-1.5">
-                  <span className={`absolute inline-flex size-full rounded-full ${statusDotClass(d.status)} opacity-75`} />
-                  {d.status === "running" && (
-                    <span className={`inline-flex size-full rounded-full ${statusDotClass(d.status)} animate-status-pulse`} />
-                  )}
-                </span>
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="truncate font-semibold text-sm text-foreground">{d.app?.name ?? "Unknown app"}</h3>
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-mono font-medium border ${
+                running ? "border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-500" :
+                d.status === "pending" || d.status === "creating" ? "border-brand/30 bg-brand/10 text-brand" :
+                d.status === "failed" ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-500" :
+                "border-border bg-muted text-muted-foreground"
+              }`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${running ? "bg-green-500 animate-pulse" : d.status === "pending" || d.status === "creating" ? "bg-brand" : d.status === "failed" ? "bg-red-500" : "bg-muted-foreground/50"}`} />
                 {d.status}
               </span>
-              {/* Health dot */}
-              <span className="relative flex size-2" title={`Health: ${d.status}`}>
-                <span className={`size-full rounded-full ${healthDotColor(d.status)}`} />
-              </span>
             </div>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-              <a
-                href={d.previewPath}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex max-w-[180px] items-center gap-1 font-mono text-brand hover:underline sm:max-w-[220px]"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ExternalLink className="size-3 shrink-0" /> <span className="truncate">{d.subdomain}.apps.local</span>
-              </a>
-              <span className="inline-flex items-center gap-1 font-mono">
-                <Container className="size-3" /> <span className="truncate max-w-[150px]">{d.containerName}</span>
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <Timer className="size-3" /> {running ? `Running for ${uptimeSince(d.createdAt)}` : `Stopped · ${timeAgo(d.updatedAt)}`}
-              </span>
-              {d.volumeDataSize != null && (
-                <span className="inline-flex items-center gap-1">
-                  <Database className="size-3" /> {formatDataSize(d.volumeDataSize)}
-                </span>
-              )}
-              {/* Uptime indicator */}
-              <span className="inline-flex items-center gap-1 tabular-nums">
-                <Activity className="size-3" />
-                {running ? `${uptime}% uptime` : "Stopped"}
-              </span>
-              {/* Memory usage bar */}
-              <span className="inline-flex items-center gap-1.5">
-                <span className="text-[10px] tabular-nums">{metrics.memoryUsagePercent}%</span>
-                <Progress value={metrics.memoryUsagePercent} className="h-1.5 w-16" />
-              </span>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground text-[11px]">
+              <a href={d.previewPath} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-1 font-mono hover:underline text-foreground/80"
+                onClick={(e)=>e.stopPropagation()}
+              ><ExternalLink className="h-3 w-3" />{d.subdomain}.apps.local</a>
+              <span className="inline-flex items-center gap-1 font-mono"><Timer className="h-3 w-3" />{running?`${uptimeSince(d.createdAt)}`:`Offline`}</span>
+              <span className="inline-flex items-center gap-1 font-mono"><Cpu className="h-3 w-3" />{metrics.cpuUsagePercent}%</span>
+              <span className="inline-flex items-center gap-1 font-mono"><MemoryStick className="h-3 w-3" />{metrics.memoryUsagePercent}%</span>
             </div>
           </div>
-        </button>
+        </div>
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <Button
           size="sm"
           variant="outline"
-          className="gap-1.5"
+          className="h-8 gap-1.5 bg-background"
           onClick={() => window.open(d.previewPath, "_blank")}
           disabled={!running}
         >
-          <ExternalLink className="size-3.5" /> Open
+          <ExternalLink className="h-3.5 w-3.5" /> Open
         </Button>
         {running ? (
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={onStop} disabled={busy}>
-            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5" />} Stop
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-background" onClick={onStop} disabled={busy}>
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />} Stop
           </Button>
         ) : (
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={onStart} disabled={busy}>
-            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />} Start
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-background" onClick={onStart} disabled={busy}>
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Start
           </Button>
         )}
-        <Button size="sm" variant="outline" className="gap-1.5" onClick={onRestart} disabled={busy}>
-          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCw className="size-3.5" />} Restart
+        <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-background" onClick={onRestart} disabled={busy}>
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}
         </Button>
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button size="sm" variant="outline" className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy}>
-              <Trash2 className="size-3.5" /> Delete
+            <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-background border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy}>
+              <Trash2 className="h-3.5 w-3.5" />
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>

@@ -42,6 +42,7 @@ interface DeployModalProps {
 
 export function DeployModal({ app, open, onOpenChange, onDeployed }: DeployModalProps) {
   const [label, setLabel] = useState("");
+  const [subdomain, setSubdomain] = useState("");
   const [envPairs, setEnvPairs] = useState<{ key: string; value: string }[]>([]);
   const [deploying, setDeploying] = useState(false);
 
@@ -62,6 +63,8 @@ export function DeployModal({ app, open, onOpenChange, onDeployed }: DeployModal
     try {
       const body: Record<string, unknown> = { appId: app.id };
       if (label.trim()) body.label = label.trim();
+      if (subdomain.trim()) body.subdomain = subdomain.trim();
+      
       // Add env vars if any
       const envObj: Record<string, string> = {};
       for (const p of envPairs) {
@@ -89,195 +92,141 @@ export function DeployModal({ app, open, onOpenChange, onDeployed }: DeployModal
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <AppLogo logo={app.logo} simulator={app.simulator} name={app.name} size="lg" />
+        <DialogHeader className="pb-4 border-b border-border">
+          <DialogTitle className="flex items-center gap-3 text-xl">
+            <div className="h-10 w-10 shrink-0 rounded-lg border border-border bg-background flex items-center justify-center overflow-hidden">
+              <AppLogo logo={app.logo} simulator={app.simulator} name={app.name} size="md" />
+            </div>
             <div>
-              <span className="block">Deploy {app.name}</span>
+              <span className="block font-semibold">Deploy {app.name}</span>
               <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-                {app.category} · {app.dockerImage}
+                {app.category}
               </span>
             </div>
           </DialogTitle>
-          <DialogDescription>
-            Configure and launch your own isolated instance.
-          </DialogDescription>
         </DialogHeader>
 
-        {/* Label input */}
-        <div className="space-y-1.5">
-          <label
-            htmlFor="deploy-label"
-            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
-          >
-            <Tag className="size-3" /> Label (optional)
-          </label>
-          <Input
-            id="deploy-label"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="e.g. prod, staging, client-A"
-            disabled={deploying}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleDeploy();
-            }}
-          />
-          <p className="text-[11px] text-muted-foreground">
-            A short label to help you identify this deployment in your dashboard.
-          </p>
-        </div>
-
-        {/* Environment Variables */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-              <Variable className="size-3" /> Environment variables (optional)
-            </label>
-            <button
-              type="button"
-              onClick={addEnvPair}
-              disabled={deploying || envPairs.length >= 10}
-              className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline disabled:opacity-50"
+        <div className="space-y-4 py-2">
+          {/* Label input */}
+          <div className="space-y-1.5">
+            <label
+              htmlFor="deploy-label"
+              className="text-xs font-medium text-foreground"
             >
-              <Plus className="size-3" /> Add
-            </button>
+              Deployment Name (Optional)
+            </label>
+            <Input
+              id="deploy-label"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="e.g. prod, staging, client-A"
+              disabled={deploying}
+              className="bg-background"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleDeploy();
+              }}
+            />
           </div>
-          {envPairs.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground">
-              No custom environment variables. Click "Add" to configure.
-            </p>
-          ) : (
-            <div className="space-y-1.5">
-              {envPairs.map((pair, idx) => (
-                <div key={idx} className="flex items-center gap-1.5">
-                  <Input
-                    value={pair.key}
-                    onChange={(e) => updateEnvPair(idx, "key", e.target.value)}
-                    placeholder="KEY"
-                    disabled={deploying}
-                    className="h-8 flex-1 font-mono text-xs"
-                  />
-                  <span className="text-muted-foreground">=</span>
-                  <Input
-                    value={pair.value}
-                    onChange={(e) => updateEnvPair(idx, "value", e.target.value)}
-                    placeholder="value"
-                    disabled={deploying}
-                    className="h-8 flex-1 text-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeEnvPair(idx)}
-                    disabled={deploying}
-                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive disabled:opacity-50"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </div>
-              ))}
+
+          {/* Subdomain input */}
+          <div className="space-y-1.5">
+            <label
+              htmlFor="deploy-subdomain"
+              className="text-xs font-medium text-foreground"
+            >
+              Custom Subdomain (Optional)
+            </label>
+            <div className="flex rounded-md shadow-sm">
+              <Input
+                id="deploy-subdomain"
+                value={subdomain}
+                onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                placeholder="my-app-name"
+                disabled={deploying}
+                className="bg-background rounded-r-none border-r-0 focus-visible:z-10"
+              />
+              <span className="inline-flex items-center rounded-r-md border border-l-0 border-border bg-muted px-3 text-muted-foreground text-sm">
+                .apps.local
+              </span>
             </div>
-          )}
+          </div>
+
+          {/* Environment Variables */}
+          <div className="space-y-2 pt-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-foreground">
+                Environment Variables
+              </label>
+              <button
+                type="button"
+                onClick={addEnvPair}
+                disabled={deploying || envPairs.length >= 10}
+                className="inline-flex items-center gap-1 text-xs font-medium text-foreground hover:underline disabled:opacity-50"
+              >
+                <Plus className="size-3" /> Add Variable
+              </button>
+            </div>
+            {envPairs.length === 0 ? (
+              <p className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-md border border-border/50 text-center">
+                No custom environment variables.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {envPairs.map((pair, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Input
+                      value={pair.key}
+                      onChange={(e) => updateEnvPair(idx, "key", e.target.value)}
+                      placeholder="KEY"
+                      disabled={deploying}
+                      className="flex-1 font-mono text-xs bg-background"
+                    />
+                    <Input
+                      value={pair.value}
+                      onChange={(e) => updateEnvPair(idx, "value", e.target.value)}
+                      placeholder="Value"
+                      disabled={deploying}
+                      className="flex-1 text-xs bg-background"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeEnvPair(idx)}
+                      disabled={deploying}
+                      className="h-9 w-9 text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* What you get summary */}
-        <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
-          <p className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            What you&apos;ll get
-          </p>
-          <ul className="space-y-2 text-sm">
-            <SummaryRow
-              icon={<Container className="size-4 text-brand" />}
-              title="Isolated container"
-              desc={`${app.dockerImage} · port ${app.containerPort}`}
-            />
-            <SummaryRow
-              icon={<Database className="size-4 text-brand" />}
-              title="Persistent volume"
-              desc="Data survives stop / restart"
-            />
-            <SummaryRow
-              icon={<Globe className="size-4 text-brand" />}
-              title="Unique public URL"
-              desc="<subdomain>.apps.local"
-            />
-            <SummaryRow
-              icon={<ShieldCheck className="size-4 text-brand" />}
-              title="Tenant isolation"
-              desc="Only you can access it"
-            />
-          </ul>
-          <div className="mt-3 flex items-center gap-4 border-t border-border/40 pt-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Cpu className="size-3" /> 0.5 core
-            </span>
-            <span className="flex items-center gap-1">
-              <MemoryStick className="size-3" /> 512 MB
-            </span>
-          </div>
-        </div>
-
-        {/* Estimated cost */}
-        <div className="rounded-xl border border-border/60 bg-gradient-to-br from-brand-soft/60 via-muted/30 to-muted/20 p-4">
-          <p className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            <Calculator className="size-3.5" /> Estimated cost
-          </p>
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-foreground">
-                <Cpu className="size-3.5 text-muted-foreground" />
-                <span>Compute</span>
-                <span className="text-xs text-muted-foreground">0.5 CPU + 512 MB</span>
-              </span>
-              <span className="font-mono text-xs font-medium tabular-nums">$0.008/hr</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-foreground">
-                <HardDrive className="size-3.5 text-muted-foreground" />
-                <span>Storage</span>
-                <span className="text-xs text-muted-foreground">10 GB persistent volume</span>
-              </span>
-              <span className="font-mono text-xs font-medium tabular-nums">$0.001/hr</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-foreground">
-                <Network className="size-3.5 text-muted-foreground" />
-                <span>Network</span>
-                <span className="text-xs text-muted-foreground">Public URL + subdomain</span>
-              </span>
-              <span className="font-mono text-xs font-medium tabular-nums">$0.0005/hr</span>
-            </div>
-          </div>
-          <div className="mt-3 flex items-center justify-between border-t border-border/40 pt-3">
-            <span className="text-sm font-semibold text-foreground">Total</span>
-            <div className="text-right">
-              <span className="font-mono text-sm font-bold tabular-nums text-brand">~$0.0095/hr</span>
-              <span className="ml-2 font-mono text-xs text-muted-foreground">(~$6.84/mo)</span>
-            </div>
-          </div>
-          <p className="mt-2 text-[11px] italic text-muted-foreground">
-            Estimate only — actual usage may vary
-          </p>
-        </div>
-
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-2 sm:gap-0 pt-4 border-t border-border mt-2">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={deploying}
+            className="bg-background"
           >
             Cancel
           </Button>
           <Button
             onClick={handleDeploy}
             disabled={deploying}
-            className="bg-brand text-brand-foreground hover:bg-brand/90"
+            className={`min-w-[120px] transition-all ${deploying ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-foreground text-background hover:bg-foreground/90"}`}
           >
             {deploying ? (
-              <Loader2 className="mr-2 size-4 animate-spin" />
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                Deploying...
+              </>
             ) : (
-              <Rocket className="mr-2 size-4" />
+              "Deploy Application"
             )}
-            {deploying ? "Deploying…" : "Deploy now"}
           </Button>
         </DialogFooter>
       </DialogContent>

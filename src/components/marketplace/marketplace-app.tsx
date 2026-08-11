@@ -11,6 +11,12 @@ import { DashboardView } from "@/components/marketplace/views/dashboard-view";
 import { DeploymentView } from "@/components/marketplace/views/deployment-view";
 import { SettingsView } from "@/components/marketplace/views/settings-view";
 import { AdminView } from "@/components/marketplace/views/admin-view";
+import { BillingView } from "@/components/marketplace/views/billing-view";
+import { LandingView } from "@/components/marketplace/views/landing-view";
+import { DeploymentsListView } from "@/components/marketplace/views/deployments-list-view";
+import { UsageView } from "@/components/marketplace/views/usage-view";
+import { HelpView } from "@/components/marketplace/views/help-view";
+import { AppShell } from "@/components/marketplace/app-shell";
 import { Loader2 } from "lucide-react";
 import { CommandPalette } from "@/components/marketplace/command-palette";
 import { OnboardingBanner } from "@/components/marketplace/onboarding-banner";
@@ -18,7 +24,7 @@ import { KeyboardShortcuts } from "@/components/marketplace/keyboard-shortcuts";
 import { CompareTray } from "@/components/marketplace/compare-tray";
 
 export function MarketplaceApp() {
-  const [route, setRoute] = useState<Route>({ name: "marketplace" });
+  const [route, setRoute] = useState<Route>({ name: "landing" });
   const user = useAuth((s) => s.user);
   const hydrating = useAuth((s) => s.hydrating);
   const hydrate = useAuth((s) => s.hydrate);
@@ -82,20 +88,36 @@ export function MarketplaceApp() {
     return () => { document.removeEventListener("keydown", onKey); clearTimeout(timeout); };
   }, [user]);
 
+  const isAppShellRoute = user && ["dashboard", "deployment", "settings", "admin", "usage", "billing", "marketplace", "app", "deployments", "help"].includes(route.name);
+
   return (
-    <div className="flex min-h-screen flex-col">
-      <Nav />
-      <OnboardingBanner />
-      <main className="flex-1">
-        {hydrating ? (
-          <div className="flex h-[60vh] items-center justify-center">
-            <Loader2 className="size-6 animate-spin text-brand" />
-          </div>
-        ) : (
-          <RouteView route={route} />
-        )}
-      </main>
-      <Footer />
+    <div className="flex min-h-screen flex-col bg-background">
+      {!isAppShellRoute && route.name !== 'landing' && route.name !== 'login' && <Nav />}
+      {!isAppShellRoute && route.name !== 'landing' && route.name !== 'login' && <OnboardingBanner />}
+      
+      {isAppShellRoute ? (
+        <AppShell route={route}>
+          {hydrating ? (
+            <div className="flex h-[60vh] items-center justify-center">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <RouteView route={route} />
+          )}
+        </AppShell>
+      ) : (
+        <main className="flex-1">
+          {hydrating ? (
+            <div className="flex h-[60vh] items-center justify-center">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <RouteView route={route} />
+          )}
+        </main>
+      )}
+
+      {!isAppShellRoute && route.name !== 'landing' && route.name !== 'login' && <Footer />}
       <CommandPalette />
       <KeyboardShortcuts />
       <CompareTray />
@@ -121,6 +143,8 @@ function routeToKey(route: Route): string {
 
 function InnerRouteView({ route }: { route: Route }) {
   switch (route.name) {
+    case "landing":
+      return <LandingView />;
     case "login":
       return <LoginView />;
     case "marketplace":
@@ -131,11 +155,19 @@ function InnerRouteView({ route }: { route: Route }) {
       return <DashboardView />;
     case "settings":
       return <SettingsView />;
+    case "billing":
+      return <BillingView />;
     case "admin":
       return <AdminView />;
     case "deployment":
       return <DeploymentView id={route.id} />;
+    case "deployments":
+      return <DeploymentsListView />;
+    case "usage":
+      return <UsageView />;
+    case "help":
+      return <HelpView />;
     default:
-      return <MarketplaceView />;
+      return <LandingView />;
   }
 }

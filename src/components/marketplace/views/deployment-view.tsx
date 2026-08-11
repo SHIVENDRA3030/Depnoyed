@@ -75,6 +75,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Sparkline,
@@ -93,35 +94,35 @@ function statusBannerStyle(status: string): { bg: string; icon: React.ReactNode;
   switch (status) {
     case "running":
       return {
-        bg: "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800",
-        icon: <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400" />,
+        bg: "border-[rgba(34,197,94,0.25)] bg-[rgba(34,197,94,0.06)]",
+        icon: <CheckCircle2 className="size-5 text-emerald-400" />,
         text: "This deployment is running and accessible.",
       };
     case "pending":
     case "creating":
       return {
-        bg: "bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800",
-        icon: <Loader2 className="size-5 animate-spin text-amber-600 dark:text-amber-400" />,
+        bg: "border-[rgba(255,106,0,0.25)] bg-[rgba(255,106,0,0.06)]",
+        icon: <Loader2 className="size-5 animate-spin text-[#FF6A00]" />,
         text: "Deployment is being provisioned…",
       };
     case "failed":
     case "dead":
       return {
-        bg: "bg-red-50 border-red-200 dark:bg-red-950/40 dark:border-red-800",
-        icon: <AlertCircle className="size-5 text-red-600 dark:text-red-400" />,
+        bg: "border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.06)]",
+        icon: <AlertCircle className="size-5 text-red-400" />,
         text: "Deployment failed. Try restarting or delete and re-deploy.",
       };
     case "stopped":
     case "exited":
       return {
-        bg: "bg-zinc-50 border-zinc-200 dark:bg-zinc-900/40 dark:border-zinc-700",
-        icon: <Square className="size-5 text-zinc-500 dark:text-zinc-400" />,
+        bg: "border-border bg-background/30",
+        icon: <Square className="size-5 text-muted-foreground/60" />,
         text: "Deployment is stopped. Start it to make it accessible.",
       };
     default:
       return {
-        bg: "bg-muted border-border",
-        icon: <Circle className="size-5 text-muted-foreground" />,
+        bg: "border-border/80 bg-transparent",
+        icon: <Circle className="size-5 text-muted-foreground/50" />,
         text: "Unknown status.",
       };
   }
@@ -286,309 +287,49 @@ export function DeploymentView({ id }: { id: string }) {
     <div className="mx-auto max-w-4xl px-4 py-8">
       <button
         onClick={() => navigate({ name: "dashboard" })}
-        className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
+        className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium transition-colors text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" /> Dashboard
       </button>
 
-      {/* Status banner */}
-      <div className={`mb-6 flex items-center gap-3 rounded-xl border p-4 ${banner.bg}`}>
-        {banner.icon}
-        <div>
-          <p className="text-sm font-medium">{dep.status.charAt(0).toUpperCase() + dep.status.slice(1)}</p>
-          <p className="text-xs text-muted-foreground">{banner.text}</p>
-        </div>
-      </div>
-
-      {/* Health metrics section */}
-      <div className="mb-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <HeartPulse className="size-4 text-rose-500" /> Health
-        </h2>
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {/* Uptime */}
-          <MetricCard
-            icon={<Activity className="size-3.5" />}
-            label="Uptime"
-            value={running ? `${uptime}%` : "0%"}
-          >
-            {running && (
-              <Progress
-                value={uptime}
-                className="mt-2 h-1.5"
-              />
-            )}
-          </MetricCard>
-
-          {/* Memory usage */}
-          <MetricCard
-            icon={<MemoryStick className="size-3.5" />}
-            label="Memory"
-            value={`${metrics.memoryUsagePercent}%`}
-          >
-            <Progress
-              value={metrics.memoryUsagePercent}
-              className="mt-2 h-1.5"
-            />
-          </MetricCard>
-
-          {/* CPU usage */}
-          <MetricCard
-            icon={<Cpu className="size-3.5" />}
-            label="CPU"
-            value={`${metrics.cpuUsagePercent}%`}
-          >
-            <Progress
-              value={metrics.cpuUsagePercent}
-              className="mt-2 h-1.5"
-            />
-          </MetricCard>
-
-          {/* Response latency */}
-          <MetricCard
-            icon={<Zap className="size-3.5" />}
-            label="Latency"
-            value={`${metrics.responseLatencyMs}ms`}
-          >
-            <div className="mt-2 flex items-center gap-1.5">
-              <div
-                className={`h-1.5 rounded-full ${
-                  metrics.responseLatencyMs < 50
-                    ? "bg-emerald-500"
-                    : metrics.responseLatencyMs < 100
-                    ? "bg-amber-500"
-                    : "bg-red-500"
-                }`}
-                style={{ width: `${Math.min((metrics.responseLatencyMs / 150) * 100, 100)}%` }}
-              />
-              <div className="h-1.5 flex-1 rounded-full bg-muted" />
-            </div>
-          </MetricCard>
-
-          {/* Last health check */}
-          <MetricCard
-            icon={<Clock className="size-3.5" />}
-            label="Last check"
-            value={formatHealthCheckTime(healthCheckTime)}
-          >
-            <p className="mt-1 text-[10px] text-muted-foreground">
-              {healthCheckTime.toLocaleTimeString()}
-            </p>
-          </MetricCard>
-        </div>
-      </div>
-
-      {/* Performance sparkline section */}
-      <DeploymentPerformanceSparklines
-        containerId={containerId}
-        status={dep.status}
-        metrics={metrics}
-      />
-
       {/* Header */}
-      <div className="gradient-border-animated flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <div className="h-14 w-14 shrink-0 rounded-xl flex items-center justify-center overflow-hidden border border-border bg-background">
             <AppLogo logo={dep.app?.logo ?? null} simulator={dep.app?.simulator ?? "static"} name={dep.app?.name ?? "App"} size="lg" />
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-xl font-bold tracking-tight">{dep.app?.name ?? "Deployment"}</h1>
-                <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusColor(dep.status)}`}>
-                  <span className={`size-1.5 rounded-full ${statusDot(dep.status)}`} />
-                  {dep.status}
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                  <Timer className="size-3" />
-                  {running ? `Uptime: ${uptimeSince(dep.createdAt)}` : `Downtime: ${timeAgo(dep.updatedAt)}`}
-                </span>
-              </div>
-              <a
-                href={dep.previewPath}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-1 inline-flex max-w-full items-center gap-1 font-mono text-xs text-brand hover:underline"
-              >
-                <Globe className="size-3 shrink-0" /> <span className="truncate">{dep.subdomain}.apps.local</span>
+          </div>
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">{dep.app?.name ?? "Deployment"}</h1>
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-mono font-medium border ${running ? "border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-500" : "border-border bg-muted/50 text-muted-foreground"}`}>
+                <span className={`size-1.5 rounded-full ${running ? "bg-green-500 animate-pulse" : "bg-muted-foreground/50"}`} />
+                {dep.status}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 mt-1.5 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1 font-mono text-xs">
+                <Timer className="size-3.5" />
+                {running ? `Uptime: ${uptimeSince(dep.createdAt)}` : `Down: ${timeAgo(dep.updatedAt)}`}
+              </span>
+              <span className="text-muted-foreground/30">•</span>
+              <a href={dep.previewPath} target="_blank" rel="noreferrer"
+                className="flex items-center gap-1 font-mono text-xs hover:underline"
+                style={{color:"#FF6A00"}}>
+                <Globe className="size-3.5" />{dep.subdomain}.apps.local
               </a>
-              {dep.realAppUrl && (
-                <a
-                  href={dep.realAppUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="ml-2 mt-1 inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
-                  title={`Open the real running container at ${dep.realAppUrl}`}
-                >
-                  <ExternalLink className="size-3" /> Open real app
-                </a>
-              )}
-              {/* Label row */}
-              <div className="mt-2 flex items-center gap-2">
-                {labelEditing ? (
-                  <div className="flex items-center gap-1.5">
-                    <Tag className="size-3.5 text-muted-foreground" />
-                    <Input
-                      value={labelDraft}
-                      onChange={(e) => setLabelDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") saveLabel();
-                        if (e.key === "Escape") setLabelEditing(false);
-                      }}
-                      placeholder="Add a label (e.g. 'prod', 'staging', 'client-A')"
-                      className="h-7 w-64 text-xs"
-                      autoFocus
-                      disabled={labelSaving}
-                    />
-                    <button
-                      onClick={saveLabel}
-                      disabled={labelSaving}
-                      className="inline-flex size-7 items-center justify-center rounded-md bg-brand text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
-                      aria-label="Save label"
-                    >
-                      {labelSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-                    </button>
-                    <button
-                      onClick={() => setLabelEditing(false)}
-                      className="inline-flex size-7 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
-                      aria-label="Cancel"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={startEditLabel}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-brand/40 hover:text-foreground"
-                  >
-                    <Tag className="size-3" />
-                    {dep.label ? (
-                      <span className="text-foreground">{dep.label}</span>
-                    ) : (
-                      <span>Add label</span>
-                    )}
-                    <Pencil className="size-2.5 opacity-60" />
-                  </button>
-                )}
-              </div>
             </div>
           </div>
         </div>
-
-        <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-3">
-          <Button
-            size="sm"
-            className="btn-ripple bg-brand text-brand-foreground hover:bg-brand/90"
-            onClick={() => window.open(dep.previewPath, "_blank")}
-            disabled={!running}
-          >
-            <ExternalLink className="mr-1.5 size-3.5" /> Open app
+        
+        {dep.realAppUrl && (
+          <Button variant="outline"
+            onClick={() => window.open(dep.realAppUrl, "_blank")}>
+            <ExternalLink className="mr-2 size-4" /> Open App
           </Button>
-          {running ? (
-            <Button size="sm" variant="outline" onClick={() => act("stop")} disabled={busy} className="btn-ripple">
-              {busy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Square className="mr-1.5 size-3.5" />} Stop
-            </Button>
-          ) : (
-            <Button size="sm" variant="outline" onClick={() => act("start")} disabled={busy} className="btn-ripple">
-              {busy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Play className="mr-1.5 size-3.5" />} Start
-            </Button>
-          )}
-          <Button size="sm" variant="outline" onClick={() => act("restart")} disabled={busy} className="btn-ripple">
-            {busy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <RotateCw className="mr-1.5 size-3.5" />} Restart
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button size="sm" variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy}>
-                <Trash2 className="mr-1.5 size-3.5" /> Delete
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete this deployment?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This permanently removes container <span className="font-mono">{dep.containerName}</span> and volume{" "}
-                  <span className="font-mono">{dep.volumeName}</span>. All data will be lost.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={remove}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
+        )}
       </div>
 
-      {/* Status Badge section */}
-      <StatusBadgeSection
-        appName={dep.app?.name ?? "app"}
-        status={dep.status}
-        subdomain={dep.subdomain}
-      />
-
-      {/* Deploy progress — connected line/dots visual */}
-      <div className="card-interactive mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <h2 className="text-sm font-semibold">Deployment progress</h2>
-        <div className="relative mt-4">
-          {/* Vertical connecting line */}
-          <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-border" />
-          <ol className="relative space-y-4">
-            {steps.map((s, i) => (
-              <li key={s.label} className="flex items-start gap-4">
-                <div className="relative z-10 flex size-6 shrink-0 items-center justify-center">
-                  {s.state === "done" ? (
-                    <span className="flex size-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/50">
-                      <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
-                    </span>
-                  ) : s.state === "active" ? (
-                    <span className="flex size-6 items-center justify-center rounded-full bg-brand-soft">
-                      <Loader2 className="size-4 animate-spin text-brand" />
-                    </span>
-                  ) : (
-                    <span className="flex size-6 items-center justify-center rounded-full border border-border bg-background">
-                      <Circle className="size-3 text-muted-foreground/40" />
-                    </span>
-                  )}
-                </div>
-                <span
-                  className={`pt-1 text-sm ${
-                    s.state === "done" ? "text-foreground" : s.state === "active" ? "font-medium text-foreground" : "text-muted-foreground"
-                  }`}
-                >
-                  {s.label}
-                  {s.state === "done" && i === steps.length - 1 && (
-                    <span className="ml-2 text-xs text-emerald-600 dark:text-emerald-400">✓</span>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </div>
-
-      {/* Details + logs */}
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div className="card-interactive rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="text-sm font-semibold">Runtime details</h2>
-          <dl className="mt-3 space-y-2.5 text-sm">
-            <Detail icon={<Server className="size-3.5" />} label="Container" value={dep.containerName} mono copyable />
-            <Detail icon={<Database className="size-3.5" />} label="Volume" value={dep.volumeName} mono copyable />
-            <Detail icon={<Server className="size-3.5" />} label="Container ID" value={dep.containerId ?? "—"} mono />
-            <Detail icon={<Globe className="size-3.5" />} label="Subdomain" value={`${dep.subdomain}.apps.local`} mono copyable />
-            <Detail icon={<Cpu className="size-3.5" />} label="CPU limit" value="0.5 core" />
-            <Detail icon={<MemoryStick className="size-3.5" />} label="Memory limit" value="512 MB" />
-          </dl>
-          <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-4">
-            <Badge variant="secondary" className="gap-1">
-              <Server className="size-3" /> {dep.app?.dockerImage ?? "unknown"}
-            </Badge>
-            <Badge variant="outline">port {dep.port ?? "—"}</Badge>
-          </div>
-        </div>
-
+      {/* Main Area: Log Viewer */}
+      <div className="mb-8">
         <TerminalLogViewer
           logs={logs}
           logRef={logRef}
@@ -600,93 +341,164 @@ export function DeploymentView({ id }: { id: string }) {
         />
       </div>
 
-      {/* Environment Variables Management */}
-      <EnvVarsPanel dep={dep} />
+      <Tabs defaultValue="overview">
+        <TabsList className="mb-4">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="environment">Environment</TabsTrigger>
+          <TabsTrigger value="manage">Manage</TabsTrigger>
+        </TabsList>
 
-      {/* Sharing & Access */}
-      <SharingAccessSection dep={dep} />
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Runtime details */}
+          <div className="rounded-xl p-5 bg-card border border-border">
+              <h2 className="text-xs font-mono font-semibold tracking-[0.12em] uppercase mb-4 text-muted-foreground">Runtime Details</h2>
+              <dl className="space-y-3 text-sm">
+                <Detail icon={<Server className="size-3.5" />} label="Container" value={dep.containerName} mono copyable />
+                <Detail icon={<Database className="size-3.5" />} label="Volume" value={dep.volumeName} mono copyable />
+                <Detail icon={<Server className="size-3.5" />} label="Container ID" value={dep.containerId ?? "—"} mono />
+                <Detail icon={<Cpu className="size-3.5" />} label="CPU limit" value="0.5 core" />
+                <Detail icon={<MemoryStick className="size-3.5" />} label="Memory limit" value="512 MB" />
+              </dl>
+              <div className="mt-5 flex flex-wrap gap-2 pt-4 border-t border-border">
+                <Badge variant="secondary" className="gap-1">
+                  <Server className="size-3" /> {dep.app?.dockerImage ?? "unknown"}
+                </Badge>
+                <Badge variant="outline">port {dep.port ?? "—"}</Badge>
+              </div>
+            </div>
+            
+            {/* Health & Progress */}
+            <div className="space-y-6">
+              <div className="rounded-xl border border-border bg-card p-5">
+                <h2 className="flex items-center gap-2 text-sm font-semibold mb-4">
+                  <HeartPulse className="size-4 text-rose-500" /> Health Metrics
+                </h2>
+                <div className="grid grid-cols-2 gap-3">
+                  <MetricCard icon={<Activity className="size-3.5" />} label="Uptime" value={running ? `${uptime}%` : "0%"} />
+                  <MetricCard icon={<MemoryStick className="size-3.5" />} label="Memory" value={`${metrics.memoryUsagePercent}%`} />
+                  <MetricCard icon={<Cpu className="size-3.5" />} label="CPU" value={`${metrics.cpuUsagePercent}%`} />
+                  <MetricCard icon={<Zap className="size-3.5" />} label="Latency" value={`${metrics.responseLatencyMs}ms`} />
+                </div>
+              </div>
 
-      {/* Volume data browser */}
-      <div className="card-interactive mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="flex items-center gap-1.5 text-sm font-semibold">
-              <Database className="size-4" /> Persistent volume data
-            </h2>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              The keys stored in <span className="font-mono">{dep.volumeName}</span>. Survives stop / restart.
-            </p>
+              <div className="rounded-xl border border-border bg-card p-5">
+                <h2 className="text-sm font-semibold mb-4">Deployment Progress</h2>
+                <div className="relative">
+                  <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-border" />
+                  <ol className="relative space-y-4">
+                    {steps.map((s, i) => (
+                      <li key={s.label} className="flex items-start gap-4">
+                        <div className="relative z-10 flex size-6 shrink-0 items-center justify-center">
+                          {s.state === "done" ? (
+                            <span className="flex size-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/50">
+                              <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                            </span>
+                          ) : s.state === "active" ? (
+                            <span className="flex size-6 items-center justify-center rounded-full bg-brand-soft">
+                              <Loader2 className="size-4 animate-spin text-brand" />
+                            </span>
+                          ) : (
+                            <span className="flex size-6 items-center justify-center rounded-full border border-border bg-background">
+                              <Circle className="size-3 text-muted-foreground/40" />
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          className={`pt-1 text-sm ${
+                            s.state === "done" ? "text-foreground" : s.state === "active" ? "font-medium text-foreground" : "text-muted-foreground"
+                          }`}
+                        >
+                          {s.label}
+                          {s.state === "done" && i === steps.length - 1 && (
+                            <span className="ml-2 text-xs text-emerald-600 dark:text-emerald-400">✓</span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadVolume}
-            disabled={volumeLoading}
-            className="gap-1.5"
-          >
-            {volumeLoading ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <RotateCw className="size-3.5" />
-            )}
-            Refresh
-          </Button>
-        </div>
 
-        {volumeKeys === null ? (
-          <div className="mt-4 rounded-lg border border-dashed border-border p-6 text-center">
-            <Database className="mx-auto size-6 text-muted-foreground/40" />
-            <p className="mt-2 text-xs text-muted-foreground">
-              Click "Refresh" to inspect the volume contents.
+          <DeploymentPerformanceSparklines
+            containerId={containerId}
+            status={dep.status}
+            metrics={metrics}
+          />
+          
+          <StatusBadgeSection
+            appName={dep.app?.name ?? "app"}
+            status={dep.status}
+            subdomain={dep.subdomain}
+          />
+          
+          <SharingAccessSection dep={dep} />
+        </TabsContent>
+
+        {/* Environment Tab */}
+        <TabsContent value="environment" className="space-y-6">
+          <EnvVarsPanel dep={dep} />
+        </TabsContent>
+
+        {/* Manage Tab */}
+        <TabsContent value="manage" className="space-y-6">
+          <div className="rounded-xl border border-border bg-card p-5">
+            <h2 className="text-sm font-semibold mb-4 text-foreground">Actions</h2>
+            <div className="flex flex-wrap items-center gap-3 border-t border-border/50 pt-4">
+              <Button
+                className="bg-brand text-brand-foreground hover:bg-brand/90"
+                onClick={() => window.open(dep.previewPath, "_blank")}
+                disabled={!running}
+              >
+                <ExternalLink className="mr-2 size-4" /> Open App
+              </Button>
+              {running ? (
+                <Button variant="outline" onClick={() => act("stop")} disabled={busy} className="bg-background">
+                  {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Square className="mr-2 size-4" />} Stop
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={() => act("start")} disabled={busy} className="bg-background">
+                  {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Play className="mr-2 size-4" />} Start
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => act("restart")} disabled={busy} className="bg-background">
+                {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RotateCw className="mr-2 size-4" />} Restart
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-5">
+            <h2 className="text-sm font-semibold text-destructive mb-2">Danger Zone</h2>
+            <p className="text-sm text-destructive/80 mb-4">
+              Deleting this deployment will permanently remove the container and all associated data in the persistent volume.
             </p>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={busy}>
+                  <Trash2 className="mr-2 size-4" /> Delete Deployment
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete the deployment, container, and all data within its persistent volume.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={remove} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
-        ) : volumeKeys.length === 0 ? (
-          <div className="mt-4 rounded-lg border border-dashed border-border p-6 text-center">
-            <Database className="mx-auto size-6 text-muted-foreground/40" />
-            <p className="mt-2 text-xs text-muted-foreground">
-              Volume is empty. Use the deployed app to write some data, then refresh.
-            </p>
-          </div>
-        ) : (
-          <div className="mt-4 max-h-72 overflow-y-auto scroll-thin rounded-lg border border-border/60">
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-muted/60 backdrop-blur">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium uppercase tracking-wider text-muted-foreground">
-                    Key
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium uppercase tracking-wider text-muted-foreground">
-                    Value
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium uppercase tracking-wider text-muted-foreground">
-                    Size
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {volumeKeys.map((k) => {
-                  const v = volumeValues[k] ?? "";
-                  const display = v.length > 80 ? v.slice(0, 80) + "…" : v;
-                  return (
-                    <tr key={k} className="border-t border-border/40 hover:bg-muted/30">
-                      <td className="px-3 py-2 font-mono text-brand">{k}</td>
-                      <td className="px-3 py-2 font-mono text-foreground/80 break-all">{display || <span className="text-muted-foreground/40">—</span>}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                        {new Blob([v]).size} B
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {volumeKeys && volumeKeys.length > 20 && (
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            Showing first 20 of {volumeKeys.length} keys.
-          </p>
-        )}
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -764,7 +576,7 @@ function TerminalLogViewer({
   }
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+    <div className="dark flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
       {/* Terminal header bar */}
       <div className="terminal-header flex items-center gap-3 rounded-t-2xl px-4 py-2.5">
         {/* 3 colored dots */}
@@ -1234,28 +1046,12 @@ function maskValue(value: string): string {
 
 function EnvVarsPanel({ dep }: { dep: DeploymentItem }) {
   // Parse envVars from the deployment
-  const initialVars = useMemo(() => {
+  const vars = useMemo(() => {
     if (!dep.envVars || typeof dep.envVars !== "object") return {} as Record<string, string>;
     return dep.envVars;
   }, [dep.envVars]);
 
-  // Local editing state
-  const [vars, setVars] = useState<Record<string, string>>(initialVars);
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
-  const [addingNew, setAddingNew] = useState(false);
-  const [newKey, setNewKey] = useState("");
-  const [newValue, setNewValue] = useState("");
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-
-  // Sync with deployment data
-  useEffect(() => {
-    setVars(initialVars);
-    setHasChanges(false);
-  }, [initialVars]);
-
   const varEntries = Object.entries(vars);
   const varCount = varEntries.length;
 
@@ -1268,239 +1064,65 @@ function EnvVarsPanel({ dep }: { dep: DeploymentItem }) {
     });
   }
 
-  function startAdd() {
-    setNewKey("");
-    setNewValue("");
-    setAddingNew(true);
-  }
-
-  function confirmAdd() {
-    const trimmedKey = newKey.trim();
-    if (!trimmedKey) return;
-    if (vars.hasOwnProperty(trimmedKey)) {
-      toast.error("Variable already exists");
-      return;
-    }
-    setVars((prev) => ({ ...prev, [trimmedKey]: newValue }));
-    setHasChanges(true);
-    setAddingNew(false);
-    setNewKey("");
-    setNewValue("");
-  }
-
-  function startEdit(key: string) {
-    setEditingKey(key);
-    setEditValue(vars[key] ?? "");
-  }
-
-  function confirmEdit() {
-    if (editingKey === null) return;
-    setVars((prev) => ({ ...prev, [editingKey]: editValue }));
-    setHasChanges(true);
-    setEditingKey(null);
-    setEditValue("");
-  }
-
-  function deleteVar(key: string) {
-    setVars((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-    setHasChanges(true);
-  }
-
-  async function saveChanges() {
-    setSaving(true);
-    try {
-      await api(`/api/deployments/${dep.id}/volume`, {
-        method: "PUT",
-        body: JSON.stringify({ envVars: vars }),
-      });
-      setHasChanges(false);
-      toast.success("Environment variables saved");
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "Failed to save environment variables");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
-    <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-1.5 text-sm font-semibold">
-          <Variable className="size-4" /> Environment Variables
+          <Variable className="size-4 text-brand" /> Environment Variables
           {varCount > 0 && (
             <Badge variant="secondary" className="ml-1.5 gap-1 text-[10px]">
               {varCount} variable{varCount !== 1 ? "s" : ""}
             </Badge>
           )}
         </h2>
-        <div className="flex items-center gap-2">
-          {hasChanges && (
-            <Button size="sm" onClick={saveChanges} disabled={saving} className="gap-1.5 bg-brand text-brand-foreground hover:bg-brand/90">
-              {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-              Save changes
-            </Button>
-          )}
-          {!addingNew && (
-            <Button size="sm" variant="outline" onClick={startAdd} className="gap-1.5">
-              <Plus className="size-3.5" /> Add variable
-            </Button>
-          )}
-        </div>
       </div>
 
-      {varCount === 0 && !addingNew ? (
-        /* Empty state */
-        <div className="mt-4 rounded-lg border border-dashed border-border bg-zinc-950/5 dark:bg-zinc-950/40 p-6 text-center">
-          <Variable className="mx-auto size-8 text-muted-foreground/40" />
-          <p className="mt-2 text-sm font-medium text-muted-foreground">
+      {varCount === 0 ? (
+        <div className="mt-4 rounded-lg border border-dashed border-border bg-muted/50 p-6 text-center">
+          <Variable className="mx-auto size-8 text-muted-foreground/40 mb-3" />
+          <p className="text-sm font-medium text-foreground">
             No environment variables configured
           </p>
-          <p className="mt-1 text-xs text-muted-foreground/60">
-            Add variables to customize your deployment at runtime.
+          <p className="text-xs text-muted-foreground mt-1">
+            This deployment was created without any custom environment variables.
           </p>
-          <Button size="sm" variant="outline" onClick={startAdd} className="mt-4 gap-1.5">
-            <Plus className="size-3.5" /> Add variable
-          </Button>
         </div>
       ) : (
-        /* Variables table */
-        <div className="mt-4 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-inner-terminal">
-          {/* Inline add form */}
-          {addingNew && (
-            <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2.5">
-              <Lock className="size-3.5 shrink-0 text-zinc-600" />
-              <Input
-                value={newKey}
-                onChange={(e) => setNewKey(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") confirmAdd();
-                  if (e.key === "Escape") setAddingNew(false);
-                }}
-                placeholder="KEY"
-                className="h-7 w-32 flex-1 border-zinc-700 bg-zinc-900 font-mono text-xs text-emerald-400 placeholder:text-zinc-600 focus-visible:ring-zinc-600"
-                autoFocus
-              />
-              <span className="text-zinc-600">=</span>
-              <Input
-                value={newValue}
-                onChange={(e) => setNewValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") confirmAdd();
-                  if (e.key === "Escape") setAddingNew(false);
-                }}
-                placeholder="value"
-                className="h-7 flex-1 border-zinc-700 bg-zinc-900 font-mono text-xs text-zinc-300 placeholder:text-zinc-600 focus-visible:ring-zinc-600"
-              />
-              <button
-                onClick={confirmAdd}
-                disabled={!newKey.trim()}
-                className="inline-flex size-7 items-center justify-center rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40"
-                aria-label="Confirm add"
-              >
-                <Check className="size-3.5" />
-              </button>
-              <button
-                onClick={() => setAddingNew(false)}
-                className="inline-flex size-7 items-center justify-center rounded-md border border-zinc-700 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
-                aria-label="Cancel add"
-              >
-                <X className="size-3.5" />
-              </button>
-            </div>
-          )}
-
-          {varCount === 0 && addingNew ? null : (
-            <table className="w-full text-sm">
-              <thead className="border-b border-zinc-800 bg-zinc-900/60">
-                <tr>
-                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Key</th>
-                  <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Value</th>
-                  <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-widest text-zinc-500 w-28">Actions</th>
+        <div className="mt-4 overflow-hidden rounded-lg border border-border">
+          <table className="w-full text-sm">
+            <thead className="border-b border-border bg-muted/50">
+              <tr>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Key</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {varEntries.map(([key, value]) => (
+                <tr key={key} className="border-b border-border/50 last:border-b-0 hover:bg-muted/20">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Lock className="size-3 text-muted-foreground" />
+                      <span className="font-mono text-xs font-semibold">{key}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {revealedKeys.has(key) ? value : maskValue(value)}
+                      </span>
+                      <button
+                        onClick={() => toggleReveal(key)}
+                        className="text-muted-foreground hover:text-foreground"
+                        aria-label={revealedKeys.has(key) ? "Hide value" : "Reveal value"}
+                      >
+                        {revealedKeys.has(key) ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {varEntries.map(([key, value]) => (
-                  <tr key={key} className="group border-b border-zinc-800/60 last:border-b-0 hover:bg-zinc-900/40">
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <Lock className="size-3 shrink-0 text-zinc-600" />
-                        <span className="font-mono text-xs font-semibold text-emerald-400">{key}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      {editingKey === key ? (
-                        <div className="flex items-center gap-1.5">
-                          <Input
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") confirmEdit();
-                              if (e.key === "Escape") setEditingKey(null);
-                            }}
-                            className="h-6 flex-1 border-zinc-700 bg-zinc-900 font-mono text-xs text-zinc-300 focus-visible:ring-zinc-600"
-                            autoFocus
-                          />
-                          <button
-                            onClick={confirmEdit}
-                            className="inline-flex size-6 items-center justify-center rounded bg-emerald-600 text-white hover:bg-emerald-700"
-                            aria-label="Confirm edit"
-                          >
-                            <Check className="size-3" />
-                          </button>
-                          <button
-                            onClick={() => setEditingKey(null)}
-                            className="inline-flex size-6 items-center justify-center rounded border border-zinc-700 text-zinc-500 hover:bg-zinc-800"
-                            aria-label="Cancel edit"
-                          >
-                            <X className="size-3" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs text-zinc-400">
-                            {revealedKeys.has(key) ? value : maskValue(value)}
-                          </span>
-                          <button
-                            onClick={() => toggleReveal(key)}
-                            className="inline-flex size-5 items-center justify-center rounded text-zinc-600 transition-colors hover:text-zinc-300"
-                            aria-label={revealedKeys.has(key) ? "Hide value" : "Reveal value"}
-                          >
-                            {revealedKeys.has(key) ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {editingKey !== key && (
-                          <>
-                            <button
-                              onClick={() => startEdit(key)}
-                              className="inline-flex size-6 items-center justify-center rounded text-zinc-600 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
-                              aria-label="Edit variable"
-                            >
-                              <Pencil className="size-3" />
-                            </button>
-                            <button
-                              onClick={() => deleteVar(key)}
-                              className="inline-flex size-6 items-center justify-center rounded text-zinc-600 transition-colors hover:bg-red-900/30 hover:text-red-400"
-                              aria-label="Delete variable"
-                            >
-                              <Trash2Icon className="size-3" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

@@ -72,23 +72,11 @@ export function SettingsView() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      {/* Gradient header section with avatar */}
-      <div className="mb-8 overflow-hidden rounded-2xl border border-border/40 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent dark:from-emerald-500/5 dark:via-teal-500/3">
-        <div className="relative px-6 pb-5 pt-6">
-          {/* Decorative background orb */}
-          <div className="absolute -right-12 -top-12 size-40 rounded-full bg-gradient-to-br from-emerald-400/15 to-teal-400/5 blur-2xl" aria-hidden="true" />
-          <div className="relative flex items-center gap-5">
-            <div className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-2xl font-bold text-white shadow-lg ring-2 ring-white/20 dark:ring-white/10">
-              {user.email.slice(0, 2).toUpperCase()}
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Manage your account, deployments, and preferences.
-              </p>
-            </div>
-          </div>
-        </div>
+      {/* Page Header */}
+      <div className="mb-8">
+        <p className="text-[11px] font-mono tracking-[0.15em] uppercase mb-2 text-brand/70">Platform Settings</p>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Settings</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Manage your account, deployments, and preferences.</p>
       </div>
 
       <div className="space-y-6">
@@ -174,13 +162,13 @@ function SettingsCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-all duration-200 hover:shadow-md">
-      <div className="flex items-center gap-3 border-b border-border/40 bg-muted/20 px-6 py-4">
+    <div className="overflow-hidden rounded-xl transition-all duration-200 bg-card border border-border">
+      <div className="flex items-center gap-3 px-6 py-4 border-b border-border bg-background/50">
         <span className="flex size-8 items-center justify-center rounded-lg bg-brand-soft text-brand">
           {icon}
         </span>
         <div>
-          <h2 className="text-sm font-semibold">{title}</h2>
+          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
           <p className="text-xs text-muted-foreground">{description}</p>
         </div>
       </div>
@@ -220,7 +208,7 @@ function ProfileSection({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
-        <div className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-xl font-bold text-white shadow-md">
+        <div className="flex size-14 items-center justify-center rounded-full bg-brand text-xl font-bold text-brand-foreground shadow-sm">
           {user.email.slice(0, 2).toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">
@@ -452,11 +440,11 @@ function DeploymentDefaultsSection() {
         <Switch checked={autoStart} onCheckedChange={saveAutoStart} />
       </div>
 
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
-        <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-800 dark:text-emerald-300">
+      <div className="rounded-lg p-3 border border-brand/20 bg-brand-soft">
+        <p className="flex items-center gap-1.5 text-xs font-medium text-brand">
           <Zap className="size-3.5" /> These are client-side preferences
         </p>
-        <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-400">
+        <p className="mt-1 text-[11px] text-muted-foreground/60">
           Server-side resource limits may override these defaults. Current server config: CPU 0.5 core, Memory 512 MB.
         </p>
       </div>

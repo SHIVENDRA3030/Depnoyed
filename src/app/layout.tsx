@@ -16,10 +16,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OSS Deploy — Open-Source Marketplace",
+  title: "DEPLOYED — Mission Control for Deployments",
   description:
-    "Deploy your own isolated instance of open-source applications in one click. Each deployment gets its own container, persistent volume, and unique public URL.",
-  keywords: ["open-source", "marketplace", "docker", "deploy", "self-hosted", "containers"],
+    "Premium deployment infrastructure platform. Deploy containerized applications with one click — each gets its own container, persistent volume, and unique URL.",
+  keywords: ["deployment", "infrastructure", "docker", "kubernetes", "devops", "containers", "platform"],
 };
 
 export default function RootLayout({
@@ -28,7 +28,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className="dark">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >

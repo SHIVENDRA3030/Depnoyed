@@ -191,8 +191,16 @@ export function AdminView() {
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                    No apps found
+                  <td colSpan={5} className="px-4 py-16 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted/50 text-muted-foreground shadow-sm">
+                        <Boxes className="size-5" />
+                      </div>
+                      <h3 className="text-sm font-semibold">No apps found</h3>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Try adjusting your search query or add a new app.
+                      </p>
+                    </div>
                   </td>
                 </tr>
               ) : (
