@@ -29,7 +29,7 @@ export function SequenceHero({ onReady }: { onReady: () => void }) {
     canvas.height = window.innerHeight;
 
     const currentFrame = (index: number) =>
-      `/sequence/frame_${String(index).padStart(3, "0")}.jpg`;
+      `/sequence/frame_${String(index).padStart(3, "0")}.webp`;
 
     let lastRenderedIndex = -1;
 
