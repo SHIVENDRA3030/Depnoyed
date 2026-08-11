@@ -72,7 +72,7 @@ export function Nav() {
             className="font-mono text-[13px] font-semibold tracking-[0.12em] uppercase transition-colors group-hover:text-[#FF6A00]"
             style={{ color: "#F5F5F0" }}
           >
-            DEPLOYED
+            DEPNOYED
           </span>
           <span
             className="hidden sm:block text-[10px] font-mono tracking-[0.15em] uppercase px-1.5 py-0.5 rounded border"
@@ -242,7 +242,7 @@ export function Nav() {
                     <span className="text-[#050505] font-bold text-xs font-mono">D</span>
                   </div>
                   <span className="font-mono text-sm font-semibold tracking-[0.10em] uppercase text-[#F5F5F0]">
-                    DEPLOYED
+                    DEPNOYED
                   </span>
                 </SheetTitle>
               </SheetHeader>

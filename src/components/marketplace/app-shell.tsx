@@ -151,7 +151,7 @@ export function AppShell({ children, route }: { children: React.ReactNode; route
           <span
             className="font-mono text-[13px] font-semibold tracking-[0.10em] uppercase group-hover:text-brand transition-colors text-foreground"
           >
-            DEPLOYED
+            DEPNOYED
           </span>
         </button>
 
@@ -239,7 +239,7 @@ export function AppShell({ children, route }: { children: React.ReactNode; route
                       <span className="text-brand-foreground font-bold text-xs font-mono">D</span>
                     </div>
                     <span className="font-mono text-[13px] font-semibold tracking-[0.10em] uppercase text-foreground">
-                      DEPLOYED
+                      DEPNOYED
                     </span>
                   </SheetTitle>
                 </SheetHeader>
@@ -247,7 +247,7 @@ export function AppShell({ children, route }: { children: React.ReactNode; route
               </SheetContent>
             </Sheet>
             <span className="font-mono text-[13px] font-semibold tracking-[0.10em] uppercase text-foreground">
-              DEPLOYED
+              DEPNOYED
             </span>
           </div>
 
