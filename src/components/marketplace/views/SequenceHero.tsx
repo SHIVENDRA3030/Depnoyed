@@ -34,8 +34,25 @@ export function SequenceHero({ onReady }: { onReady: () => void }) {
     let lastRenderedIndex = -1;
 
     const render = (index: number) => {
-      if (index === lastRenderedIndex) return; // Skip redundant draws
-      const img = images[index];
+      let targetIndex = index;
+      
+      // If exact frame isn't loaded, find the closest loaded frame to prevent visual freezing
+      if (!images[targetIndex] || !images[targetIndex].complete) {
+        let closestDist = Infinity;
+        for (let i = 0; i < FRAME_COUNT; i++) {
+          if (images[i] && images[i].complete) {
+            const dist = Math.abs(index - i);
+            if (dist < closestDist) {
+              closestDist = dist;
+              targetIndex = i;
+            }
+          }
+        }
+      }
+
+      if (targetIndex === lastRenderedIndex) return; // Skip redundant draws
+
+      const img = images[targetIndex];
       if (img && img.complete) {
         // Multiply by 1.15 to slightly zoom in the frame (15% zoom)
         const scale = Math.max(canvas.width / img.width, canvas.height / img.height) * 1.15;
@@ -44,7 +61,7 @@ export function SequenceHero({ onReady }: { onReady: () => void }) {
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-        lastRenderedIndex = index;
+        lastRenderedIndex = targetIndex;
       }
     };
 
@@ -71,17 +88,30 @@ export function SequenceHero({ onReady }: { onReady: () => void }) {
       render(0);
       onReady();
 
-      // Preload the rest in small batches to prevent network/CPU congestion
-      const BATCH_SIZE = 8;
-      for (let i = 1; i < FRAME_COUNT; i += BATCH_SIZE) {
-        const batch = [];
-        for (let j = 0; j < BATCH_SIZE && i + j < FRAME_COUNT; j++) {
-          batch.push(loadImg(i + j));
+      // Phase 1: Sparse load (every 10th frame) so fast scrubbing has visual feedback
+      let sparseBatch: Promise<unknown>[] = [];
+      for (let i = 10; i < FRAME_COUNT; i += 10) {
+        sparseBatch.push(loadImg(i));
+        if (sparseBatch.length >= 8) {
+          await new Promise((r) => setTimeout(r, 16)); 
+          await Promise.all(sparseBatch);
+          sparseBatch = [];
         }
-        // Let the main thread breathe
-        await new Promise((r) => setTimeout(r, 16)); 
-        await Promise.all(batch);
       }
+      if (sparseBatch.length > 0) await Promise.all(sparseBatch);
+
+      // Phase 2: Fill in the remaining frames
+      let fullBatch: Promise<unknown>[] = [];
+      for (let i = 1; i < FRAME_COUNT; i++) {
+        if (i % 10 === 0) continue; // Already loaded in Phase 1
+        fullBatch.push(loadImg(i));
+        if (fullBatch.length >= 8) {
+          await new Promise((r) => setTimeout(r, 16)); 
+          await Promise.all(fullBatch);
+          fullBatch = [];
+        }
+      }
+      if (fullBatch.length > 0) await Promise.all(fullBatch);
     };
     loadQueue();
 
