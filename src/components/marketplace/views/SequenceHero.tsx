@@ -48,21 +48,42 @@ export function SequenceHero({ onReady }: { onReady: () => void }) {
       }
     };
 
-    let firstFrameLoaded = false;
-    for (let i = 1; i <= FRAME_COUNT; i++) {
-      const img = new Image();
-      img.src = currentFrame(i);
-      images.push(img);
-      img.onload = () => {
-        if (i === 1 && !firstFrameLoaded) {
-          firstFrameLoaded = true;
-          render(0);
-          onReady();
-        }
-      };
-    }
-
     const seqObj = { frame: 0 };
+
+    const loadQueue = async () => {
+      const loadImg = (idx: number) => {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.src = currentFrame(idx + 1);
+          images[idx] = img;
+          img.onload = () => {
+            if (seqObj.frame === idx) {
+              render(idx);
+            }
+            resolve(null);
+          };
+          img.onerror = resolve;
+        });
+      };
+
+      // Load first frame immediately
+      await loadImg(0);
+      render(0);
+      onReady();
+
+      // Preload the rest in small batches to prevent network/CPU congestion
+      const BATCH_SIZE = 8;
+      for (let i = 1; i < FRAME_COUNT; i += BATCH_SIZE) {
+        const batch = [];
+        for (let j = 0; j < BATCH_SIZE && i + j < FRAME_COUNT; j++) {
+          batch.push(loadImg(i + j));
+        }
+        // Let the main thread breathe
+        await new Promise((r) => setTimeout(r, 16)); 
+        await Promise.all(batch);
+      }
+    };
+    loadQueue();
 
     // Smooth pinning using ScrollTrigger instead of manual scroll locking
     const st = ScrollTrigger.create({
