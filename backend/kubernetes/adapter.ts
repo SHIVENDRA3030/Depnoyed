@@ -25,11 +25,11 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 // These are initialised lazily — null-safe at build/import time.
 // If no kubeconfig is present (e.g. `next build` inside Docker), the try block
 // below is skipped and adapter methods will throw an informative error at runtime.
-let kc: k8s.KubeConfig | undefined;
-let appsApi: k8s.AppsV1Api | undefined;
-let coreApi: k8s.CoreV1Api | undefined;
-let networkingApi: k8s.NetworkingV1Api | undefined;
-let customApi: k8s.CustomObjectsApi | undefined;
+let kc: k8s.KubeConfig = undefined as any;
+let appsApi: k8s.AppsV1Api = undefined as any;
+let coreApi: k8s.CoreV1Api = undefined as any;
+let networkingApi: k8s.NetworkingV1Api = undefined as any;
+let customApi: k8s.CustomObjectsApi = undefined as any;
 
 /**
  * Custom HTTP library using Node.js https module with client certificate support.
@@ -133,48 +133,65 @@ class NodeHttpsHttpLibrary {
   }
 }
 
-try {
-  const _kc = new k8s.KubeConfig();
-  _kc.loadFromDefault();
-  // Docker Desktop: explicitly use docker-desktop context for client cert auth
-  _kc.setCurrentContext("docker-desktop");
-  // Skip TLS verify for all clusters (Docker Desktop uses self-signed certs)
-  for (const cluster of _kc.clusters) {
-    (cluster as any).skipTLSVerify = true;
-    (cluster as any).ca = undefined;
-  }
+// We do not initialize these at the top level to avoid build-time errors
+// and to ensure they pick up runtime environment variables inside the pod.
+let initialized = false;
 
-  // Ensure client certificate is used for mTLS with Docker Desktop
-  const currentUser = _kc.getCurrentUser();
-  if (currentUser && (currentUser as any).certData && (currentUser as any).keyData) {
-    (currentUser as any).cert = Buffer.from((currentUser as any).certData, "base64").toString("utf8");
-    (currentUser as any).key = Buffer.from((currentUser as any).keyData, "base64").toString("utf8");
-  }
+function ensureInitialized() {
+  if (initialized) return;
 
-  const nodeHttpLib = new NodeHttpsHttpLibrary();
-
-  // Override the default fetch-based HTTP library with our Node.js https-based one
-  const originalMakeApiClient = _kc.makeApiClient.bind(_kc);
-  // @ts-ignore - override with custom HTTP library for mTLS support
-  (_kc as any).makeApiClient = function <T>(ctor: new (...args: any[]) => T): T {
-    // @ts-ignore - generic type mismatch in override
-    const client = originalMakeApiClient(ctor);
-    // @ts-ignore - accessing internal api property
-    if (client?.api?.configuration) {
-      // @ts-ignore - setting custom httpApi
-      (client.api.configuration as any).httpApi = nodeHttpLib;
+  try {
+    const _kc = new k8s.KubeConfig();
+    _kc.loadFromDefault();
+    
+    // Docker Desktop: explicitly use docker-desktop context for client cert auth if available
+    try {
+      _kc.setCurrentContext("docker-desktop");
+    } catch (e) {
+      // Ignore if context doesn't exist (e.g. in production cluster)
     }
-    // @ts-ignore - generic type mismatch in return
-    return client;
-  };
 
-  kc = _kc;
-  appsApi = _kc.makeApiClient(k8s.AppsV1Api);
-  coreApi = _kc.makeApiClient(k8s.CoreV1Api);
-  networkingApi = _kc.makeApiClient(k8s.NetworkingV1Api);
-  customApi = _kc.makeApiClient(k8s.CustomObjectsApi);
-} catch (err) {
-  logger.warn({ msg: "kubernetes: no cluster configured — adapter calls will fail at runtime", err: String(err) });
+    // Skip TLS verify for all clusters (Docker Desktop uses self-signed certs)
+    for (const cluster of _kc.clusters) {
+      (cluster as any).skipTLSVerify = true;
+      (cluster as any).ca = undefined;
+    }
+
+    // Ensure client certificate is used for mTLS with Docker Desktop
+    const currentUser = _kc.getCurrentUser();
+    if (currentUser && (currentUser as any).certData && (currentUser as any).keyData) {
+      (currentUser as any).cert = Buffer.from((currentUser as any).certData, "base64").toString("utf8");
+      (currentUser as any).key = Buffer.from((currentUser as any).keyData, "base64").toString("utf8");
+    }
+
+    const nodeHttpLib = new NodeHttpsHttpLibrary();
+
+    // Override the default fetch-based HTTP library with our Node.js https-based one
+    const originalMakeApiClient = _kc.makeApiClient.bind(_kc);
+    // @ts-ignore - override with custom HTTP library for mTLS support
+    (_kc as any).makeApiClient = function <T>(ctor: new (...args: any[]) => T): T {
+      // @ts-ignore - generic type mismatch in override
+      const client = originalMakeApiClient(ctor);
+      // @ts-ignore - accessing internal api property
+      if (client?.api?.configuration) {
+        // @ts-ignore - setting custom httpApi
+        (client.api.configuration as any).httpApi = nodeHttpLib;
+      }
+      // @ts-ignore - generic type mismatch in return
+      return client;
+    };
+
+    kc = _kc;
+    appsApi = _kc.makeApiClient(k8s.AppsV1Api);
+    coreApi = _kc.makeApiClient(k8s.CoreV1Api);
+    networkingApi = _kc.makeApiClient(k8s.NetworkingV1Api);
+    customApi = _kc.makeApiClient(k8s.CustomObjectsApi);
+    
+    initialized = true;
+  } catch (err) {
+    logger.error({ msg: "Failed to initialize Kubernetes client", err: String(err) });
+    throw new Error(`Kubernetes client initialization failed: ${err}`);
+  }
 }
 
 
@@ -186,6 +203,7 @@ export function getNamespace(tenantId: string): string {
 const K8S_READY_TIMEOUT_MS = parseInt(process.env.K8S_READY_TIMEOUT_MS ?? "90000", 10);
 
 async function ensureNamespace(namespace: string) {
+  ensureInitialized();
   try {
     await coreApi.readNamespace({ name: namespace });
   } catch (err: any) {
@@ -352,6 +370,7 @@ export class KubernetesAdapter implements DockerAdapter {
   /* ------------------------------ Volumes ------------------------------- */
 
   async createVolume(name: string, tenantId: string): Promise<VolumeInfo> {
+    ensureInitialized();
     const namespace = getNamespace(tenantId);
     await ensureNamespace(namespace);
 
@@ -384,6 +403,7 @@ export class KubernetesAdapter implements DockerAdapter {
   }
 
   async removeVolume(name: string, tenantId: string): Promise<void> {
+    ensureInitialized();
     const namespace = getNamespace(tenantId);
     const start = Date.now();
     try {
@@ -395,6 +415,7 @@ export class KubernetesAdapter implements DockerAdapter {
   }
 
   async inspectVolume(name: string, tenantId: string): Promise<VolumeInfo | null> {
+    ensureInitialized();
     const namespace = getNamespace(tenantId);
     try {
       const res = await coreApi.readNamespacedPersistentVolumeClaim({ name, namespace });
@@ -412,6 +433,7 @@ export class KubernetesAdapter implements DockerAdapter {
   /* ---------------------------- Containers ------------------------------ */
 
   async createContainer(opts: CreateContainerOptions): Promise<ContainerInfo> {
+    ensureInitialized();
     const namespace = getNamespace(opts.tenantId);
     await ensureNamespace(namespace);
 
@@ -662,6 +684,7 @@ export class KubernetesAdapter implements DockerAdapter {
   }
 
   async startContainer(name: string, tenantId: string): Promise<ContainerInfo> {
+    ensureInitialized();
     const namespace = getNamespace(tenantId);
     const start = Date.now();
     try {
@@ -684,6 +707,7 @@ export class KubernetesAdapter implements DockerAdapter {
   }
 
   async stopContainer(name: string, tenantId: string): Promise<ContainerInfo> {
+    ensureInitialized();
     const namespace = getNamespace(tenantId);
     const start = Date.now();
     try {
@@ -706,11 +730,13 @@ export class KubernetesAdapter implements DockerAdapter {
   }
 
   async restartContainer(name: string, tenantId: string): Promise<ContainerInfo> {
+    ensureInitialized();
     await this.stopContainer(name, tenantId);
     return this.startContainer(name, tenantId);
   }
 
   async removeContainer(name: string, tenantId: string): Promise<void> {
+    ensureInitialized();
     if (!name) return;
     const namespace = getNamespace(tenantId);
     const start = Date.now();
@@ -736,6 +762,7 @@ export class KubernetesAdapter implements DockerAdapter {
    * Returns `failed` on permanent error states (image pull, crash loop, pod failed).
    */
   async inspectContainer(name: string, tenantId: string): Promise<ContainerInfo | null> {
+    ensureInitialized();
     if (!name) return null;
     const namespace = getNamespace(tenantId);
     try {
@@ -808,6 +835,7 @@ export class KubernetesAdapter implements DockerAdapter {
    * on permanent error states so callers can mark the deployment as failed.
    */
   async waitForReady(name: string, tenantId: string): Promise<ContainerInfo> {
+    ensureInitialized();
     const deadline = Date.now() + K8S_READY_TIMEOUT_MS;
     const namespace = getNamespace(tenantId);
     const poll = 2000;
@@ -858,6 +886,7 @@ export class KubernetesAdapter implements DockerAdapter {
   /* ------------------------------- Logs ---------------------------------- */
 
   async getLogs(name: string, tenantId: string, tail = 100): Promise<LogLine[]> {
+    ensureInitialized();
     if (!name) return [];
     const namespace = getNamespace(tenantId);
     try {
@@ -897,6 +926,7 @@ export class KubernetesAdapter implements DockerAdapter {
    * running, or any error). NEVER fabricates data.
    */
   async getStats(name: string, tenantId: string): Promise<ContainerStats | null> {
+    ensureInitialized();
     if (!name) return null;
     const namespace = getNamespace(tenantId);
 
@@ -972,6 +1002,7 @@ export class KubernetesAdapter implements DockerAdapter {
    * Roadmap.
    */
   async execVolumeOp(volume: string, tenantId: string, op: VolumeOp): Promise<VolumeOpResult> {
+    ensureInitialized();
     const namespace = getNamespace(tenantId);
 
     // Resolve the real claim name from the Deployment spec.
