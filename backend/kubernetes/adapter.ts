@@ -22,24 +22,14 @@ import { config } from "../config";
 // Disable TLS verification globally for Bun's fetch (used by @kubernetes/client-node)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
-const kc = new k8s.KubeConfig();
-kc.loadFromDefault();
-// Docker Desktop: explicitly use docker-desktop context for client cert auth
-kc.setCurrentContext("docker-desktop");
-// Skip TLS verify for all clusters (Docker Desktop uses self-signed certs)
-for (const cluster of kc.clusters) {
-  (cluster as any).skipTLSVerify = true;
-  (cluster as any).ca = undefined;
-}
-
-// Ensure client certificate is used for mTLS with Docker Desktop
-// @kubernetes/client-node loads certData/keyData (base64) but needs cert/key (decoded)
-// Decode and set them on the current user for mTLS
-const currentUser = kc.getCurrentUser();
-if (currentUser && (currentUser as any).certData && (currentUser as any).keyData) {
-  (currentUser as any).cert = Buffer.from((currentUser as any).certData, "base64").toString("utf8");
-  (currentUser as any).key = Buffer.from((currentUser as any).keyData, "base64").toString("utf8");
-}
+// These are initialised lazily — null-safe at build/import time.
+// If no kubeconfig is present (e.g. `next build` inside Docker), the try block
+// below is skipped and adapter methods will throw an informative error at runtime.
+let kc: k8s.KubeConfig | undefined;
+let appsApi: k8s.AppsV1Api | undefined;
+let coreApi: k8s.CoreV1Api | undefined;
+let networkingApi: k8s.NetworkingV1Api | undefined;
+let customApi: k8s.CustomObjectsApi | undefined;
 
 /**
  * Custom HTTP library using Node.js https module with client certificate support.
@@ -48,8 +38,8 @@ if (currentUser && (currentUser as any).certData && (currentUser as any).keyData
  */
 class NodeHttpsHttpLibrary {
   send(request: any): any {
-    const cluster = kc.getCurrentCluster();
-    const user = kc.getCurrentUser();
+    const cluster = kc!.getCurrentCluster();
+    const user = kc!.getCurrentUser();
     if (!cluster || !(user as any)?.cert || !(user as any)?.key) {
       throw new Error("Cluster or client cert/key not configured");
     }
@@ -143,29 +133,50 @@ class NodeHttpsHttpLibrary {
   }
 }
 
-const nodeHttpLib = new NodeHttpsHttpLibrary();
-
-// Override the default fetch-based HTTP library with our Node.js https-based one
-// This ensures client certificates are used for mTLS with Docker Desktop
-const originalMakeApiClient = kc.makeApiClient.bind(kc);
-// @ts-ignore - override with custom HTTP library for mTLS support
-(kc as any).makeApiClient = function <T>(ctor: new (...args: any[]) => T): T {
-  // @ts-ignore - generic type mismatch in override
-  const client = originalMakeApiClient(ctor);
-  // Replace the httpApi in the configuration
-  // @ts-ignore - accessing internal api property
-  if (client?.api?.configuration) {
-    // @ts-ignore - setting custom httpApi
-    (client.api.configuration as any).httpApi = nodeHttpLib;
+try {
+  const _kc = new k8s.KubeConfig();
+  _kc.loadFromDefault();
+  // Docker Desktop: explicitly use docker-desktop context for client cert auth
+  _kc.setCurrentContext("docker-desktop");
+  // Skip TLS verify for all clusters (Docker Desktop uses self-signed certs)
+  for (const cluster of _kc.clusters) {
+    (cluster as any).skipTLSVerify = true;
+    (cluster as any).ca = undefined;
   }
-  // @ts-ignore - generic type mismatch in return
-  return client;
-};
 
-const appsApi = kc.makeApiClient(k8s.AppsV1Api);
-const coreApi = kc.makeApiClient(k8s.CoreV1Api);
-const networkingApi = kc.makeApiClient(k8s.NetworkingV1Api);
-const customApi = kc.makeApiClient(k8s.CustomObjectsApi);
+  // Ensure client certificate is used for mTLS with Docker Desktop
+  const currentUser = _kc.getCurrentUser();
+  if (currentUser && (currentUser as any).certData && (currentUser as any).keyData) {
+    (currentUser as any).cert = Buffer.from((currentUser as any).certData, "base64").toString("utf8");
+    (currentUser as any).key = Buffer.from((currentUser as any).keyData, "base64").toString("utf8");
+  }
+
+  const nodeHttpLib = new NodeHttpsHttpLibrary();
+
+  // Override the default fetch-based HTTP library with our Node.js https-based one
+  const originalMakeApiClient = _kc.makeApiClient.bind(_kc);
+  // @ts-ignore - override with custom HTTP library for mTLS support
+  (_kc as any).makeApiClient = function <T>(ctor: new (...args: any[]) => T): T {
+    // @ts-ignore - generic type mismatch in override
+    const client = originalMakeApiClient(ctor);
+    // @ts-ignore - accessing internal api property
+    if (client?.api?.configuration) {
+      // @ts-ignore - setting custom httpApi
+      (client.api.configuration as any).httpApi = nodeHttpLib;
+    }
+    // @ts-ignore - generic type mismatch in return
+    return client;
+  };
+
+  kc = _kc;
+  appsApi = _kc.makeApiClient(k8s.AppsV1Api);
+  coreApi = _kc.makeApiClient(k8s.CoreV1Api);
+  networkingApi = _kc.makeApiClient(k8s.NetworkingV1Api);
+  customApi = _kc.makeApiClient(k8s.CustomObjectsApi);
+} catch (err) {
+  logger.warn({ msg: "kubernetes: no cluster configured — adapter calls will fail at runtime", err: String(err) });
+}
+
 
 // Generate namespace from tenant ID
 export function getNamespace(tenantId: string): string {
