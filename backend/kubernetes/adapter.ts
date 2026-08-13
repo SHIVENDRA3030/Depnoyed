@@ -25,11 +25,13 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 // These are initialised lazily — null-safe at build/import time.
 // If no kubeconfig is present (e.g. `next build` inside Docker), the try block
 // below is skipped and adapter methods will throw an informative error at runtime.
-let kc: k8s.KubeConfig = undefined as any;
-let appsApi: k8s.AppsV1Api = undefined as any;
-let coreApi: k8s.CoreV1Api = undefined as any;
-let networkingApi: k8s.NetworkingV1Api = undefined as any;
-let customApi: k8s.CustomObjectsApi = undefined as any;
+const k8sState: {
+  kc?: k8s.KubeConfig;
+  appsApi?: k8s.AppsV1Api;
+  coreApi?: k8s.CoreV1Api;
+  networkingApi?: k8s.NetworkingV1Api;
+  customApi?: k8s.CustomObjectsApi;
+} = {};
 
 /**
  * Custom HTTP library using Node.js https module with client certificate support.
@@ -38,8 +40,8 @@ let customApi: k8s.CustomObjectsApi = undefined as any;
  */
 class NodeHttpsHttpLibrary {
   send(request: any): any {
-    const cluster = kc!.getCurrentCluster();
-    const user = kc!.getCurrentUser();
+    const cluster = k8sState.kc!.getCurrentCluster();
+    const user = k8sState.kc!.getCurrentUser();
     if (!cluster || !(user as any)?.cert || !(user as any)?.key) {
       throw new Error("Cluster or client cert/key not configured");
     }
@@ -135,10 +137,8 @@ class NodeHttpsHttpLibrary {
 
 // We do not initialize these at the top level to avoid build-time errors
 // and to ensure they pick up runtime environment variables inside the pod.
-let initialized = false;
-
 function ensureInitialized() {
-  if (initialized) return;
+  if (k8sState.kc) return;
 
   try {
     const _kc = new k8s.KubeConfig();
@@ -181,13 +181,11 @@ function ensureInitialized() {
       return client;
     };
 
-    kc = _kc;
-    appsApi = _kc.makeApiClient(k8s.AppsV1Api);
-    coreApi = _kc.makeApiClient(k8s.CoreV1Api);
-    networkingApi = _kc.makeApiClient(k8s.NetworkingV1Api);
-    customApi = _kc.makeApiClient(k8s.CustomObjectsApi);
-    
-    initialized = true;
+    k8sState.kc = _kc;
+    k8sState.appsApi = _kc.makeApiClient(k8s.AppsV1Api);
+    k8sState.coreApi = _kc.makeApiClient(k8s.CoreV1Api);
+    k8sState.networkingApi = _kc.makeApiClient(k8s.NetworkingV1Api);
+    k8sState.customApi = _kc.makeApiClient(k8s.CustomObjectsApi);
   } catch (err) {
     logger.error({ msg: "Failed to initialize Kubernetes client", err: String(err) });
     throw new Error(`Kubernetes client initialization failed: ${err}`);
@@ -205,11 +203,11 @@ const K8S_READY_TIMEOUT_MS = parseInt(process.env.K8S_READY_TIMEOUT_MS ?? "90000
 async function ensureNamespace(namespace: string) {
   ensureInitialized();
   try {
-    await coreApi.readNamespace({ name: namespace });
+    await k8sState.coreApi!.readNamespace({ name: namespace });
   } catch (err: any) {
     if (getErrorCode(err) === 404) {
       try {
-        await coreApi.createNamespace({ body: { metadata: { name: namespace } } });
+        await k8sState.coreApi!.createNamespace({ body: { metadata: { name: namespace } } });
       } catch (e: any) {
         if (getErrorCode(e) !== 409) throw e;
       }
@@ -241,11 +239,11 @@ async function ensureNamespace(namespace: string) {
   };
 
   try {
-    await networkingApi.readNamespacedNetworkPolicy({ name: "default-deny-and-dns", namespace });
+    await k8sState.networkingApi!.readNamespacedNetworkPolicy({ name: "default-deny-and-dns", namespace });
   } catch (err: any) {
     if (getErrorCode(err) === 404) {
       try {
-        await networkingApi.createNamespacedNetworkPolicy({ namespace, body: networkPolicyBody as any });
+        await k8sState.networkingApi!.createNamespacedNetworkPolicy({ namespace, body: networkPolicyBody as any });
       } catch (e: any) {
         if (getErrorCode(e) !== 409) throw e;
       }
@@ -271,11 +269,11 @@ async function ensureNamespace(namespace: string) {
   };
 
   try {
-    await coreApi.readNamespacedResourceQuota({ name: "tenant-quota", namespace });
+    await k8sState.coreApi!.readNamespacedResourceQuota({ name: "tenant-quota", namespace });
   } catch (err: any) {
     if (getErrorCode(err) === 404) {
       try {
-        await coreApi.createNamespacedResourceQuota({ namespace, body: resourceQuotaBody as any });
+        await k8sState.coreApi!.createNamespacedResourceQuota({ namespace, body: resourceQuotaBody as any });
       } catch (e: any) {
         if (getErrorCode(e) !== 409) throw e;
       }
@@ -386,7 +384,7 @@ export class KubernetesAdapter implements DockerAdapter {
 
     const start = Date.now();
     try {
-      await coreApi.createNamespacedPersistentVolumeClaim({ namespace, body: pvc });
+      await k8sState.coreApi!.createNamespacedPersistentVolumeClaim({ namespace, body: pvc });
     } catch (err: any) {
       if (getErrorCode(err) !== 409) throw err;
       // 409: already exists — still return its metadata for idempotency
@@ -394,7 +392,7 @@ export class KubernetesAdapter implements DockerAdapter {
     k8sLog({ event: "volume.create", operation: "createPVC", namespace, tenantId, durationMs: elapsedSince(start) });
 
     // Read back to confirm and get createdAt.
-    const read = await coreApi.readNamespacedPersistentVolumeClaim({ name, namespace });
+    const read = await k8sState.coreApi!.readNamespacedPersistentVolumeClaim({ name, namespace });
     return {
       name,
       createdAt: read.metadata?.creationTimestamp?.toISOString() || new Date().toISOString(),
@@ -407,7 +405,7 @@ export class KubernetesAdapter implements DockerAdapter {
     const namespace = getNamespace(tenantId);
     const start = Date.now();
     try {
-      await coreApi.deleteNamespacedPersistentVolumeClaim({ name, namespace });
+      await k8sState.coreApi!.deleteNamespacedPersistentVolumeClaim({ name, namespace });
     } catch (err: any) {
       if (getErrorCode(err) !== 404) throw err;
     }
@@ -418,7 +416,7 @@ export class KubernetesAdapter implements DockerAdapter {
     ensureInitialized();
     const namespace = getNamespace(tenantId);
     try {
-      const res = await coreApi.readNamespacedPersistentVolumeClaim({ name, namespace });
+      const res = await k8sState.coreApi!.readNamespacedPersistentVolumeClaim({ name, namespace });
       return {
         name,
         createdAt: res.metadata?.creationTimestamp?.toISOString() || new Date().toISOString(),
@@ -577,24 +575,24 @@ export class KubernetesAdapter implements DockerAdapter {
     // Deployment
     let deploymentStart = Date.now();
     try {
-      await appsApi.createNamespacedDeployment({ namespace, body: deploymentBody });
+      await k8sState.appsApi!.createNamespacedDeployment({ namespace, body: deploymentBody });
     } catch (err: any) {
       if (getErrorCode(err) === 409) {
         // On conflict, patch only mutable fields. If the patch fails (e.g.
         // immutable selector conflict), delete and re-create the deployment.
         try {
-          const current = await appsApi.readNamespacedDeployment({ name: opts.containerName, namespace });
+          const current = await k8sState.appsApi!.readNamespacedDeployment({ name: opts.containerName, namespace });
           const currentSpec = current.spec;
           if (currentSpec) {
             currentSpec.replicas = 0;
             currentSpec.template = deploymentBody.spec.template;
-            await appsApi.replaceNamespacedDeployment({ name: opts.containerName, namespace, body: { ...current, spec: currentSpec } });
+            await k8sState.appsApi!.replaceNamespacedDeployment({ name: opts.containerName, namespace, body: { ...current, spec: currentSpec } });
           }
         } catch (patchErr: any) {
           if (getErrorCode(patchErr) === 422) {
             // Immutable field mismatch — delete and re-create.
-            try { await appsApi.deleteNamespacedDeployment({ name: opts.containerName, namespace }); } catch {}
-            await appsApi.createNamespacedDeployment({ namespace, body: deploymentBody });
+            try { await k8sState.appsApi!.deleteNamespacedDeployment({ name: opts.containerName, namespace }); } catch {}
+            await k8sState.appsApi!.createNamespacedDeployment({ namespace, body: deploymentBody });
           } else {
             throw patchErr;
           }
@@ -615,11 +613,11 @@ export class KubernetesAdapter implements DockerAdapter {
     // Service
     let serviceStart = Date.now();
     try {
-      await coreApi.createNamespacedService({ namespace, body: serviceBody });
+      await k8sState.coreApi!.createNamespacedService({ namespace, body: serviceBody });
     } catch (err: any) {
       if (getErrorCode(err) === 409) {
         // Replace the service with the desired spec.
-        await coreApi.replaceNamespacedService({ name: opts.containerName, namespace, body: serviceBody });
+        await k8sState.coreApi!.replaceNamespacedService({ name: opts.containerName, namespace, body: serviceBody });
       } else {
         throw err;
       }
@@ -636,10 +634,10 @@ export class KubernetesAdapter implements DockerAdapter {
     // Ingress
     let ingressStart = Date.now();
     try {
-      await networkingApi.createNamespacedIngress({ namespace, body: ingressBody });
+      await k8sState.networkingApi!.createNamespacedIngress({ namespace, body: ingressBody });
     } catch (err: any) {
       if (getErrorCode(err) === 409) {
-        await networkingApi.replaceNamespacedIngress({ name: opts.containerName, namespace, body: ingressBody });
+        await k8sState.networkingApi!.replaceNamespacedIngress({ name: opts.containerName, namespace, body: ingressBody });
       } else {
         throw err;
       }
@@ -666,7 +664,7 @@ export class KubernetesAdapter implements DockerAdapter {
           },
         };
         try {
-          await coreApi.createNamespacedPersistentVolumeClaim({ namespace, body: pvc });
+          await k8sState.coreApi!.createNamespacedPersistentVolumeClaim({ namespace, body: pvc });
         } catch (err: any) {
           if (getErrorCode(err) !== 409) throw err;
         }
@@ -688,9 +686,9 @@ export class KubernetesAdapter implements DockerAdapter {
     const namespace = getNamespace(tenantId);
     const start = Date.now();
     try {
-      const res = await appsApi.readNamespacedDeployment({ name, namespace });
+      const res = await k8sState.appsApi!.readNamespacedDeployment({ name, namespace });
       if (res.spec) res.spec.replicas = 1;
-      await appsApi.replaceNamespacedDeployment({ name, namespace, body: res });
+      await k8sState.appsApi!.replaceNamespacedDeployment({ name, namespace, body: res });
     } catch (err: any) {
       if (getErrorCode(err) !== 404) throw err;
     }
@@ -711,9 +709,9 @@ export class KubernetesAdapter implements DockerAdapter {
     const namespace = getNamespace(tenantId);
     const start = Date.now();
     try {
-      const res = await appsApi.readNamespacedDeployment({ name, namespace });
+      const res = await k8sState.appsApi!.readNamespacedDeployment({ name, namespace });
       if (res.spec) res.spec.replicas = 0;
-      await appsApi.replaceNamespacedDeployment({ name, namespace, body: res });
+      await k8sState.appsApi!.replaceNamespacedDeployment({ name, namespace, body: res });
     } catch (err: any) {
       if (getErrorCode(err) !== 404) throw err;
     }
@@ -741,9 +739,9 @@ export class KubernetesAdapter implements DockerAdapter {
     const namespace = getNamespace(tenantId);
     const start = Date.now();
     try {
-      await appsApi.deleteNamespacedDeployment({ name, namespace });
-      await coreApi.deleteNamespacedService({ name, namespace });
-      await networkingApi.deleteNamespacedIngress({ name, namespace });
+      await k8sState.appsApi!.deleteNamespacedDeployment({ name, namespace });
+      await k8sState.coreApi!.deleteNamespacedService({ name, namespace });
+      await k8sState.networkingApi!.deleteNamespacedIngress({ name, namespace });
     } catch (err: any) {
       if (getErrorCode(err) !== 404) throw err;
     }
@@ -766,10 +764,10 @@ export class KubernetesAdapter implements DockerAdapter {
     if (!name) return null;
     const namespace = getNamespace(tenantId);
     try {
-      const res = await appsApi.readNamespacedDeployment({ name, namespace });
+      const res = await k8sState.appsApi!.readNamespacedDeployment({ name, namespace });
       const image = res.spec?.template?.spec?.containers?.[0]?.image || "";
 
-      const pods = await coreApi.listNamespacedPod({ namespace, labelSelector: `app=${name}` });
+      const pods = await k8sState.coreApi!.listNamespacedPod({ namespace, labelSelector: `app=${name}` });
 
       // Readiness gate: if replicas not yet 1, we're still creating.
       const readyReplicas = res.status?.readyReplicas ?? 0;
@@ -845,7 +843,7 @@ export class KubernetesAdapter implements DockerAdapter {
       if (info?.status === "running") return info;
       if (info?.status === "failed") {
         // Describe which pod failed and why, for the error message.
-        const pods = await coreApi.listNamespacedPod({ namespace, labelSelector: `app=${name}` });
+        const pods = await k8sState.coreApi!.listNamespacedPod({ namespace, labelSelector: `app=${name}` });
         const failed = pods.items.find(
           (p) =>
             p.status?.phase === "Failed" ||
@@ -890,12 +888,12 @@ export class KubernetesAdapter implements DockerAdapter {
     if (!name) return [];
     const namespace = getNamespace(tenantId);
     try {
-      const pods = await coreApi.listNamespacedPod({ namespace, labelSelector: `app=${name}` });
+      const pods = await k8sState.coreApi!.listNamespacedPod({ namespace, labelSelector: `app=${name}` });
       if (pods.items.length === 0) return [];
       const podName = pods.items[0].metadata?.name;
       if (!podName) return [];
 
-      const logs = await coreApi.readNamespacedPodLog({
+      const logs = await k8sState.coreApi!.readNamespacedPodLog({
         name: podName,
         namespace,
         container: "app",
@@ -932,7 +930,7 @@ export class KubernetesAdapter implements DockerAdapter {
 
     let podName = "";
     try {
-      const pods = await coreApi.listNamespacedPod({ namespace, labelSelector: `app=${name}` });
+      const pods = await k8sState.coreApi!.listNamespacedPod({ namespace, labelSelector: `app=${name}` });
       if (pods.items.length > 0 && pods.items[0].metadata?.name) {
         podName = pods.items[0].metadata.name;
       }
@@ -943,7 +941,7 @@ export class KubernetesAdapter implements DockerAdapter {
     if (!podName) return null;
 
     try {
-      const metrics: any = await customApi.getNamespacedCustomObject({
+      const metrics: any = await k8sState.customApi!.getNamespacedCustomObject({
         group: "metrics.k8s.io",
         version: "v1beta1",
         namespace,
@@ -1008,7 +1006,7 @@ export class KubernetesAdapter implements DockerAdapter {
     // Resolve the real claim name from the Deployment spec.
     let claimName = "";
     try {
-      const dep = await appsApi.readNamespacedDeployment({ name: volume, namespace });
+      const dep = await k8sState.appsApi!.readNamespacedDeployment({ name: volume, namespace });
       const volumes = dep.spec?.template?.spec?.volumes ?? [];
       const vol = volumes.find((v) => v.name === "data-volume");
       claimName = vol?.persistentVolumeClaim?.claimName ?? "";
