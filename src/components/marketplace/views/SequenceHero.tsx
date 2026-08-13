@@ -32,20 +32,24 @@ export function SequenceHero({ onReady }: { onReady: () => void }) {
       `/sequence/frame_${String(index).padStart(3, "0")}.webp`;
 
     let lastRenderedIndex = -1;
+    let renderRequested = false;
+    const seqObj = { frame: 0 };
 
-    const render = (index: number) => {
-      let targetIndex = index;
+    const render = () => {
+      let targetIndex = seqObj.frame;
       
       // If exact frame isn't loaded, find the closest loaded frame to prevent visual freezing
       if (!images[targetIndex] || !images[targetIndex].complete) {
-        let closestDist = Infinity;
-        for (let i = 0; i < FRAME_COUNT; i++) {
-          if (images[i] && images[i].complete) {
-            const dist = Math.abs(index - i);
-            if (dist < closestDist) {
-              closestDist = dist;
-              targetIndex = i;
-            }
+        for (let offset = 1; offset < FRAME_COUNT; offset++) {
+          const up = targetIndex + offset;
+          const down = targetIndex - offset;
+          if (up < FRAME_COUNT && images[up]?.complete) {
+            targetIndex = up;
+            break;
+          }
+          if (down >= 0 && images[down]?.complete) {
+            targetIndex = down;
+            break;
           }
         }
       }
@@ -56,16 +60,27 @@ export function SequenceHero({ onReady }: { onReady: () => void }) {
       if (img && img.complete) {
         // Multiply by 1.15 to slightly zoom in the frame (15% zoom)
         const scale = Math.max(canvas.width / img.width, canvas.height / img.height) * 1.15;
-        const x = (canvas.width / 2) - (img.width / 2) * scale;
-        const y = (canvas.height / 2) - (img.height / 2) * scale;
+        // Use Math.round to avoid sub-pixel anti-aliasing rendering costs
+        const drawW = Math.round(img.width * scale);
+        const drawH = Math.round(img.height * scale);
+        const x = Math.round((canvas.width / 2) - (drawW / 2));
+        const y = Math.round((canvas.height / 2) - (drawH / 2));
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+        ctx.drawImage(img, x, y, drawW, drawH);
         lastRenderedIndex = targetIndex;
       }
     };
 
-    const seqObj = { frame: 0 };
+    const requestRender = () => {
+      if (!renderRequested) {
+        renderRequested = true;
+        requestAnimationFrame(() => {
+          render();
+          renderRequested = false;
+        });
+      }
+    };
 
     const loadQueue = async () => {
       const loadImg = (idx: number) => {
@@ -75,7 +90,7 @@ export function SequenceHero({ onReady }: { onReady: () => void }) {
           images[idx] = img;
           img.onload = () => {
             if (seqObj.frame === idx) {
-              render(idx);
+              requestRender();
             }
             resolve(null);
           };
@@ -85,15 +100,16 @@ export function SequenceHero({ onReady }: { onReady: () => void }) {
 
       // Load first frame immediately
       await loadImg(0);
-      render(0);
+      requestRender();
       onReady();
 
       // Phase 1: Sparse load (every 10th frame) so fast scrubbing has visual feedback
+      // Browser limits concurrent connections to same host (usually 6), so chunk by 4 to keep UI thread responsive
       let sparseBatch: Promise<unknown>[] = [];
       for (let i = 10; i < FRAME_COUNT; i += 10) {
         sparseBatch.push(loadImg(i));
-        if (sparseBatch.length >= 8) {
-          await new Promise((r) => setTimeout(r, 16)); 
+        if (sparseBatch.length >= 4) {
+          await new Promise((r) => setTimeout(r, 10)); 
           await Promise.all(sparseBatch);
           sparseBatch = [];
         }
@@ -105,8 +121,8 @@ export function SequenceHero({ onReady }: { onReady: () => void }) {
       for (let i = 1; i < FRAME_COUNT; i++) {
         if (i % 10 === 0) continue; // Already loaded in Phase 1
         fullBatch.push(loadImg(i));
-        if (fullBatch.length >= 8) {
-          await new Promise((r) => setTimeout(r, 16)); 
+        if (fullBatch.length >= 4) {
+          await new Promise((r) => setTimeout(r, 10)); 
           await Promise.all(fullBatch);
           fullBatch = [];
         }
@@ -126,7 +142,7 @@ export function SequenceHero({ onReady }: { onReady: () => void }) {
       onUpdate: (self) => {
         // Render the correct frame based on scroll progress
         seqObj.frame = Math.round(self.progress * (FRAME_COUNT - 1));
-        render(seqObj.frame);
+        requestRender();
 
         // Handle opacity fade out near the end
         const fadeEl = document.getElementById("seq-fade");
@@ -144,7 +160,7 @@ export function SequenceHero({ onReady }: { onReady: () => void }) {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
       lastRenderedIndex = -1;
-      render(seqObj.frame);
+      requestRender();
     };
     window.addEventListener("resize", onResize);
 
