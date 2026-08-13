@@ -3,7 +3,7 @@ module "eks" {
   version = "~> 19.16"
 
   cluster_name    = var.cluster_name
-  cluster_version = "1.30"
+  cluster_version = "1.35"
 
   vpc_id                   = module.vpc.vpc_id
   subnet_ids               = module.vpc.private_subnets
@@ -12,8 +12,8 @@ module "eks" {
   cluster_endpoint_public_access = true
 
   eks_managed_node_groups = {
-    depnoyed_nodes = {
-      ami_type     = "AL2_x86_64"
+    depnoyed_nodes_al2023 = {
+      ami_type     = "AL2023_x86_64_STANDARD" # Migrated from AL2 (deprecated for k8s 1.33+)
       min_size     = var.node_group_min_size
       max_size     = var.node_group_max_size
       desired_size = var.node_group_desired_size

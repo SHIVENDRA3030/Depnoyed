@@ -1,0 +1,25 @@
+apiVersion: depnoyed/v1
+name: static-welcome
+display:
+  name: "Static Welcome"
+  category: "Web"
+  description: "An nginx:alpine based static welcome page. The simplest possible deployment to validate the control plane."
+runtime:
+  type: "container"
+  image: "nginx:alpine"
+  port: 80
+resources:
+  requests:
+    cpu: "50m"
+    memory: "64Mi"
+  limits:
+    cpu: "200m"
+    memory: "128Mi"
+storage:
+  - name: "data"
+    mountPath: "/usr/share/nginx/html"
+    size: "1Gi"
+health:
+  http:
+    path: "/"
+    port: 80

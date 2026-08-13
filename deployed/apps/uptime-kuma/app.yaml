@@ -1,0 +1,25 @@
+apiVersion: depnoyed/v1
+name: uptime-kuma
+display:
+  name: "Uptime Kuma"
+  category: "Monitoring"
+  description: "A fancy self-hosted monitoring tool. Track uptime for HTTP(s), TCP, DNS, and more."
+runtime:
+  type: "container"
+  image: "louislam/uptime-kuma:latest"
+  port: 3001
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+storage:
+  - name: "data"
+    mountPath: "/app/data"
+    size: "5Gi"
+health:
+  http:
+    path: "/"
+    port: 3001

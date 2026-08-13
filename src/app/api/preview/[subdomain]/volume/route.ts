@@ -31,7 +31,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ subdomai
 
   if (detail) {
     const adapter = getDockerAdapter();
-    const logs = running ? await adapter.getLogs(deployment.containerName, 5) : [];
+    const logs = running ? await adapter.getLogs(deployment.containerName, deployment.userId, 5) : [];
     return json({
       deployment: {
         id: deployment.id,

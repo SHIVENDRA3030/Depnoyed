@@ -1,0 +1,25 @@
+apiVersion: depnoyed/v1
+name: wordpress
+display:
+  name: "WordPress"
+  category: "Publishing"
+  description: "The world's most popular CMS. Create any kind of website."
+runtime:
+  type: "container"
+  image: "wordpress:latest"
+  port: 80
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "1000m"
+    memory: "2Gi"
+storage:
+  - name: "data"
+    mountPath: "/var/www/html"
+    size: "10Gi"
+health:
+  http:
+    path: "/"
+    port: 80

@@ -1,0 +1,192 @@
+name: Deploy to AWS EKS
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+      aws_region:
+        description: 'AWS Region'
+        required: true
+        default: 'us-east-1'
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./Depnoyed/infra/aws/terraform
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ github.event.inputs.aws_region }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: GitHubActionsTerraform
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.x
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan -input=false -out=tfplan
+        env:
+          TF_VAR_environment: ${{ github.event.inputs.environment }}
+
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: ./Depnoyed/infra/aws/terraform/tfplan
+
+  terraform-apply:
+    name: Terraform Apply
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./Depnoyed/infra/aws/terraform
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ github.event.inputs.aws_region }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: GitHubActionsTerraform
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.x
+
+      - name: Download Terraform Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ./
+
+      - name: Terraform Apply
+        run: terraform apply -input=false tfplan
+
+      - name: Configure kubectl
+        run: |
+          aws eks --region ${{ github.event.inputs.aws_region }} update-kubeconfig --name depnoyed-cluster
+
+  deploy-control-plane:
+    name: Deploy Depnoyed Control Plane
+    needs: terraform-apply
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ github.event.inputs.aws_region }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: GitHubActionsKubectl
+
+      - name: Configure kubectl
+        run: |
+          aws eks --region ${{ github.event.inputs.aws_region }} update-kubeconfig --name depnoyed-cluster
+
+      - name: Install NGINX Ingress Controller
+        run: |
+          helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+          helm repo update
+          helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+            --namespace ingress-nginx --create-namespace \
+            --set controller.service.type=LoadBalancer \
+            --set controller.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-type"=nlb \
+            --wait
+
+      - name: Install cert-manager
+        run: |
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.5/cert-manager.yaml
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
+
+      - name: Create ClusterIssuer for Let's Encrypt
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: cert-manager.io/v1
+          kind: ClusterIssuer
+          metadata:
+            name: letsencrypt-prod
+          spec:
+            acme:
+              server: https://acme-v02.api.letsencrypt.org/directory
+              email: ${{ secrets.LETSENCRYPT_EMAIL }}
+              privateKeySecretRef:
+                name: letsencrypt-prod
+              solvers:
+              - http01:
+                  ingress:
+                    class: nginx
+          EOF
+
+      - name: Create ghcr.io image pull secret
+        run: |
+          kubectl create secret docker-registry ghcr-secret \
+            --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GITHUB_TOKEN }} \
+            --namespace=depnoyed-system \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create Depnoyed secrets
+        run: |
+          kubectl create secret generic depnoyed-secrets \
+            --from-literal=MONGODB_URI="${{ secrets.MONGODB_URI }}" \
+            --from-literal=AUTH_SECRET="${{ secrets.AUTH_SECRET }}" \
+            --from-literal=DEPLOY_BASE_DOMAIN="${{ secrets.DEPLOY_BASE_DOMAIN }}" \
+            --namespace=depnoyed-system \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy Depnoyed
+        run: |
+          kubectl apply -f ./Depnoyed/infra/kubernetes/namespace.yaml
+          kubectl apply -f ./Depnoyed/infra/kubernetes/rbac.yaml
+          
+          # Render ingress with base domain
+          DEPLOY_BASE_DOMAIN="${{ secrets.DEPLOY_BASE_DOMAIN }}" envsubst < ./Depnoyed/infra/kubernetes/ingress.yaml | kubectl apply -f -
+          
+          kubectl apply -f ./Depnoyed/infra/kubernetes/deployment.yaml
+          kubectl apply -f ./Depnoyed/infra/kubernetes/service.yaml
+
+      - name: Wait for deployment
+        run: |
+          kubectl rollout status deployment/depnoyed -n depnoyed-system --timeout=300s
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n depnoyed-system
+          kubectl get ingress -n depnoyed-system

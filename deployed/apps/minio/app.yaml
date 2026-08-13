@@ -1,0 +1,28 @@
+apiVersion: depnoyed/v1
+name: minio
+display:
+  name: "MinIO"
+  category: "Storage"
+  description: "High-performance, S3-compatible object storage."
+runtime:
+  type: "container"
+  image: "minio/minio:latest"
+  port: 9000
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "1000m"
+    memory: "2Gi"
+storage:
+  - name: "data"
+    mountPath: "/data"
+    size: "20Gi"
+  - name: "config"
+    mountPath: "/root/.minio"
+    size: "1Gi"
+health:
+  http:
+    path: "/minio/health/live"
+    port: 9000

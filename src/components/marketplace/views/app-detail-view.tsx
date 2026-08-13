@@ -296,13 +296,13 @@ export function AppDetailView({ slug }: { slug: string }) {
 
             <div className="mt-5 space-y-2">
               {app.repository && (
-                <Button variant="outline" className="w-full justify-start bg-background" onClick={() => window.open(app.repository, "_blank")}>
+                <Button variant="outline" className="w-full justify-start bg-background" onClick={() => window.open(app.repository!, "_blank")}>
                   <Code className="mr-2 size-4" /> View Source
                   <ExternalLink className="ml-auto size-3 opacity-50" />
                 </Button>
               )}
               {app.website && (
-                <Button variant="outline" className="w-full justify-start bg-background" onClick={() => window.open(app.website, "_blank")}>
+                <Button variant="outline" className="w-full justify-start bg-background" onClick={() => window.open(app.website!, "_blank")}>
                   <Globe className="mr-2 size-4" /> Visit Website
                   <ExternalLink className="ml-auto size-3 opacity-50" />
                 </Button>

@@ -1,0 +1,31 @@
+apiVersion: depnoyed/v1
+name: jellyfin
+display:
+  name: "Jellyfin"
+  category: "Media"
+  description: "The Free Software Media System. Stream your media to any device."
+runtime:
+  type: "container"
+  image: "jellyfin/jellyfin:latest"
+  port: 8096
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "2000m"
+    memory: "4Gi"
+storage:
+  - name: "data"
+    mountPath: "/config"
+    size: "5Gi"
+  - name: "cache"
+    mountPath: "/cache"
+    size: "5Gi"
+  - name: "media"
+    mountPath: "/media"
+    size: "50Gi"
+health:
+  http:
+    path: "/health"
+    port: 8096

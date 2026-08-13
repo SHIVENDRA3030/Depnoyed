@@ -1,0 +1,25 @@
+apiVersion: depnoyed/v1
+name: meilisearch
+display:
+  name: "Meilisearch"
+  category: "Search"
+  description: "Lightning-fast, typo-tolerant search engine. Easy to deploy and use."
+runtime:
+  type: "container"
+  image: "getmeili/meilisearch:latest"
+  port: 7700
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "1000m"
+    memory: "2Gi"
+storage:
+  - name: "data"
+    mountPath: "/meili_data"
+    size: "5Gi"
+health:
+  http:
+    path: "/health"
+    port: 7700

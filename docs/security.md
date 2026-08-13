@@ -2,6 +2,18 @@
 
 Depnoyed enforces multiple layers of security to ensure multi-tenant isolation and safe workload execution.
 
+## Volume Data (Demo Sidecar)
+
+The `execVolumeOp` path used by the persistence demo stores key/value data in host-side
+JSON files under `.ossmp-data/volumes/<pvc-name>.json`. Under Kubernetes (`Option A`),
+this sidecar is keyed by the real PVC claim name — resolved from the Deployment spec,
+never guessed. This is demo data, not real in-cluster persistence.
+
+**Important:** Do not store secrets (passwords, API keys, tokens) in volume operations.
+The host-side JSON sidecar is readable by any process running on the control plane.
+A future working group will implement `Option B` (in-PVC ops via a helper sidecar) for
+real persistence on Kubernetes.
+
 ## 1. Authentication & Identity
 - **NextAuth:** User sessions are handled via NextAuth using secure, HTTP-only cookies.
 - **No Client Trust:** The backend NEVER trusts `userId` or `tenantId` from the client request body. It always derives the identity securely from the server-side session.

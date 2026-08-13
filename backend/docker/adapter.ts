@@ -20,7 +20,8 @@ export type ContainerStatus =
   | "paused"
   | "exited"
   | "dead"
-  | "removing";
+  | "removing"
+  | "failed";
 
 export interface CreateContainerOptions {
   containerName: string;
@@ -36,6 +37,13 @@ export interface CreateContainerOptions {
   simulator: string;
   /** Tenant ID for namespace isolation (used by Kubernetes). */
   tenantId: string;
+  /** Optional storage volumes from app manifest. */
+  storage?: Array<{ name: string; mountPath: string; size: string }>;
+  /** Optional health check config from app manifest. */
+  health?: {
+    http?: { path: string; port?: number };
+    tcp?: { port: number };
+  };
 }
 
 export interface ContainerInfo {
@@ -61,6 +69,16 @@ export interface LogLine {
   message: string;
 }
 
+export interface ContainerStats {
+  cpuUsagePercent: number;
+  memoryUsagePercent: number;
+  memoryUsageBytes: number;
+  networkRxBytes: number;
+  networkTxBytes: number;
+  diskReadBytes: number;
+  diskWriteBytes: number;
+}
+
 export type VolumeOp =
   | { kind: "get"; key: string }
   | { kind: "set"; key: string; value: string }
@@ -75,7 +93,7 @@ export interface VolumeOpResult {
 }
 
 export interface DockerAdapter {
-  readonly kind: "mock" | "docker";
+  readonly kind: "mock" | "docker" | "kubernetes";
 
   createVolume(name: string, tenantId: string): Promise<VolumeInfo>;
   removeVolume(name: string, tenantId: string): Promise<void>;
@@ -89,6 +107,7 @@ export interface DockerAdapter {
   inspectContainer(name: string, tenantId: string): Promise<ContainerInfo | null>;
 
   getLogs(name: string, tenantId: string, tail?: number): Promise<LogLine[]>;
+  getStats(name: string, tenantId: string): Promise<ContainerStats | null>;
 
   /**
    * Execute an operation against the container's persistent volume.
@@ -218,7 +237,7 @@ async function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-class MockDockerAdapter implements DockerAdapter {
+export class MockDockerAdapter implements DockerAdapter {
   readonly kind = "mock" as const;
 
   async createVolume(name: string, tenantId: string): Promise<VolumeInfo> {
@@ -347,6 +366,45 @@ class MockDockerAdapter implements DockerAdapter {
     return c.logs.slice(-tail);
   }
 
+  async getStats(name: string, tenantId: string): Promise<ContainerStats | null> {
+    await loadState();
+    let c = getStore().state.containers[name];
+    if (!c) {
+      await loadState(true);
+      c = getStore().state.containers[name];
+    }
+    if (!c || c.status !== "running") return null;
+
+    // Use deterministic mock metrics based on container ID for realism in mock mode
+    // (Ported from the old metrics.ts logic)
+    const seed = c.id;
+    let h = 0;
+    const seededRandom = (s: string) => {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+      h ^= h << 13; h ^= h >> 17; h ^= h << 5;
+      return ((h >>> 0) % 10000) / 10000;
+    };
+
+    const memoryUsagePercent = Math.round(30 + seededRandom(seed + ":mem") * 50);
+    const cpuUsagePercent = Math.round(10 + seededRandom(seed + ":cpu") * 50);
+    const memoryUsageBytes = (memoryUsagePercent / 100) * c.memoryLimitMb * 1024 * 1024;
+    
+    // Simulate some MB/s throughput
+    const networkBase = seededRandom(seed + ":net") * 30 * 1024 * 1024; 
+    const diskBase = seededRandom(seed + ":disk") * 20 * 1024 * 1024;
+
+    return {
+      cpuUsagePercent,
+      memoryUsagePercent,
+      memoryUsageBytes,
+      networkRxBytes: networkBase,
+      networkTxBytes: networkBase / 2,
+      diskReadBytes: diskBase,
+      diskWriteBytes: diskBase / 3,
+    };
+  }
+
   async execVolumeOp(name: string, tenantId: string, op: VolumeOp): Promise<VolumeOpResult> {
     await loadState();
     let c = getStore().state.containers[name];
@@ -423,7 +481,7 @@ import Docker from "dockerode";
  *    Grafana) is bound to a host port in the configured range so the real
  *    app is reachable at http://<docker-host>:<hostPort>.
  */
-class DockerEngineAdapter implements DockerAdapter {
+export class DockerEngineAdapter implements DockerAdapter {
   readonly kind = "docker" as const;
   private docker: Docker;
   /** Lazily-initialized host-side volume sidecar store (reuses mock's paths). */
@@ -600,6 +658,62 @@ class DockerEngineAdapter implements DockerAdapter {
       throw err;
     }
     return demuxDockerLogs(stream);
+  }
+
+  async getStats(name: string, tenantId: string): Promise<ContainerStats | null> {
+    try {
+      const container = this.docker.getContainer(name);
+      const stats = await container.stats({ stream: false }) as any;
+      if (!stats) return null;
+
+      // Calculate CPU percent
+      let cpuPercent = 0.0;
+      const cpuDelta = stats.cpu_stats?.cpu_usage?.total_usage - stats.precpu_stats?.cpu_usage?.total_usage;
+      const systemDelta = stats.cpu_stats?.system_cpu_usage - stats.precpu_stats?.system_cpu_usage;
+      if (systemDelta > 0.0 && cpuDelta > 0.0) {
+        const cpus = stats.cpu_stats?.online_cpus || 1;
+        cpuPercent = (cpuDelta / systemDelta) * cpus * 100.0;
+      }
+
+      // Calculate Memory percent
+      const memUsage = stats.memory_stats?.usage || 0;
+      const memLimit = stats.memory_stats?.limit || 1;
+      const memoryPercent = (memUsage / memLimit) * 100.0;
+
+      // Network I/O
+      let rxBytes = 0;
+      let txBytes = 0;
+      if (stats.networks) {
+        for (const net of Object.values(stats.networks) as any[]) {
+          rxBytes += net.rx_bytes || 0;
+          txBytes += net.tx_bytes || 0;
+        }
+      }
+
+      // Disk I/O (blkio)
+      let readBytes = 0;
+      let writeBytes = 0;
+      if (stats.blkio_stats && stats.blkio_stats.io_service_bytes_recursive) {
+        for (const io of stats.blkio_stats.io_service_bytes_recursive) {
+          if (io.op === "Read" || io.op === "read") readBytes += io.value;
+          if (io.op === "Write" || io.op === "write") writeBytes += io.value;
+        }
+      }
+
+      return {
+        cpuUsagePercent: cpuPercent,
+        memoryUsagePercent: memoryPercent,
+        memoryUsageBytes: memUsage,
+        networkRxBytes: rxBytes,
+        networkTxBytes: txBytes,
+        diskReadBytes: readBytes,
+        diskWriteBytes: writeBytes,
+      };
+    } catch (err: unknown) {
+      if (isDockerNotFound(err)) return null;
+      // Depending on docker status, stats might throw an error if container is not running
+      return null;
+    }
   }
 
   /* --------------------------- Volume key/value -------------------------- */
@@ -827,12 +941,12 @@ import { KubernetesAdapter } from "../kubernetes/adapter";
 export function getDockerAdapter(): DockerAdapter {
   const g = globalThis as unknown as {
     __ossmpDockerAdapter?: DockerAdapter;
-    __ossmpDockerAdapterKind?: "mock" | "docker";
+    __ossmpDockerAdapterKind?: "mock" | "docker" | "kubernetes";
   };
   if (!g.__ossmpDockerAdapter) {
     if (config.docker.adapter === "kubernetes") {
       g.__ossmpDockerAdapter = new KubernetesAdapter();
-      g.__ossmpDockerAdapterKind = "docker"; // masquerade as docker for frontend compatibility
+      g.__ossmpDockerAdapterKind = "kubernetes";
     } else if (config.docker.adapter === "docker") {
       const real = new DockerEngineAdapter();
       // Probe the daemon synchronously on first use. If unreachable, fall back
@@ -860,9 +974,9 @@ export function getDockerAdapter(): DockerAdapter {
   return g.__ossmpDockerAdapter;
 }
 
-/** Returns the kind of the active adapter ("mock" or "docker"). */
-export function getDockerAdapterKind(): "mock" | "docker" {
+/** Returns the kind of the active adapter ("mock" | "docker" | "kubernetes"). */
+export function getDockerAdapterKind(): "mock" | "docker" | "kubernetes" {
   getDockerAdapter(); // ensure initialised
-  const g = globalThis as unknown as { __ossmpDockerAdapterKind?: "mock" | "docker" };
+  const g = globalThis as unknown as { __ossmpDockerAdapterKind?: "mock" | "docker" | "kubernetes" };
   return g.__ossmpDockerAdapterKind ?? "mock";
 }

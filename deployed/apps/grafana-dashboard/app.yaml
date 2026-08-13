@@ -1,0 +1,25 @@
+apiVersion: depnoyed/v1
+name: grafana-dashboard
+display:
+  name: "Grafana Dashboard"
+  category: "Monitoring"
+  description: "The open observability platform. Query, visualize, and alert on metrics."
+runtime:
+  type: "container"
+  image: "grafana/grafana:latest"
+  port: 3000
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+storage:
+  - name: "data"
+    mountPath: "/var/lib/grafana"
+    size: "5Gi"
+health:
+  http:
+    path: "/api/health"
+    port: 3000

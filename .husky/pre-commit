@@ -1,0 +1,26 @@
+#!/bin/sh
+#
+# Gitleaks pre-commit hook - prevent committing secrets
+#
+# Managed via: git config core.hooksPath .husky
+# (documented in README - no npm dependency required)
+
+# If gitleaks is not installed, skip silently (don't block developers who
+# don't have it). CI enforces this at the repo level regardless.
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "gitleaks not installed - skipping secret scan (install to enable local hook)"
+  exit 0
+fi
+
+echo "Running gitleaks on staged changes..."
+gitleaks protect --staged --config .gitleaks.toml --verbose
+STATUS=$?
+
+if [ $STATUS -ne 0 ]; then
+  echo ""
+  echo "========================================================"
+  echo "  SECRET DETECTED - commit blocked"
+  echo "  If this is a false positive, edit .gitleaks.toml"
+  echo "========================================================"
+  exit $STATUS
+fi

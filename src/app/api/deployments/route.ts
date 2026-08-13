@@ -50,7 +50,7 @@ export const GET = withErrors(async () => {
       const base = serializeDeployment(d);
       let volumeDataSize: number | undefined;
       try {
-        const volInfo = await adapter.inspectVolume(d.volumeName);
+        const volInfo = await adapter.inspectVolume(d.volumeName, d.userId);
         if (volInfo) volumeDataSize = volInfo.dataSize;
       } catch {
         /* ignore volume inspect failure */

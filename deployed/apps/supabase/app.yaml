@@ -1,0 +1,28 @@
+apiVersion: depnoyed/v1
+name: supabase
+display:
+  name: "Supabase"
+  category: "Backend"
+  description: "The open source Firebase alternative. Auth, Database, Realtime, Storage, and Edge Functions."
+runtime:
+  type: "container"
+  image: "supabase/supabase:latest"
+  port: 8000
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "2000m"
+    memory: "4Gi"
+storage:
+  - name: "data"
+    mountPath: "/var/lib/postgresql/data"
+    size: "10Gi"
+  - name: "storage"
+    mountPath: "/storage"
+    size: "5Gi"
+health:
+  http:
+    path: "/health"
+    port: 8000

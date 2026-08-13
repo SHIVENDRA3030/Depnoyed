@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-app
+  namespace: depnoyed-test-user1
+spec:
+  type: ClusterIP
+  selector:
+    app: test-app
+  ports:
+    - port: 5678
+      targetPort: 5678

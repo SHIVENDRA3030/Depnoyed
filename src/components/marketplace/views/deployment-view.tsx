@@ -56,7 +56,6 @@ import { AppLogo } from "@/components/marketplace/app-logo";
 import { statusColor, statusDot } from "@/components/marketplace/status";
 import {
   calculateUptime,
-  getContainerMetrics,
   lastHealthCheck,
 } from "@/lib/metrics";
 import { Button } from "@/components/ui/button";
@@ -88,6 +87,16 @@ interface LogLine {
   t: string;
   stream: string;
   message: string;
+}
+
+export interface ContainerStats {
+  cpuUsagePercent: number;
+  memoryUsagePercent: number;
+  memoryUsageBytes: number;
+  networkRxBytes: number;
+  networkTxBytes: number;
+  diskReadBytes: number;
+  diskWriteBytes: number;
 }
 
 function statusBannerStyle(status: string): { bg: string; icon: React.ReactNode; text: string } {
@@ -142,6 +151,17 @@ export function DeploymentView({ id }: { id: string }) {
   const logRef = useRef<HTMLDivElement>(null);
   const [followLogs, setFollowLogs] = useState(true);
   const [logSearch, setLogSearch] = useState("");
+  const [stats, setStats] = useState<ContainerStats | null>(null);
+
+  const loadStats = useCallback(async () => {
+    if (!dep || dep.status !== "running") return;
+    try {
+      const res = await api<{ stats: ContainerStats }>(`/api/deployments/${id}/stats`);
+      if (res.stats) setStats(res.stats);
+    } catch {
+      // ignore
+    }
+  }, [id, dep]);
 
   const load = useCallback(async () => {
     try {
@@ -199,6 +219,12 @@ export function DeploymentView({ id }: { id: string }) {
     }, 3000);
     return () => clearInterval(t);
   }, [load, loadLogs]);
+
+  useEffect(() => {
+    loadStats();
+    const t = setInterval(loadStats, 3000);
+    return () => clearInterval(t);
+  }, [loadStats]);
 
   useEffect(() => {
     if (followLogs && logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -279,7 +305,6 @@ export function DeploymentView({ id }: { id: string }) {
   const steps = computeSteps(dep.status);
   const banner = statusBannerStyle(dep.status);
   const containerId = dep.containerId ?? dep.id;
-  const metrics = getContainerMetrics(containerId);
   const uptime = calculateUptime(dep.createdAt, dep.status);
   const healthCheckTime = lastHealthCheck(containerId);
 
@@ -322,7 +347,7 @@ export function DeploymentView({ id }: { id: string }) {
         
         {dep.realAppUrl && (
           <Button variant="outline"
-            onClick={() => window.open(dep.realAppUrl, "_blank")}>
+            onClick={() => window.open(dep.realAppUrl as string, "_blank")}>
             <ExternalLink className="mr-2 size-4" /> Open App
           </Button>
         )}
@@ -377,9 +402,9 @@ export function DeploymentView({ id }: { id: string }) {
                 </h2>
                 <div className="grid grid-cols-2 gap-3">
                   <MetricCard icon={<Activity className="size-3.5" />} label="Uptime" value={running ? `${uptime}%` : "0%"} />
-                  <MetricCard icon={<MemoryStick className="size-3.5" />} label="Memory" value={`${metrics.memoryUsagePercent}%`} />
-                  <MetricCard icon={<Cpu className="size-3.5" />} label="CPU" value={`${metrics.cpuUsagePercent}%`} />
-                  <MetricCard icon={<Zap className="size-3.5" />} label="Latency" value={`${metrics.responseLatencyMs}ms`} />
+                  <MetricCard icon={<MemoryStick className="size-3.5" />} label="Memory" value={stats ? `${stats.memoryUsagePercent.toFixed(1)}%` : "N/A"} />
+                  <MetricCard icon={<Cpu className="size-3.5" />} label="CPU" value={stats ? `${stats.cpuUsagePercent.toFixed(1)}%` : "N/A"} />
+                  <MetricCard icon={<Zap className="size-3.5" />} label="Network" value={stats ? `${(stats.networkRxBytes / 1024 / 1024).toFixed(1)} MB` : "N/A"} />
                 </div>
               </div>
 
@@ -426,7 +451,7 @@ export function DeploymentView({ id }: { id: string }) {
           <DeploymentPerformanceSparklines
             containerId={containerId}
             status={dep.status}
-            metrics={metrics}
+            stats={stats}
           />
           
           <StatusBadgeSection
@@ -777,47 +802,61 @@ const DEPLOY_SPARKLINE_POINTS = 30;
 function DeploymentPerformanceSparklines({
   containerId,
   status,
-  metrics,
+  stats,
 }: {
   containerId: string;
   status: string;
-  metrics: { cpuUsagePercent: number; memoryUsagePercent: number; responseLatencyMs: number; healthScore: number };
+  stats: ContainerStats | null;
 }) {
   const running = status === "running";
   const color = sparklineColor(status);
 
-  // Base metrics from getContainerMetrics
-  const baseCpu = metrics.cpuUsagePercent;
-  const baseMemory = metrics.memoryUsagePercent;
-  const baseNetwork = metrics.responseLatencyMs / 150 * 40 + 10; // ~10-50
-  const baseDisk = metrics.healthScore * 0.3 + 5; // ~5-35
+  // Maintain rolling windows of stats for the sparklines
+  const [series, setSeries] = useState({
+    cpu: Array(DEPLOY_SPARKLINE_POINTS).fill(0),
+    memory: Array(DEPLOY_SPARKLINE_POINTS).fill(0),
+    network: Array(DEPLOY_SPARKLINE_POINTS).fill(0),
+    disk: Array(DEPLOY_SPARKLINE_POINTS).fill(0),
+  });
 
-  // Tick counter drives series evolution (only ticks for running deployments)
-  const [tick, setTick] = useState(0);
+  // Track previous network/disk bytes to calculate MB/s (delta)
+  const [prevStats, setPrevStats] = useState<{ rx: number; tx: number; dr: number; dw: number; t: number } | null>(null);
 
-  // Auto-refresh every 5 seconds for running deployments
   useEffect(() => {
-    if (!running) return;
-    const t = setInterval(() => setTick((n) => n + 1), 5000);
-    return () => clearInterval(t);
-  }, [running]);
+    if (!stats || !running) return;
 
-  // Compute full series from containerId + tick (fully derived)
-  const series = useMemo(() => {
-    const cpu = generateTimeSeries(baseCpu, DEPLOY_SPARKLINE_POINTS, 4, `dep-${containerId}:cpu`);
-    const memory = generateTimeSeries(baseMemory, DEPLOY_SPARKLINE_POINTS, 3, `dep-${containerId}:mem`);
-    const network = generateTimeSeries(baseNetwork, DEPLOY_SPARKLINE_POINTS, 5, `dep-${containerId}:net`);
-    const disk = generateTimeSeries(baseDisk, DEPLOY_SPARKLINE_POINTS, 3, `dep-${containerId}:disk`);
-    // Apply tick-based evolution
-    let c = cpu, m = memory, n = network, d = disk;
-    for (let i = 0; i < tick; i++) {
-      c = tickTimeSeries(c, baseCpu, 4, i + 1);
-      m = tickTimeSeries(m, baseMemory, 3, i + 1);
-      n = tickTimeSeries(n, baseNetwork, 5, i + 1);
-      d = tickTimeSeries(d, baseDisk, 3, i + 1);
+    const now = Date.now();
+    let netDelta = 0;
+    let diskDelta = 0;
+
+    if (prevStats) {
+      const timeSec = (now - prevStats.t) / 1000;
+      if (timeSec > 0) {
+        // Bytes per second converted to MB/s
+        netDelta = ((stats.networkRxBytes + stats.networkTxBytes) - (prevStats.rx + prevStats.tx)) / (1024 * 1024) / timeSec;
+        diskDelta = ((stats.diskReadBytes + stats.diskWriteBytes) - (prevStats.dr + prevStats.dw)) / (1024 * 1024) / timeSec;
+      }
     }
-    return { cpu: c, memory: m, network: n, disk: d };
-  }, [containerId, baseCpu, baseMemory, baseNetwork, baseDisk, tick]);
+
+    setPrevStats({
+      rx: stats.networkRxBytes,
+      tx: stats.networkTxBytes,
+      dr: stats.diskReadBytes,
+      dw: stats.diskWriteBytes,
+      t: now
+    });
+
+    // Handle initial state spikes (negative or absurd values)
+    const safeNet = Math.max(0, netDelta);
+    const safeDisk = Math.max(0, diskDelta);
+
+    setSeries(prev => ({
+      cpu: [...prev.cpu.slice(1), stats.cpuUsagePercent || 0],
+      memory: [...prev.memory.slice(1), stats.memoryUsagePercent || 0],
+      network: [...prev.network.slice(1), safeNet],
+      disk: [...prev.disk.slice(1), safeDisk],
+    }));
+  }, [stats, running]);
 
   const charts: {
     key: string;
@@ -859,55 +898,63 @@ function DeploymentPerformanceSparklines({
     },
   ];
 
-  return (
+return (
     <div className="mb-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
       <h2 className="flex items-center gap-2 text-sm font-semibold">
         <Activity className="size-4 text-brand" /> Performance
       </h2>
-      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {charts.map((c) => {
-          const current = c.data[c.data.length - 1] ?? 0;
-          const prev = c.data[c.data.length - 2] ?? current;
-          const trendUp = current >= prev;
-          const min = Math.min(...c.data);
-          const max = Math.max(...c.data);
-          const displayVal = c.decimals ? current.toFixed(c.decimals) : Math.round(current);
-          const displayMin = c.decimals ? min.toFixed(c.decimals) : Math.round(min);
-          const displayMax = c.decimals ? max.toFixed(c.decimals) : Math.round(max);
-          return (
-            <div
-              key={c.key}
-              className="flex flex-col rounded-xl border border-border bg-muted/30 p-3"
-            >
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                  {c.icon} {c.label}
-                </span>
-                <span className={`flex items-center gap-0.5 text-[10px] tabular-nums ${trendUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
-                  {trendUp ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-                  {Math.abs(Math.round(current - prev))}
-                </span>
+      {running && !stats && (
+        <div className="mt-4 text-center text-muted-foreground py-8">
+          <p className="font-medium">Metrics unavailable</p>
+          <p className="text-sm mt-1">Metrics server not installed or pod not yet reporting.</p>
+        </div>
+      )}
+      {stats && (
+        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {charts.map((c) => {
+            const current = c.data[c.data.length - 1] ?? 0;
+            const prev = c.data[c.data.length - 2] ?? current;
+            const trendUp = current >= prev;
+            const min = Math.min(...c.data);
+            const max = Math.max(...c.data);
+            const displayVal = c.decimals ? current.toFixed(c.decimals) : Math.round(current);
+            const displayMin = c.decimals ? min.toFixed(c.decimals) : Math.round(min);
+            const displayMax = c.decimals ? max.toFixed(c.decimals) : Math.round(max);
+            return (
+              <div
+                key={c.key}
+                className="flex flex-col rounded-xl border border-border bg-muted/30 p-3"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    {c.icon} {c.label}
+                  </span>
+                  <span className={`flex items-center gap-0.5 text-[10px] tabular-nums ${trendUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
+                    {trendUp ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+                    {Math.abs(Math.round(current - prev))}
+                  </span>
+                </div>
+                <p className="mt-1 text-xl font-bold tabular-nums">
+                  {displayVal}<span className="text-sm font-normal text-muted-foreground">{c.unit}</span>
+                </p>
+                <Sparkline
+                  data={c.data}
+                  color={color}
+                  width={140}
+                  height={32}
+                  strokeWidth={1.8}
+                  showArea
+                  id={`dep-${c.key}`}
+                  className="mt-2 w-full"
+                />
+                <p className="mt-1.5 text-[10px] tabular-nums text-muted-foreground">
+                  Min {displayMin}{c.unit} · Max {displayMax}{c.unit}
+                </p>
               </div>
-              <p className="mt-1 text-xl font-bold tabular-nums">
-                {displayVal}<span className="text-sm font-normal text-muted-foreground">{c.unit}</span>
-              </p>
-              <Sparkline
-                data={c.data}
-                color={color}
-                width={140}
-                height={32}
-                strokeWidth={1.8}
-                showArea
-                id={`dep-${c.key}`}
-                className="mt-2 w-full"
-              />
-              <p className="mt-1.5 text-[10px] tabular-nums text-muted-foreground">
-                Min {displayMin}{c.unit} · Max {displayMax}{c.unit}
-              </p>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

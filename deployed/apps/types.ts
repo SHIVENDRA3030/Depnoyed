@@ -12,4 +12,19 @@ export interface AppDefinition {
   website?: string | null;
   readme?: string | null;
   defaultEnv?: string | null;
+
+  // Kubernetes manifest overrides (optional)
+  resources?: {
+    requests?: { cpu?: string; memory?: string };
+    limits?: { cpu?: string; memory?: string };
+  };
+  storage?: Array<{
+    name: string;
+    mountPath: string;
+    size: string;
+  }>;
+  health?: {
+    http?: { path: string; port?: number };
+    tcp?: { port: number };
+  };
 }

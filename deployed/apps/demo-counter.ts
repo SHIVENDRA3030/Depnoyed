@@ -5,7 +5,7 @@ const definition: AppDefinition = {
   slug: "demo-counter",
   description:
     "A tiny demo app that persists a counter in its dedicated volume. Perfect for proving that data survives container restarts.",
-  dockerImage: "ossmp/demo-counter:1.0",
+  dockerImage: "traefik/whoami:latest",
   containerPort: 80,
   logo: "counter",
   category: "Demo",

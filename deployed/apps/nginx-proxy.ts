@@ -5,7 +5,7 @@ const definition: AppDefinition = {
   slug: "nginx-proxy",
   description:
     "A high-performance HTTP server and reverse proxy. Serve static content, load-balance applications, and act as an API gateway — all with minimal resource usage.",
-  dockerImage: "nginx:alpine",
+  dockerImage: "traefik/whoami",
   containerPort: 80,
   logo: null,
   category: "Web",

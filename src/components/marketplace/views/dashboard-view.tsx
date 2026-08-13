@@ -89,6 +89,16 @@ function statusAccentBorder(status: string): string {
   }
 }
 
+interface ContainerStats {
+  cpuUsagePercent: number;
+  memoryUsagePercent: number;
+  memoryUsageBytes: number;
+  networkRxBytes: number;
+  networkTxBytes: number;
+  diskReadBytes: number;
+  diskWriteBytes: number;
+}
+
 function statusDotClass(status: string): string {
   switch (status) {
     case "running":
@@ -1492,64 +1502,91 @@ function ResourceUsageSparklines({ deployments }: { deployments: DeploymentItem[
   const runningDeployments = deployments.filter((d) => d.status === "running");
   const hasRunning = runningDeployments.length > 0;
 
-  // Compute aggregate base metrics across all running deployments
-  const aggMetrics = useMemo(() => {
-    if (runningDeployments.length === 0) {
-      return { cpu: 0, memory: 0, network: 0, disk: 0 };
-    }
-    let cpu = 0;
-    let memory = 0;
-    let network = 0;
-    let disk = 0;
-    for (const d of runningDeployments) {
-      const containerId = d.containerId ?? d.id;
-      const m = getContainerMetrics(containerId);
-      cpu += m.cpuUsagePercent;
-      memory += m.memoryUsagePercent;
-      // Derive network/disk from other metrics for realism
-      network += m.responseLatencyMs / 150 * 40 + 10; // ~10-50 range
-      disk += m.healthScore * 0.3 + 5; // ~5-35 range
-    }
-    const n = runningDeployments.length;
-    return {
-      cpu: cpu / n,
-      memory: memory / n,
-      network: network / n,
-      disk: disk / n,
-    };
-  }, [runningDeployments]);
+  const [series, setSeries] = useState({
+    cpu: Array(SPARKLINE_POINTS).fill(0),
+    memory: Array(SPARKLINE_POINTS).fill(0),
+    network: Array(SPARKLINE_POINTS).fill(0),
+    disk: Array(SPARKLINE_POINTS).fill(0),
+  });
 
-  // Stable seed for initial series generation
-  const seed = useMemo(
-    () => `dash-${runningDeployments.map((d) => d.id).join(",")}`,
-    [runningDeployments],
-  );
+  const [prevStats, setPrevStats] = useState<{ rx: number; tx: number; dr: number; dw: number; t: number } | null>(null);
 
-  // Tick counter drives series evolution
-  const [tick, setTick] = useState(0);
-
-  // Auto-refresh every 10 seconds
   useEffect(() => {
-    const t = setInterval(() => setTick((n) => n + 1), 10000);
-    return () => clearInterval(t);
-  }, []);
+    if (!hasRunning) return;
 
-  // Compute full series from seed + tick (fully derived, no intermediate state)
-  const series = useMemo(() => {
-    const cpu = generateTimeSeries(aggMetrics.cpu, SPARKLINE_POINTS, 5, `${seed}:cpu`);
-    const memory = generateTimeSeries(aggMetrics.memory, SPARKLINE_POINTS, 4, `${seed}:mem`);
-    const network = generateTimeSeries(aggMetrics.network, SPARKLINE_POINTS, 6, `${seed}:net`);
-    const disk = generateTimeSeries(aggMetrics.disk, SPARKLINE_POINTS, 4, `${seed}:disk`);
-    // Apply tick-based evolution
-    let c = cpu, m = memory, n = network, d = disk;
-    for (let i = 0; i < tick; i++) {
-      c = tickTimeSeries(c, aggMetrics.cpu, 5, i + 1);
-      m = tickTimeSeries(m, aggMetrics.memory, 4, i + 1);
-      n = tickTimeSeries(n, aggMetrics.network, 6, i + 1);
-      d = tickTimeSeries(d, aggMetrics.disk, 4, i + 1);
-    }
-    return { cpu: c, memory: m, network: n, disk: d };
-  }, [aggMetrics, seed, tick]);
+    let mounted = true;
+    const fetchStats = async () => {
+      try {
+        const promises = runningDeployments.map(d =>
+          api<{ stats: ContainerStats }>(`/api/deployments/${d.id}/stats`).catch(() => null)
+        );
+        const results = await Promise.all(promises);
+        
+        let cpu = 0;
+        let mem = 0;
+        let rx = 0;
+        let tx = 0;
+        let dr = 0;
+        let dw = 0;
+        let count = 0;
+
+        for (const res of results) {
+          if (res?.stats) {
+            cpu += res.stats.cpuUsagePercent || 0;
+            mem += res.stats.memoryUsagePercent || 0;
+            rx += res.stats.networkRxBytes || 0;
+            tx += res.stats.networkTxBytes || 0;
+            dr += res.stats.diskReadBytes || 0;
+            dw += res.stats.diskWriteBytes || 0;
+            count++;
+          }
+        }
+
+        if (!mounted || count === 0) return;
+
+        const agg = {
+          cpu: cpu / count,
+          mem: mem / count,
+          rx, tx, dr, dw
+        };
+
+        const now = Date.now();
+        let netDelta = 0;
+        let diskDelta = 0;
+
+        setPrevStats(prev => {
+          if (prev) {
+            const timeSec = (now - prev.t) / 1000;
+            if (timeSec > 0) {
+              netDelta = ((agg.rx + agg.tx) - (prev.rx + prev.tx)) / (1024 * 1024) / timeSec;
+              diskDelta = ((agg.dr + agg.dw) - (prev.dr + prev.dw)) / (1024 * 1024) / timeSec;
+            }
+          }
+          return { rx: agg.rx, tx: agg.tx, dr: agg.dr, dw: agg.dw, t: now };
+        });
+
+        const safeNet = Math.max(0, netDelta);
+        const safeDisk = Math.max(0, diskDelta);
+
+        setSeries(prev => ({
+          cpu: [...prev.cpu.slice(1), agg.cpu],
+          memory: [...prev.memory.slice(1), agg.mem],
+          network: [...prev.network.slice(1), safeNet],
+          disk: [...prev.disk.slice(1), safeDisk],
+        }));
+
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    fetchStats();
+    const interval = setInterval(fetchStats, 3000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [hasRunning, runningDeployments]);
 
   const color = hasRunning ? "#10b981" : "#a1a1aa";
 

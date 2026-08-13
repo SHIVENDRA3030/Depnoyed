@@ -1,0 +1,34 @@
+apiVersion: depnoyed/v1
+name: mattermost-chat
+display:
+  name: "Mattermost Chat"
+  category: "Communication"
+  description: "Open source Slack alternative. Secure, extensible messaging for teams."
+runtime:
+  type: "container"
+  image: "mattermost/mattermost-team-edition:latest"
+  port: 8065
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "2000m"
+    memory: "4Gi"
+storage:
+  - name: "data"
+    mountPath: "/mattermost/data"
+    size: "10Gi"
+  - name: "logs"
+    mountPath: "/mattermost/logs"
+    size: "2Gi"
+  - name: "plugins"
+    mountPath: "/mattermost/plugins"
+    size: "1Gi"
+  - name: "client-plugins"
+    mountPath: "/mattermost/client/plugins"
+    size: "1Gi"
+health:
+  http:
+    path: "/api/v4/system/ping"
+    port: 8065

@@ -1,0 +1,31 @@
+apiVersion: depnoyed/v1
+name: nextcloud
+display:
+  name: "Nextcloud"
+  category: "Productivity"
+  description: "A safe home for all your data. Private cloud storage and collaboration platform."
+runtime:
+  type: "container"
+  image: "nextcloud:latest"
+  port: 80
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "2000m"
+    memory: "4Gi"
+storage:
+  - name: "data"
+    mountPath: "/var/www/html/data"
+    size: "20Gi"
+  - name: "config"
+    mountPath: "/var/www/html/config"
+    size: "1Gi"
+  - name: "apps"
+    mountPath: "/var/www/html/custom_apps"
+    size: "2Gi"
+health:
+  http:
+    path: "/"
+    port: 80

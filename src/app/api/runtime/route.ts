@@ -11,6 +11,8 @@ export const GET = withErrors(async () => {
   const kind = getDockerAdapterKind();
   const adapter = getDockerAdapter();
   let dockerReachable = false;
+  // dockerReachable is only meaningful when the real Docker engine is in use
+  // (kind === "docker"). kubernetes and mock adapters always report false.
   if (kind === "docker") {
     try {
       // The adapter exposes ping() only on DockerEngineAdapter. We probe via

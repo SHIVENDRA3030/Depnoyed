@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - master
+  pull_request:
 
 env:
   REGISTRY: ghcr.io
@@ -12,7 +13,26 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  secret-scan:
+    name: Scan for secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for secrets with gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_COMMENTS: true
+          GITLEAKS_ENABLE_SUMMARY: true
+        with:
+          args: detect --source . --verbose
+
   build-and-push:
+    needs: secret-scan
     runs-on: ubuntu-latest
     permissions:
       contents: read

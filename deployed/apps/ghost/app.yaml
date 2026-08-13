@@ -1,0 +1,25 @@
+apiVersion: depnoyed/v1
+name: ghost
+display:
+  name: "Ghost"
+  category: "Publishing"
+  description: "The professional publishing platform. Modern, open-source, and extensible."
+runtime:
+  type: "container"
+  image: "ghost:latest"
+  port: 2368
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "1000m"
+    memory: "2Gi"
+storage:
+  - name: "data"
+    mountPath: "/var/lib/ghost/content"
+    size: "10Gi"
+health:
+  http:
+    path: "/"
+    port: 2368

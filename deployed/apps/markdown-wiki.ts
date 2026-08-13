@@ -5,8 +5,8 @@ const definition: AppDefinition = {
   slug: "markdown-wiki",
   description:
     "A lightweight wiki engine that renders Markdown content with live preview. All pages are persisted to your dedicated volume, surviving restarts.",
-  dockerImage: "ossmp/markdown-wiki:1.0",
-  containerPort: 8080,
+  dockerImage: "nginx:alpine",
+  containerPort: 80,
   logo: "wiki",
   category: "Productivity",
   simulator: "wiki",

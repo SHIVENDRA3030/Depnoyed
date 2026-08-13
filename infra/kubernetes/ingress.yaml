@@ -9,11 +9,11 @@ metadata:
 spec:
   tls:
     - hosts:
-        - dashboard.enysis.in
-        - enysis.in
+        - dashboard.${DEPLOY_BASE_DOMAIN}
+        - ${DEPLOY_BASE_DOMAIN}
       secretName: depnoyed-tls
   rules:
-    - host: dashboard.enysis.in
+    - host: dashboard.${DEPLOY_BASE_DOMAIN}
       http:
         paths:
           - path: /
@@ -23,17 +23,7 @@ spec:
                 name: depnoyed
                 port:
                   number: 80
-    - host: enysis.in
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: depnoyed
-                port:
-                  number: 80
-    - host: a677bbd98b7ea4043965e35d908e8e24-6733cd14fa194965.elb.us-east-1.amazonaws.com
+    - host: ${DEPLOY_BASE_DOMAIN}
       http:
         paths:
           - path: /

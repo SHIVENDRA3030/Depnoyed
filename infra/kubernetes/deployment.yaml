@@ -40,7 +40,10 @@ spec:
                   name: depnoyed-secrets
                   key: AUTH_SECRET
             - name: DEPLOY_BASE_DOMAIN
-              value: "enysis.in"
+              valueFrom:
+                secretKeyRef:
+                  name: depnoyed-secrets
+                  key: DEPLOY_BASE_DOMAIN
           resources:
             requests:
               cpu: 250m
@@ -55,7 +58,8 @@ metadata:
   name: depnoyed-secrets
   namespace: depnoyed-system
 type: Opaque
-stringData:
-  # MUST BE REPLACED BEFORE APPLYING
-  MONGODB_URI: "mongodb+srv://..."
-  AUTH_SECRET: "generate-me-with-openssl-rand-hex-32"
+# Created by CI/CD workflow with actual values from GitHub Secrets
+# stringData:
+#   MONGODB_URI: "mongodb+srv://..."
+#   AUTH_SECRET: "generate-me-with-openssl-rand-hex-32"
+#   DEPLOY_BASE_DOMAIN: "your-domain.com"

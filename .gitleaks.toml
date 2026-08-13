@@ -1,0 +1,38 @@
+title = "Depnoyed Gitleaks Configuration"
+
+# Allowlist for known placeholder/documentation patterns that match
+# secret-shaped regexes but are NOT secrets.
+[allowlist]
+description = "Global allowlist - placeholders, examples, and non-secrets"
+paths = [
+  '''\.env\.example$''',
+  '''docs/''',
+  '''RUN\.md$''',
+  '''README''',
+  '''tests/fixtures/''',
+  '''\.jpeg$''',
+  '''\.jpg$''',
+  '''\.png$''',
+  '''\.webp$''',
+  '''\.gif$''',
+  '''node_modules/''',
+  '''\.next/''',
+  '''infra/kubernetes/deployment\.yaml$''',
+]
+regexTarget = "match"
+
+# These regexes match placeholder/template values that are intentionally
+# committed (documentation or Kubernetes manifest placeholders).
+# Since they are not real credentials, allowlisting them is safe.
+# NOTE: gitleaks already includes AWS, Azure, Google, Slack, etc. rules.
+[[rules]]
+id = "generic-placeholder-mongodb"
+description = "MongoDB URI with obvious placeholder (not a real secret)"
+regex = '''mongodb(\+srv)?://[^\s"']*(<password>|\.\.\.|yourpassword)@?[^\s"']*'''
+tags = ["placeholder", "mongodb"]
+
+[[rules]]
+id = "github-pat-placeholder"
+description = "GitHub PAT placeholder in docs/examples (yourtokenhere etc)"
+regex = '''ghp_[A-Za-z0-9]{0,5}(yourtokenhere|example|placeholder|\.\.\.)[A-Za-z0-9_]*'''
+tags = ["placeholder", "github"]
