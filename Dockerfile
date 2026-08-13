@@ -12,6 +12,14 @@ RUN bunx prisma generate
 # Copy source code
 COPY . .
 
+# Build-time env vars (next-auth needs NEXTAUTH_URL/SECRET even at build time)
+ARG NEXTAUTH_URL=http://localhost:3000
+ARG NEXTAUTH_SECRET=build-time-placeholder
+ARG NODE_ENV=production
+ENV NEXTAUTH_URL=$NEXTAUTH_URL
+ENV NEXTAUTH_SECRET=$NEXTAUTH_SECRET
+ENV NODE_ENV=$NODE_ENV
+
 # Build Next.js
 # Note: Next.js standalone output is configured in next.config.ts / package.json
 RUN bun run build

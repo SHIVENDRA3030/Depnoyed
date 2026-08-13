@@ -9,7 +9,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # github.repository is the owner/repo string e.g. shivendra3030/depnoyed
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
@@ -25,11 +24,10 @@ jobs:
       - name: Scan for secrets with gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml
-          GITLEAKS_ENABLE_COMMENTS: true
-          GITLEAKS_ENABLE_SUMMARY: true
-        with:
-          args: detect --source . --verbose
+          GITLEAKS_ENABLE_COMMENTS: "true"
+          GITLEAKS_ENABLE_SUMMARY: "true"
 
   build-and-push:
     needs: secret-scan
@@ -41,6 +39,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -55,13 +56,19 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=sha
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NEXTAUTH_URL=http://localhost:3000
+            NEXTAUTH_SECRET=build-time-placeholder
+            NODE_ENV=production
