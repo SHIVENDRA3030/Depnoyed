@@ -138,54 +138,70 @@ class NodeHttpsHttpLibrary {
 // We do not initialize these at the top level to avoid build-time errors
 // and to ensure they pick up runtime environment variables inside the pod.
 function ensureInitialized() {
-  if (k8sState.kc) return;
+  // Fully-initialized fast path. Checking every field (not just kc) lets a
+  // failed init attempt self-heal on the next call instead of leaving
+  // kc set with undefined API clients, which surfaces downstream as
+  // "undefined is not an object (evaluating 'l.deleteNamespacedDeployment')".
+  if (k8sState.kc && k8sState.appsApi && k8sState.coreApi && k8sState.networkingApi && k8sState.customApi) {
+    return;
+  }
 
   try {
-    const _kc = new k8s.KubeConfig();
-    _kc.loadFromDefault();
-    
-    // Docker Desktop: explicitly use docker-desktop context for client cert auth if available
-    try {
-      _kc.setCurrentContext("docker-desktop");
-    } catch (e) {
-      // Ignore if context doesn't exist (e.g. in production cluster)
-    }
+    // Reuse a KubeConfig from a partially-successful previous attempt.
+    const _kc = k8sState.kc ?? new k8s.KubeConfig();
+    if (!k8sState.kc) {
+      _kc.loadFromDefault();
 
-    // Skip TLS verify for all clusters (Docker Desktop uses self-signed certs)
-    for (const cluster of _kc.clusters) {
-      (cluster as any).skipTLSVerify = true;
-      (cluster as any).ca = undefined;
-    }
-
-    // Ensure client certificate is used for mTLS with Docker Desktop
-    const currentUser = _kc.getCurrentUser();
-    if (currentUser && (currentUser as any).certData && (currentUser as any).keyData) {
-      (currentUser as any).cert = Buffer.from((currentUser as any).certData, "base64").toString("utf8");
-      (currentUser as any).key = Buffer.from((currentUser as any).keyData, "base64").toString("utf8");
-    }
-
-    const nodeHttpLib = new NodeHttpsHttpLibrary();
-
-    // Override the default fetch-based HTTP library with our Node.js https-based one
-    const originalMakeApiClient = _kc.makeApiClient.bind(_kc);
-    // @ts-ignore - override with custom HTTP library for mTLS support
-    (_kc as any).makeApiClient = function <T>(ctor: new (...args: any[]) => T): T {
-      // @ts-ignore - generic type mismatch in override
-      const client = originalMakeApiClient(ctor);
-      // @ts-ignore - accessing internal api property
-      if (client?.api?.configuration) {
-        // @ts-ignore - setting custom httpApi
-        (client.api.configuration as any).httpApi = nodeHttpLib;
+      // Docker Desktop: explicitly use docker-desktop context for client cert auth if available
+      try {
+        _kc.setCurrentContext("docker-desktop");
+      } catch (e) {
+        // Ignore if context doesn't exist (e.g. in production cluster)
       }
-      // @ts-ignore - generic type mismatch in return
-      return client;
-    };
 
-    k8sState.kc = _kc;
-    k8sState.appsApi = _kc.makeApiClient(k8s.AppsV1Api);
-    k8sState.coreApi = _kc.makeApiClient(k8s.CoreV1Api);
-    k8sState.networkingApi = _kc.makeApiClient(k8s.NetworkingV1Api);
-    k8sState.customApi = _kc.makeApiClient(k8s.CustomObjectsApi);
+      // Skip TLS verify for all clusters (Docker Desktop uses self-signed certs)
+      for (const cluster of _kc.clusters) {
+        (cluster as any).skipTLSVerify = true;
+        (cluster as any).ca = undefined;
+      }
+
+      // Ensure client certificate is used for mTLS with Docker Desktop
+      const currentUser = _kc.getCurrentUser();
+      if (currentUser && (currentUser as any).certData && (currentUser as any).keyData) {
+        (currentUser as any).cert = Buffer.from((currentUser as any).certData, "base64").toString("utf8");
+        (currentUser as any).key = Buffer.from((currentUser as any).keyData, "base64").toString("utf8");
+      }
+
+      const nodeHttpLib = new NodeHttpsHttpLibrary();
+
+      // Override the default fetch-based HTTP library with our Node.js https-based one
+      const originalMakeApiClient = _kc.makeApiClient.bind(_kc);
+      // @ts-ignore - override with custom HTTP library for mTLS support
+      (_kc as any).makeApiClient = function <T>(ctor: new (...args: any[]) => T): T {
+        // @ts-ignore - generic type mismatch in override
+        const client = originalMakeApiClient(ctor);
+        // @ts-ignore - accessing internal api property
+        if (client?.api?.configuration) {
+          // @ts-ignore - setting custom httpApi
+          (client.api.configuration as any).httpApi = nodeHttpLib;
+        }
+        // @ts-ignore - generic type mismatch in return
+        return client;
+      };
+
+      k8sState.kc = _kc;
+    }
+
+    // Build every client into a local first, then publish them together so
+    // callers can never observe a half-initialized k8sState.
+    const appsApi = _kc.makeApiClient(k8s.AppsV1Api);
+    const coreApi = _kc.makeApiClient(k8s.CoreV1Api);
+    const networkingApi = _kc.makeApiClient(k8s.NetworkingV1Api);
+    const customApi = _kc.makeApiClient(k8s.CustomObjectsApi);
+    k8sState.appsApi = appsApi;
+    k8sState.coreApi = coreApi;
+    k8sState.networkingApi = networkingApi;
+    k8sState.customApi = customApi;
   } catch (err) {
     logger.error({ msg: "Failed to initialize Kubernetes client", err: String(err) });
     throw new Error(`Kubernetes client initialization failed: ${err}`);
