@@ -34,6 +34,9 @@ export function mergeManifestIntoDefinition(
   if (manifest.runtime) {
     if (manifest.runtime.image) merged.dockerImage = manifest.runtime.image;
     if (manifest.runtime.port) merged.containerPort = manifest.runtime.port;
+    if (typeof manifest.runtime.user === "string" && manifest.runtime.user.trim()) {
+      merged.dockerUser = manifest.runtime.user.trim();
+    }
   }
 
   // Override resources
@@ -67,6 +70,7 @@ export interface AppManifest {
     type?: string;
     image?: string;
     port?: number;
+    user?: string;
   };
   resources?: {
     requests?: { cpu?: string; memory?: string };

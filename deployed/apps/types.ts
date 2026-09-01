@@ -12,6 +12,8 @@ export interface AppDefinition {
   website?: string | null;
   readme?: string | null;
   defaultEnv?: string | null;
+  /** Docker user override (e.g. "0" for root) for images that need write access to fresh volumes. */
+  dockerUser?: string | null;
 
   // Kubernetes manifest overrides (optional)
   resources?: {

@@ -8,13 +8,14 @@ runtime:
   type: "container"
   image: "grafana/grafana:latest"
   port: 3000
+  user: "0"
 resources:
   requests:
     cpu: "100m"
     memory: "128Mi"
   limits:
-    cpu: "500m"
-    memory: "512Mi"
+    cpu: "1000m"
+    memory: "1Gi"
 storage:
   - name: "data"
     mountPath: "/var/lib/grafana"

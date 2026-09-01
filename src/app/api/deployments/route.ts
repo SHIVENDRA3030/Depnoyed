@@ -50,7 +50,12 @@ export const GET = withErrors(async () => {
       const base = serializeDeployment(d);
       let volumeDataSize: number | undefined;
       try {
-        const volInfo = await adapter.inspectVolume(d.volumeName, d.userId);
+        const volInfo = await Promise.race([
+          adapter.inspectVolume(d.volumeName, d.userId),
+          new Promise<null>((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout inspecting volume")), 1000)
+          ),
+        ]);
         if (volInfo) volumeDataSize = volInfo.dataSize;
       } catch {
         /* ignore volume inspect failure */

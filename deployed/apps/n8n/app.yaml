@@ -8,6 +8,7 @@ runtime:
   type: "container"
   image: "n8nio/n8n:latest"
   port: 5678
+  user: "0"
 resources:
   requests:
     cpu: "250m"

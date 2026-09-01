@@ -83,7 +83,13 @@ export function DeployModal({ app, open, onOpenChange, onDeployed }: DeployModal
       onDeployed?.(deployment);
       navigate({ name: "deployment", id: deployment.id });
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "Deployment failed");
+      if (e instanceof ApiError && e.status === 401) {
+        toast.error("Your session expired. Please sign in to deploy.");
+        onOpenChange(false);
+        navigate({ name: "login" });
+      } else {
+        toast.error(e instanceof ApiError ? e.message : "Deployment failed");
+      }
     } finally {
       setDeploying(false);
     }

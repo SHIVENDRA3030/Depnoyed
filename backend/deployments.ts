@@ -125,10 +125,15 @@ export async function createDeployment(input: DeployInput): Promise<DeployResult
       
     env["APP_PUBLIC_URL"] = appUrlToInject;
 
-    // Substitute {{APP_URL}} placeholders
+    // Hostname-only variant for apps that need it (e.g. n8n's N8N_HOST).
+    const appHostToInject = appUrlToInject.replace(/^https?:\/\//, "");
+
+    // Substitute {{APP_URL}} and {{APP_HOST}} placeholders
     for (const key of Object.keys(env)) {
       if (typeof env[key] === "string") {
-        env[key] = env[key].replace(/\{\{APP_URL\}\}/g, appUrlToInject);
+        env[key] = env[key]
+          .replace(/\{\{APP_URL\}\}/g, appUrlToInject)
+          .replace(/\{\{APP_HOST\}\}/g, appHostToInject);
       }
     }
 
@@ -151,6 +156,9 @@ export async function createDeployment(input: DeployInput): Promise<DeployResult
       env,
       simulator: mergedApp.simulator,
       tenantId: input.userId,
+      // Optional container-user override (e.g. root for images that need to
+      // initialise a fresh volume, like n8n's node user).
+      dockerUser: mergedApp.dockerUser ?? null,
       // Pass manifest-derived storage and health config
       storage: mergedApp.storage,
       health: mergedApp.health,
@@ -208,13 +216,20 @@ export async function createDeployment(input: DeployInput): Promise<DeployResult
 export async function syncDeploymentStatus(deploymentId: string, userId: string) {
   const deployment = await getOwnedDeployment(deploymentId, userId);
   const adapter = getDockerAdapter();
-  const info = await adapter.inspectContainer(deployment.containerName, deployment.userId);
-  if (info) {
-    const status = mapStatus(info.status);
-    if (status !== deployment.status) {
-      await db.deployment.update({ where: { id: deployment.id }, data: { status } });
-      return { ...deployment, status };
+  try {
+    const info = await Promise.race([
+      adapter.inspectContainer(deployment.containerName, deployment.userId),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 1500))
+    ]);
+    if (info) {
+      const status = mapStatus(info.status);
+      if (status !== deployment.status) {
+        await db.deployment.update({ where: { id: deployment.id }, data: { status } });
+        return { ...deployment, status };
+      }
     }
+  } catch (err) {
+    /* ignore timeout or connection errors, just return current db state */
   }
   return deployment;
 }
@@ -280,8 +295,18 @@ export async function deleteDeployment(deploymentId: string, userId: string) {
   const deployment = await getOwnedDeployment(deploymentId, userId);
   const adapter = getDockerAdapter();
   // Remove the container first, then the volume, then the DB record.
-  await adapter.removeContainer(deployment.containerName, deployment.userId);
-  await adapter.removeVolume(deployment.volumeName, deployment.userId);
+  // We swallow runtime errors so that an unreachable Docker daemon doesn't
+  // prevent the user from deleting the deployment from the database.
+  try {
+    await adapter.removeContainer(deployment.containerName, deployment.userId);
+  } catch (err) {
+    console.error("[deployments] Failed to remove container during delete:", err);
+  }
+  try {
+    await adapter.removeVolume(deployment.volumeName, deployment.userId);
+  } catch (err) {
+    console.error("[deployments] Failed to remove volume during delete:", err);
+  }
   await db.deployment.delete({ where: { id: deployment.id } });
 }
 

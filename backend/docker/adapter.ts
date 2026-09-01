@@ -37,6 +37,8 @@ export interface CreateContainerOptions {
   simulator: string;
   /** Tenant ID for namespace isolation (used by Kubernetes). */
   tenantId: string;
+  /** Optional container user override, e.g. "0" to run as root. */
+  dockerUser?: string | null;
   /** Optional storage volumes from app manifest. */
   storage?: Array<{ name: string; mountPath: string; size: string }>;
   /** Optional health check config from app manifest. */
@@ -290,7 +292,7 @@ export class MockDockerAdapter implements DockerAdapter {
       logs: [],
     };
     pushLog(c, "stdout", `Creating container from image ${opts.image}`);
-    pushLog(c, "stdout", `Mounting volume ${opts.volumeName} at /data`);
+    pushLog(c, "stdout", `Mounting volume ${opts.volumeName} at ${opts.storage?.[0]?.mountPath ?? "/data"}`);
     pushLog(c, "stdout", `Resource limits: cpu=${opts.cpuLimit} memory=${opts.memoryLimitMb}MB`);
     getStore().state.containers[opts.containerName] = c;
     await saveState();
@@ -554,6 +556,7 @@ export class DockerEngineAdapter implements DockerAdapter {
       Image: opts.image,
       Env: envArray,
       ExposedPorts: exposedPorts,
+      ...(opts.dockerUser ? { User: opts.dockerUser } : {}),
       Labels: {
         "ossmp.managed": "true",
         "ossmp.simulator": opts.simulator,
@@ -561,8 +564,9 @@ export class DockerEngineAdapter implements DockerAdapter {
       },
       HostConfig: {
         PortBindings: portBindings,
-        // Bind the named volume to /data so apps that persist to /data work.
-        Binds: [`${opts.volumeName}:/data`],
+        // Bind the named volume to the app's configured mountPath (from manifest),
+        // defaulting to /data for backwards compatibility.
+        Binds: [`${opts.volumeName}:${opts.storage?.[0]?.mountPath ?? "/data"}`],
         // CPU limit: NanoCpus = cpus * 1e9 (dockerode uses this, not CFS quota).
         NanoCpus: Math.round(opts.cpuLimit * 1e9),
         // Memory limit in bytes. MemorySwap=memory disables swap.
@@ -570,10 +574,11 @@ export class DockerEngineAdapter implements DockerAdapter {
         MemorySwap: opts.memoryLimitMb * 1024 * 1024,
         // Restart policy: try once, don't infinite-loop a crashing app.
         RestartPolicy: { Name: "on-failure", MaximumRetryCount: 3 },
-        // Security hardening. Read-only rootfs is opt-in because most real
-        // images need to write to /var/lib, /var/run, etc.
+        // Security: drop all caps then selectively re-add the ones many
+        // official images (mongodb, mysql, postgres, etc.) need at startup
+        // for chown / user-switch in their entrypoint scripts.
         CapDrop: ["ALL"],
-        SecurityOpt: ["no-new-privileges"],
+        CapAdd: ["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETUID", "SETGID", "KILL"],
         ReadonlyRootfs: config.docker.readonlyRootfs,
         Tmpfs: { "/tmp": "", "/run": "" },
       },
