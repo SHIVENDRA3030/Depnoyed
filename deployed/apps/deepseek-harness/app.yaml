@@ -1,0 +1,24 @@
+apiVersion: depnoyed/v1
+name: deepseek-harness
+display:
+  name: "DeepSeek Harness"
+  category: "AI"
+  description: "Open-source agent harness from DeepSeek. Agent = Model + Harness."
+runtime:
+  type: "container"
+  image: "depnoyed/deepseek-harness:0.1.1-rc.2-fixed"
+  port: 3080
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "1000m"
+    memory: "2Gi"
+storage:
+  - name: "dsh-data"
+    mountPath: "/root/.dsh"
+    size: "2Gi"
+health:
+  tcp:
+    port: 3080

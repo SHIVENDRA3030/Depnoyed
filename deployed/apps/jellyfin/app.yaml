@@ -1,0 +1,25 @@
+apiVersion: depnoyed/v1
+name: jellyfin
+display:
+  name: "Jellyfin"
+  category: "Media"
+  description: "Free software media system — your own personal Netflix. Stream, organize and share your movies, shows and music."
+runtime:
+  type: "container"
+  image: "jellyfin/jellyfin:latest"
+  port: 8096
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "1000m"
+    memory: "2Gi"
+storage:
+  - name: "jellyfin-config"
+    mountPath: "/config"
+    size: "2Gi"
+health:
+  http:
+    path: "/health"
+    port: 8096

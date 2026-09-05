@@ -1,0 +1,25 @@
+apiVersion: depnoyed/v1
+name: vaultwarden
+display:
+  name: "Vaultwarden"
+  category: "Security"
+  description: "Unofficial Bitwarden-compatible password server written in Rust — lightweight self-hosting of your password vault."
+runtime:
+  type: "container"
+  image: "vaultwarden/server:latest"
+  port: 80
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "1000m"
+    memory: "2Gi"
+storage:
+  - name: "vaultwarden-data"
+    mountPath: "/data"
+    size: "1Gi"
+health:
+  http:
+    path: "/alive"
+    port: 80

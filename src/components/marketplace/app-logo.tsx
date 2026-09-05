@@ -1,6 +1,24 @@
 "use client";
 
-import { Boxes, Hash, StickyNote, Server, Rocket, Container, BookOpen, Workflow, Gauge, Database } from "lucide-react";
+import {
+  Boxes,
+  Hash,
+  StickyNote,
+  Server,
+  Rocket,
+  Container,
+  BookOpen,
+  Workflow,
+  Gauge,
+  Database,
+  Bot,
+  Activity,
+  GitBranch,
+  ShieldCheck,
+  Clapperboard,
+  Search,
+  type LucideIcon,
+} from "lucide-react";
 
 const PALETTE: Record<string, string> = {
   counter: "from-emerald-500 to-teal-600",
@@ -12,6 +30,26 @@ const PALETTE: Record<string, string> = {
   n8n: "from-pink-500 to-rose-600",
   grafana: "from-orange-500 to-red-600",
   supabase: "from-emerald-400 to-green-600",
+  deepseek: "from-indigo-500 to-blue-600",
+  "uptime-kuma": "from-teal-500 to-emerald-600",
+  vaultwarden: "from-blue-600 to-indigo-700",
+  jellyfin: "from-purple-500 to-violet-600",
+  meilisearch: "from-rose-500 to-pink-600",
+};
+
+const ICONS: Record<string, LucideIcon> = {
+  counter: Hash,
+  notes: StickyNote,
+  gitea: GitBranch,
+  wiki: BookOpen,
+  n8n: Workflow,
+  grafana: Gauge,
+  supabase: Database,
+  deepseek: Bot,
+  "uptime-kuma": Activity,
+  vaultwarden: ShieldCheck,
+  jellyfin: Clapperboard,
+  meilisearch: Search,
 };
 
 export function AppLogo({
@@ -29,31 +67,14 @@ export function AppLogo({
   const gradient = PALETTE[key] ?? "from-emerald-500 to-teal-600";
   const dims =
     size === "lg" ? "size-14" : size === "sm" ? "size-8" : "size-10";
-  const icon =
-    key === "counter" ? (
-      <Hash className={size === "lg" ? "size-7" : "size-5"} />
-    ) : key === "notes" || key === "gitea" ? (
-      <StickyNote className={size === "lg" ? "size-7" : "size-5"} />
-    ) : key === "wiki" ? (
-      <BookOpen className={size === "lg" ? "size-7" : "size-5"} />
-    ) : key === "n8n" ? (
-      <Workflow className={size === "lg" ? "size-7" : "size-5"} />
-    ) : key === "grafana" ? (
-      <Gauge className={size === "lg" ? "size-7" : "size-5"} />
-    ) : key === "supabase" ? (
-      <Database className={size === "lg" ? "size-7" : "size-5"} />
-    ) : key === "static" || key === "nginx" ? (
-      <Server className={size === "lg" ? "size-7" : "size-5"} />
-    ) : (
-      <Boxes className={size === "lg" ? "size-7" : "size-5"} />
-    );
+  const Icon = ICONS[key] ?? (key === "static" || key === "nginx" ? Server : Boxes);
 
   return (
     <div
       className={`flex ${dims} items-center justify-center rounded-xl bg-gradient-to-br ${gradient} text-white shadow-sm`}
       aria-hidden
     >
-      {icon}
+      <Icon className={size === "lg" ? "size-7" : "size-5"} />
     </div>
   );
 }

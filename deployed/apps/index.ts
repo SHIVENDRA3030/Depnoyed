@@ -16,10 +16,26 @@ import type { AppDefinition } from "./types";
 import n8n from "./n8n";
 import grafanaDashboard from "./grafana-dashboard";
 import supabase from "./supabase";
+import deepseekHarness from "./deepseek-harness";
+import uptimeKuma from "./uptime-kuma";
+import gitea from "./gitea";
+import vaultwarden from "./vaultwarden";
+import jellyfin from "./jellyfin";
+import meilisearch from "./meilisearch";
 
 export type { AppDefinition } from "./types";
 
-export const MARKETPLACE_APPS: readonly AppDefinition[] = [n8n, grafanaDashboard, supabase];
+export const MARKETPLACE_APPS: readonly AppDefinition[] = [
+  n8n,
+  grafanaDashboard,
+  supabase,
+  deepseekHarness,
+  uptimeKuma,
+  gitea,
+  vaultwarden,
+  jellyfin,
+  meilisearch,
+];
 
 /** Look up a definition by slug. */
 export function findAppDefinition(slug: string): AppDefinition | undefined {

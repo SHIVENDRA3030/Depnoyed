@@ -1,0 +1,25 @@
+apiVersion: depnoyed/v1
+name: gitea
+display:
+  name: "Gitea"
+  category: "Developer Tools"
+  description: "Painless self-hosted Git service — repositories, pull requests, issues and CI in one lightweight container."
+runtime:
+  type: "container"
+  image: "gitea/gitea:latest"
+  port: 3000
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "1000m"
+    memory: "2Gi"
+storage:
+  - name: "gitea-data"
+    mountPath: "/data"
+    size: "2Gi"
+health:
+  http:
+    path: "/"
+    port: 3000
