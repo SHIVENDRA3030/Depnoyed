@@ -32,12 +32,12 @@ bun run db:ensure-indexes
 # 4. Start the dev server (http://localhost:3000)
 bun run dev
 
-# 5. In another terminal, seed the catalog (10 apps)
+# 5. In another terminal, seed the catalog (9 apps)
 curl -X POST http://localhost:3000/api/seed
 ```
 
 After seeding, open <http://localhost:3000> — the marketplace should render
-with all 10 apps. Register a user, deploy the Demo Counter, and increment it
+with all 9 apps. Register a user, deploy the Demo Counter, and increment it
 to verify persistence.
 
 ## Scripts
@@ -232,7 +232,7 @@ flows below, or via `curl` against the API.
 
 1. **Auth** — register a user at `#/login`, sign in, refresh the page
    (session persists via the signed cookie), sign out.
-2. **Marketplace** — `#/marketplace` renders all 10 apps with category
+2. **Marketplace** — `#/marketplace` renders all 9 apps with category
    filters and search.
 3. **Deploy** — from a card or app detail, click Deploy. The deployment
    appears in `#/dashboard` with `running` status, a unique subdomain URL,

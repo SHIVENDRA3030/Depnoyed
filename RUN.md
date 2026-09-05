@@ -152,7 +152,7 @@ The marketplace starts empty. Populate it with the 10 built-in apps:
 
 ```bash
 curl -X POST http://localhost:3000/api/seed
-# Output: {"ok":true,"upserted":10,"total":10}
+# Output: {"ok":true,"upserted":9,"total":9}
 ```
 
 This is idempotent — re-running it updates existing apps in place.
@@ -161,7 +161,7 @@ This is idempotent — re-running it updates existing apps in place.
 
 1. Open **http://localhost:3000** in your browser.
 2. **Register** an account (any email + password, >= 8 chars).
-3. Browse the **Marketplace** — you'll see 10 apps.
+3. Browse the **Marketplace** — you'll see 9 apps.
 4. Click any app → click **Deploy**.
 5. Watch the deployment view:
    - **Logs** tab streams in real time
@@ -183,25 +183,27 @@ This is idempotent — re-running it updates existing apps in place.
   Subsequent deploys are instant.
 - A **green "Open real app" badge** appears next to the subdomain link on the
   deployment view. Click it → the real app opens at `http://localhost:<port>`.
-- The 7 real apps are fully functional (see table below).
+- All 9 real apps are fully functional (see table below).
 
 ---
 
-## Real Docker mode — the 7 working apps
+## Real Docker mode — the 9 working apps
 
 | App | Docker image | Default login | First deploy |
 |-----|--------------|---------------|--------------|
+| n8n | `n8nio/n8n:latest` | (owner-account wizard on first launch) | ~30s |
 | Grafana Dashboard | `grafana/grafana:latest` | `admin` / `depnoyed` | ~45s |
-| PostgreSQL | `postgres:16-alpine` | `postgres` / `depnoyed` | ~15s |
-| Redis Cache | `redis:7-alpine` | (no auth) | ~10s |
-| Nginx Proxy | `nginx:alpine` | (none) | ~10s |
-| Gitea Lite | `gitea/gitea:1.21` | (first-use setup) | ~30s |
-| Mattermost Chat | `mattermost/mattermost-preview:latest` | (first-use setup) | ~60s |
-| Prometheus | `prom/prometheus:latest` | (none) | ~30s |
+| Supabase Studio | `supabase/studio:latest` | (none — studio connects to a mock backend) | ~30s |
+| DeepSeek Harness | `depnoyed/deepseek-harness:0.1.1-rc.2-fixed` | Basic Auth: `admin` / `depnoyed` | ~45s |
+| Uptime Kuma | `louislam/uptime-kuma:1` | (admin-creation wizard on first launch) | ~30s |
+| Gitea | `gitea/gitea:latest` | (install wizard on first launch) | ~30s |
+| Vaultwarden | `vaultwarden/server:latest` | (create account; signups open by default) | ~15s |
+| Jellyfin | `jellyfin/jellyfin:latest` | (setup wizard on first launch) | ~45s |
+| Meilisearch | `getmeili/meilisearch:latest` | (no auth unless `MEILI_MASTER_KEY` is set) | ~15s |
 
-> The other 3 apps (Demo Counter, Markdown Wiki, Static Welcome) use fictional
-> `ossmp/*` images that don't exist on Docker Hub. They work in mock mode
-> only — deploying them in Docker mode will fail with an image-pull error.
+> All 9 catalog images exist on Docker Hub and were smoke-tested
+> (`docker run` + health check) before being added. Every app's readme in the
+> marketplace UI discloses its first-login behavior in detail.
 
 ### Connecting to databases from your host
 
@@ -240,7 +242,7 @@ docker volume ls
 | `bun run start` | Run the production build |
 | `bun run db:ensure-indexes` | Create MongoDB unique indexes (idempotent) |
 | `bun run db:ping` | Test MongoDB connection |
-| `curl -X POST http://localhost:3000/api/seed` | Seed the 10 marketplace apps |
+| `curl -X POST http://localhost:3000/api/seed` | Seed the 9 marketplace apps |
 | `curl http://localhost:3000/api/runtime` | Check which adapter (mock/docker) is active |
 
 ---

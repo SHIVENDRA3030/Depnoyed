@@ -33,8 +33,7 @@ production against a real Docker host.
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
 - [Technology Stack](#technology-stack)
-- [Local Setup](#local-setup)
-- [How to Run (full guide)](RUN.md)
+- [How to Run (Quick Start)](#how-to-run)
 - [Environment Variables](#environment-variables)
 - [Database Setup](#database-setup)
 - [Mock Deployment Runtime](#mock-deployment-runtime)
@@ -60,6 +59,31 @@ Depnoyed lets a user browse a catalog of open-source applications, click
 Each deployment belongs to exactly one authenticated user; cross-user access is
 refused with `403 FORBIDDEN`. Only applications listed in the catalog
 (`deployed/apps/`) can be deployed — users cannot supply arbitrary images.
+
+## Marketplace Catalog
+
+The catalog ships with **9 apps**, each defined by a TypeScript
+`AppDefinition` plus a `deployed/apps/<slug>/app.yaml` manifest (resources,
+storage mount path + size, and an HTTP health probe):
+
+| App | Category | Image | Port | Data volume | Health probe |
+| --- | -------- | ----- | ---- | ----------- | ------------ |
+| n8n | Productivity | `n8nio/n8n:latest` | 5678 | 5Gi @ `/home/node/.n8n` | `GET /healthz` |
+| Grafana Dashboard | Monitoring | `grafana/grafana:latest` | 3000 | 5Gi @ `/var/lib/grafana` | `GET /api/health` |
+| Supabase Studio | Database | `supabase/studio:latest` | 3000 | 1Gi @ `/data` | `GET /` |
+| DeepSeek Harness | AI | `depnoyed/deepseek-harness:0.1.1-rc.2-fixed` | 3080 | 2Gi @ `/root/.dsh` | TCP :3080 |
+| Uptime Kuma | Monitoring | `louislam/uptime-kuma:1` | 3001 | 1Gi @ `/app/data` | `GET /` |
+| Gitea | Developer Tools | `gitea/gitea:latest` | 3000 | 2Gi @ `/data` | `GET /` |
+| Vaultwarden | Security | `vaultwarden/server:latest` | 80 | 1Gi @ `/data` | `GET /alive` |
+| Jellyfin | Media | `jellyfin/jellyfin:latest` | 8096 | 2Gi @ `/config` | `GET /health` |
+| Meilisearch | Database | `getmeili/meilisearch:latest` | 7700 | 1Gi @ `/meili_data` | `GET /health` |
+
+Every app's readme discloses its first-login behavior — e.g. Uptime Kuma,
+Gitea and Jellyfin greet you with an account-creation/install wizard (no
+default credentials), Vaultwarden ships with `SIGNUPS_ALLOWED=true` (register
+your account, then redeploy with `SIGNUPS_ALLOWED=false` to lock it down),
+DeepSeek Harness uses HTTP Basic Auth (`admin` / `depnoyed`), and Meilisearch
+runs keyless by default until you set `MEILI_MASTER_KEY`.
 
 ## Problem it solves
 
@@ -189,7 +213,9 @@ Depnoyed/
 │   └── apps/
 │       ├── types.ts              # AppDefinition interface
 │       ├── index.ts              # MARKETPLACE_APPS array + findAppDefinition()
-│       └── <slug>.ts             # 10 app definitions (one per file)
+│       ├── manifest-loader.ts    # app.yaml loader + merge helper
+│       └── <slug>.ts             # 9 app definitions (one per file,
+│                                 # each with a <slug>/app.yaml manifest)
 ├── docs/                         # architecture, development, deployment,
 │                                 # folder-structure
 ├── frontend/                     # Frontend-layer documentation marker
@@ -227,30 +253,39 @@ file from the pre-MongoDB era), `dev.log`, `worklog.md`, `download/`, etc.
 | Icons        | lucide-react                                                          |
 | Auth         | Dependency-free: Node `crypto` scrypt + HMAC-SHA256 signed cookies    |
 
-## Local Setup
+## How to Run
 
-> **Full step-by-step guide:** See [**RUN.md**](RUN.md) for complete setup
-> instructions covering both Mock mode (default, no Docker) and Real Docker
-> mode (runs actual containers), including MongoDB Atlas setup,
-> troubleshooting, and connecting to deployed databases.
+> **Full step-by-step guide:** See [**RUN.md**](RUN.md) for the complete
+> walkthrough covering both Mock mode (default, no Docker) and Real Docker
+> mode, including MongoDB Atlas cluster creation, troubleshooting, and
+> connecting to deployed databases.
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) >= 1.3
-- Node.js 20+ (for tooling compatibility)
+| Tool | Version | Needed for |
+|------|---------|------------|
+| [Bun](https://bun.sh/) | >= 1.3 | package manager + dev runtime |
+| [Node.js](https://nodejs.org) | >= 20 | tooling compatibility |
+| [MongoDB Atlas](https://www.mongodb.com/atlas) | free M0 tier | primary database (cloud, no local install) |
+| [Docker](https://www.docker.com) | any recent | only for Real Docker mode (optional) |
 
-### Install and run
+### Quick start
 
 ```bash
-# 1. Install dependencies
+# 1. Clone and install dependencies
+git clone https://github.com/SHIVENDRA3030/Depnoyed.git
+cd Depnoyed
 bun install
 
-# 2. Configure environment
+# 2. Configure the environment
 cp .env.example .env
-# Edit .env: set MONGODB_URI (Atlas SRV string) and AUTH_SECRET (see below)
+# Edit .env and set:
+#   MONGODB_URI  — Atlas SRV connection string (Atlas -> Connect -> Drivers)
+#   AUTH_SECRET  — session-cookie signing secret (openssl rand -hex 32)
 
-# 3. Ensure MongoDB unique indexes are created (collections auto-create
-#    on first write, so there is no separate schema-push step)
+# 3. Ensure MongoDB unique indexes exist (collections auto-create on first
+#    write, so there is no separate schema-push step). Use db:ping to test
+#    connectivity if the next step fails.
 bun run db:ensure-indexes
 
 # 4. Start the dev server
@@ -259,13 +294,49 @@ bun run dev
 
 The app boots at <http://localhost:3000>.
 
-### Seed the catalog
+### First-run checklist
 
-The marketplace is empty until the catalog is seeded. After the dev server is
-running, trigger the seed endpoint to load all 10 marketplace apps:
+1. **Seed the catalog** — the marketplace is empty until the idempotent seed
+   endpoint loads all 9 marketplace apps:
+
+   ```bash
+   curl -X POST http://localhost:3000/api/seed
+   # → {"ok":true,"upserted":9,"total":9}
+   ```
+
+2. **Create an account** — open <http://localhost:3000> and register with an
+   email + password. **The first registered user automatically becomes the
+   admin** (`isAdmin: true`); everyone after that is a regular user.
+
+3. **Deploy an app** — pick any app in the marketplace, hit **Deploy**, and
+   you get an isolated container with a persistent volume, resource limits,
+   and a unique public URL. In Mock mode (default) the lifecycle is simulated
+   in-process; in Real Docker mode an actual container runs on your machine.
+
+### Run in Real Docker mode (optional)
 
 ```bash
-curl -X POST http://localhost:3000/api/seed
+# 0. Ensure Docker is installed and running
+docker info
+
+# 1. Switch the runtime adapter in .env
+echo 'DOCKER_ADAPTER=docker' >> .env
+echo 'DEPLOY_REAL_APP_BASE_URL=http://localhost' >> .env
+
+# 2. Restart the dev server
+bun run dev
+```
+
+The first deploy of each image pulls it from Docker Hub (30–60 s for ~300 MB
+images); subsequent deploys are instant. The deployment view then shows an
+**Open real app** link pointing at `http://localhost:<hostPort>` — a real
+running container backed by a real named Docker volume.
+
+### Production build
+
+```bash
+bun run build
+bun run start   # serves the standalone Next.js build on port 3000
 ```
 
 ## Environment Variables
@@ -375,9 +446,9 @@ required for production.
 
 The `DockerEngineAdapter` (selected via `DOCKER_ADAPTER=docker`) is **fully
 implemented** via the [`dockerode`](https://github.com/apocas/dockerode)
-library. When Docker is installed on the host, the 7 real marketplace apps
-(Grafana, PostgreSQL, Redis, Nginx, Gitea, Mattermost, Prometheus) run as
-actual containers — not simulations.
+library. When Docker is installed on the host, all 9 catalog apps (n8n,
+Grafana, Supabase Studio, DeepSeek Harness, Uptime Kuma, Gitea, Vaultwarden,
+Jellyfin, Meilisearch) run as actual containers — not simulations.
 
 ### Quick start with real Docker
 
